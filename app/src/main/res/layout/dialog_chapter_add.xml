@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="20dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="20dp"
+    android:paddingBottom="8dp">
+
+    <EditText
+        android:id="@+id/chapter_no"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chapter_no_hint"
+        android:importantForAutofill="no"
+        android:inputType="number" />
+
+    <EditText
+        android:id="@+id/chapter_no_end"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chapter_no_end_hint"
+        android:importantForAutofill="no"
+        android:inputType="number" />
+
+    <EditText
+        android:id="@+id/title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chapter_title_hint"
+        android:importantForAutofill="no"
+        android:inputType="text" />
+
+    <EditText
+        android:id="@+id/price"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/chapter_price_hint"
+        android:importantForAutofill="no"
+        android:inputType="number" />
+
+</LinearLayout>

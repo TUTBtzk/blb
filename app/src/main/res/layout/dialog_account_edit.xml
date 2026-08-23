@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="8dp">
+
+        <EditText
+            android:id="@+id/label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/account_label_hint"
+            android:importantForAutofill="no"
+            android:inputType="text" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/account_kind_label"
+            android:textSize="12sp" />
+
+        <Spinner
+            android:id="@+id/kind"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp" />
+
+        <TextView
+            android:id="@+id/kind_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/account_kind_hint_password"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="@string/account_login_hint"
+            android:importantForAutofill="no"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/password"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/account_password_hint"
+            android:importantForAutofill="no"
+            android:inputType="textPassword" />
+
+        <EditText
+            android:id="@+id/nickname"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/account_nickname_hint"
+            android:importantForAutofill="no"
+            android:inputType="text" />
+
+        <EditText
+            android:id="@+id/coupons"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/account_coupons_hint"
+            android:importantForAutofill="no"
+            android:inputType="number" />
+
+        <EditText
+            android:id="@+id/vouchers"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/account_vouchers_hint"
+            android:importantForAutofill="no"
+            android:inputType="number" />
+
+        <com.google.android.material.materialswitch.MaterialSwitch
+            android:id="@+id/enabled"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:checked="true"
+            android:text="@string/account_enabled" />
+
+    </LinearLayout>
+</ScrollView>

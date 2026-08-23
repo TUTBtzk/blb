@@ -1,0 +1,234 @@
+{
+  "_note": "已对着 com.sfacg 5.2.84（2026-08 实测）校准。签到那一整套（入口／今天那一格／成功页／广告计数）已经用一次真实签到钉死；带 id 的候选都是实测抓到的真实 resource-id。只有 text/textRegex 且注释标了『未验证』的仍是猜测（现在只剩登录/退登那一组，要真的退一次登录才能测）。改这个文件后可导出到 filesDir/selectors.json 热生效，不必重装。每个 key 下是候选列表，按顺序尝试。",
+
+  "_note_tabs": "底部导航：main_tab_tv1 书架 / tv2 书库 / tv3 菠萝圈 / container5 我的（我的那个只有图标，没有文字）。",
+  "home_ready": [
+    { "id": "main_tab" },
+    { "id": "main_tab_tv1" }
+  ],
+  "shelf_tab": [
+    { "id": "main_tab_tv1", "clickableAncestor": true },
+    { "text": "书架", "clickableAncestor": true }
+  ],
+  "library_tab": [
+    { "id": "main_tab_tv2", "clickableAncestor": true },
+    { "text": "书库", "clickableAncestor": true }
+  ],
+  "mine_tab": [
+    { "id": "main_tab_container5" },
+    { "id": "main_tab_image5", "clickableAncestor": true }
+  ],
+  "nickname": [
+    { "id": "nickname" }
+  ],
+
+  "_note_coupons": "「我的」页上的火券数字没有 id（只有旁边的『火券』标签），读不到；能读的地方是我的钱包（tv_friemoney）和批量购买页的 tvAccount（『账户余额：0火券/0代券』）。",
+  "coupons_value": [
+    { "id": "tvAccount" },
+    { "id": "tv_friemoney" },
+    { "textRegex": "账户余额" },
+    { "textRegex": "火券[：: ]*\\d+" }
+  ],
+
+  "_note_checkin": "首选书架页右上角的 tvSign（text=签到）；备用路径是我的页『福利君』→ 福利页 tvTaskAction(text=签到)。我的页右上角那个签到胶囊没有 id 也没有 text，用不了。点开 tvSign 出的是签到弹窗（layoutContent + signWeekView + tvSignDay『连签N天』），弹窗里点今天那格才会跳到整页的『每日签到』。",
+  "checkin_entry": [
+    { "id": "tvSign", "clickableAncestor": true },
+    { "id": "tvTaskAction", "text": "签到", "clickableAncestor": true }
+  ],
+  "_note_checkin_button": "已实测（2026-08-22 周六）：弹窗里今天那一格是 tvDay5，text=「点击签到」，文本本身不可点，要靠 clickableAncestor 上到 layout5。绝对不能匹配「补签」——过去漏签的那几格全是「补签」，点了要花补签卡。",
+  "checkin_button": [
+    { "text": "点击签到", "clickableAncestor": true },
+    { "text": "立即签到", "clickableAncestor": true }
+  ],
+  "_note_checkin_dialog": "签到弹窗/签到页本身的标记。用来区分「今天已经签过」和「弹窗还没加载出来」：菠萝包签过之后不显示任何『已签到』字样，今天那一格直接变回星期名（周六），所以判据是「弹窗在，但『点击签到』没有」。第三条必须连 title_tv 一起限定 —— 福利页有个 tvTitle 也叫「每日签到」，只匹配文字会在福利页误判成已签。",
+  "checkin_dialog": [
+    { "id": "signWeekView" },
+    { "id": "tvSignDay" },
+    { "id": "title_tv", "text": "每日签到" }
+  ],
+  "_note_checkin_done": "已实测：签到成功后跳到整页『每日签到』，tvTips1=「好棒！签到成功」、tvCoupon=「+8代券」、tvCouponTips=「奖励已发放到账号」。注意反过来不成立——第二次打开弹窗没有任何『已签到』文案，那种情况靠 checkin_dialog 判。",
+  "checkin_done": [
+    { "id": "tvTips1", "textRegex": "签到成功|好棒" },
+    { "textRegex": "签到成功|已签到|今日已签|已连续签到" }
+  ],
+  "checkin_reward": [
+    { "id": "tvCoupon" },
+    { "textRegex": "^\\+\\d+\\s*(代券|火券)" }
+  ],
+  "_note_ad": "已实测：签到弹窗和签到页上都有这一组 —— icon_sign_ad 图标、tvAdTitleTips=「看小视频再领代券」、sign_in_ad_count=「今日还剩3次」、sign_in_ad_goto=「免费领3代券」（这个才是可点的那颗）。辅助点击模式下脚本点开的就是 sign_in_ad_goto；剩余次数只认 sign_in_ad_count，它减了才算奖励到账。",
+  "ad_reward": [
+    { "id": "sign_in_ad_goto" },
+    { "id": "tvAdTitleTips" },
+    { "textRegex": "看小视频|看视频|看广告|视频翻倍|免费领\\d*代券" }
+  ],
+  "ad_remaining": [
+    { "id": "sign_in_ad_count" },
+    { "id": "tvAdCount" },
+    { "textRegex": "还剩\\s*\\d+\\s*次" }
+  ],
+  "_note_ad_flow": "已实测（2026-08-23，播放器是腾讯优量汇 com.sfacg/com.qq.e.ads.PortraitADActivity）：播放页整棵树没有一个 resource-id，也没有一个节点是 clickable —— 所有键都只能靠文字命中、靠手势点坐标中心。所以这一组全部走 textRegex，不写 id。播放页的关闭键是右上角一个没文字没 id 的 FrameLayout，没法用选择器认，改走全局返回（奖励没到手时返回会弹「确认要离开吗」，那时按 ad_resume 的「抓住奖励机会」接着看）。2026-08-23 14:14 实测补一条：跳转、浏览、返回之后播放页会弹「恭喜获得奖励／已完成浏览10秒，提前获得奖励」，代券确实到账（签到面板上「今日还剩」3 变 2），但这张弹窗上全局返回连按 8 次一动不动，出口只有右上角那颗 X —— 它是个 44×44 的 ImageView，没 text、没 desc、没 id、也不 clickable，选择器语言里没有一条能认到它。所以这一颗不走 selectors.json，走代码里的 NodeMatcher.findCornerClose（按位置和大小认右上角那颗图标）＋ BlbAccessibilityService.pressCloseCorner，并且只在 ad_earned 已经在屏幕上时才允许按：同一个位置在穿山甲播放页上是「跳过」，奖励没到手时点那儿等于把奖励扔掉。菠萝包还接了穿山甲/ptg，别家 SDK 的 id 保留在 ad_close 里当退路。",
+  "ad_pending": [
+    { "textRegex": "奖励将于\\s*\\d+\\s*秒后发放|还需观看\\s*\\d+\\s*秒|观看\\s*\\d+\\s*秒后可领取" }
+  ],
+  "_note_ad_earned": "刻意不含「奖励已发放」这四个字：签到成功页上写的是「奖励已发放到账号」，那一句是签到的奖励，会让脚本在广告还没播时就以为已经领到。「已完成浏览10秒，提前获得奖励」是实测在浏览落地页回来后出现的，算真的到手。",
+  "ad_earned": [
+    { "textRegex": "恭喜获得奖励|提前获得奖励|奖励发放成功|奖励已到账$" }
+  ],
+  "_note_ad_promo": "已实测两家 SDK 都有这种「把视频停住、不点进落地页就不给奖励」的卡。优量汇（com.qq.e.ads.PortraitADActivity）：标题「10秒更快拿奖」、正文「直接点击并浏览广告详情10秒即可获得奖励～」，卡上只有一颗「我要更快拿奖」。穿山甲（com.bytedance.sdk.openadsdk.stub.activity…，2026-08-23 实测）：卡上写「去浏览 15秒 免看此广告」「可提前13秒领奖」「请勿中断浏览以免任务失败」，按钮是「我要加速」，顶栏是「去体验15秒可立即领奖丨跳过」。2026-08-23 又实测到同一家的另外两种卡面：（A）「获得加速机会！／去看15秒可直接拿奖励」，按钮「我要直接拿奖励」，底下写「上滑或点击跳转到详情页或第三方应用」；（B）「去体验 9秒 可立即领奖」＋角标「可提前19秒领奖」，按钮「去体验」，还写着「6s后自动放弃」—— 这句是倒计时，说明认卡必须快，所以 AdWatchTask 把 ad_promo 排在 ad_resume／ad_claim 前面查。三家卡面都一样：卡上没有「关掉接着看」的键，右上角关闭键只弹「放弃奖励离开／抓住奖励机会」，画面就此定住 —— 实测挂了 6 分钟，顶栏文案一个字都没变，等是等不出奖励的。这里刻意只认卡上独有的那几句（免看此广告 / 可提前N秒领奖 / 请勿中断浏览 / 更快拿奖 / 浏览广告详情 / 获得加速机会 / 可直接拿奖励 / N秒后自动放弃），不认顶栏那句「去体验15秒可立即领奖」—— 顶栏在正常播放时也在，认了会让脚本把好好播着的广告误判成停住了。2026-08-23 13:55 那一趟又实测到同一张（A）卡的另一种渲染：Lynx 把卡上所有文案都渲成了**占位键名**而不是中文 —— 屏幕上是 get_accelerate_chance / title1 / title2 / second_text / reward_btn_shadow / get_reward_btn_bg 这样的字，整张卡上唯一的中文只剩按钮「我要直接拿奖励」和顶栏那句。于是第一条候选一句都没命中，脚本把这张定住的卡当成「正在正常播放」，干等满 150 秒上限，白丢一支广告。所以补了两条候选：（第二条）卡上那颗跳转键的确切文案在屏幕上就说明卡在屏幕上—— 只认完全相等的「我要直接拿奖励／我要加速／我要更快拿奖／去体验」，绝不能把播放页底部常驻的「立即下载」「立即打开」写进来（那两句正常播放时也在，认了就会把好好播着的广告判成停住）；（第三条）那几个占位键名本身。占位键名看着不像文案，但它就是这张卡的实测证据，删了就会重演「干等 150 秒」。默认（跳转开关关着）遇到它就放弃这一个广告并如实告诉你，不假装看完。",
+  "ad_promo": [
+    { "textRegex": "更快拿奖|点击并浏览广告详情|浏览广告详情\\s*\\d+\\s*秒|免看此广告|可提前\\s*\\d+\\s*秒领奖|请勿中断浏览|获得加速机会|可直接拿奖励|\\d+\\s*[sS秒]\\s*后自动放弃" },
+    { "textRegex": "^我要直接拿奖励$|^我要加速$|^我要更快拿奖$|^去体验$|^我要更快得奖励$", "requireArea": true },
+    { "textRegex": "^get_accelerate_chance$|^get_reward_btn_bg$|^reward_btn_shadow$" }
+  ],
+  "_note_ad_dwell": "只在 ad_promo 命中之后用来算「该在落地页停几秒」。刻意只认「要浏览多久」那几句：穿山甲顶栏的「去体验15秒可立即领奖」、卡上的「去浏览15秒」、优量汇正文里的「浏览广告详情10秒」。不认「可提前13秒领奖」—— 那个 13 是「能早领多少秒」，不是要求浏览的时长，穿山甲卡上两个数字挨在一起（要浏览15秒／可提前13秒），认错了就会停不满。取命中那句里的第一个数字，再多留几秒缓冲：停不满它要求的时长，回来照样算「任务失败」，等于白跳一趟。别把顶栏那条「去体验\\s*\\d+\\s*秒」删掉：穿山甲的卡是 Lynx 画的，卡上那句「去浏览」「15秒」「免看此广告」被拆成三个文本节点，整句在卡上根本匹配不到，秒数实际上是从顶栏那句读到的 —— 删了它就只能退回默认 12 秒，广告主那边照样判任务失败。",
+  "ad_dwell_hint": [
+    { "textRegex": "去体验\\s*\\d+\\s*秒|去浏览\\s*\\d+\\s*秒|浏览广告详情\\s*\\d+\\s*秒" }
+  ],
+  "_note_ad_skip": "播放页右上角那颗「跳过」（穿山甲实测：顶栏是「去体验15秒可立即领奖丨跳过」，「跳过」是单独一个文本节点）。只在放弃这一支广告、而且这个播放页连返回键都按不动的时候按 —— 实测穿山甲那张卡挂着时连按 4 次返回一动不动，不用它就只能把人留在广告里。按下去不会直接关掉广告，而是弹一个二次确认（见 _note_ad_leave），要再按「坚持退出」才真的退出去。正常播放中永远不查这一组：按它拿不到奖励，还白让广告主付一次曝光。所以正则只认单独成节点的「跳过」，不认「去体验15秒可立即领奖丨跳过」这种整句（避免在别处误命中）。2026-08-23 13:55 实测到顶栏的另一种切分：整条是两个节点「去体验15秒可立即领奖」和「｜跳过」—— 「跳过」前面粘着一个全角竖线，所以正则允许开头有一个 |／｜／丨。仍然锚成整串，「去体验15秒可立即领奖丨跳过」这种整句照旧不认。",
+  "ad_skip": [
+    { "textRegex": "^[|｜丨]?\\s*跳过$|^跳过广告$|^关闭广告$", "clickableAncestor": true }
+  ],
+  "_note_ad_leave": "已实测两家的二次确认都长这样。优量汇：正文「观看满15秒即可获得奖励\\n确认要离开吗？」，左「放弃奖励离开」、右「抓住奖励机会」。穿山甲（2026-08-23 实测，按它顶栏那颗「跳过」弹出来的）：标题「温馨提示」、正文「继续看28秒或下载安装即可领奖，确定要退出吗？」，两颗键是「去领取奖励」和「坚持退出」，而且这个确认框是独立窗口、两颗键都是真 clickable（播放页本身一个 clickable 都没有）。ad_abandon 认「放弃奖励离开／坚持退出」，只在我们主动决定放弃这个广告时才按。「去领取奖励」这颗刻意谁都不认 —— 名字听着像领奖，实际上是它正文里那条「下载安装」的路，按下去就是替广告主制造一次要付费的下载点击；ad_claim 的正则因此全部锚成整串，免得「去领取奖励」被当成播完后的领奖键。",
+  "ad_leave_confirm": [
+    { "textRegex": "确认要离开吗|确定要离开吗|确定要退出吗|确认要退出吗|离开将无法获得奖励" }
+  ],
+  "ad_abandon": [
+    { "textRegex": "^放弃奖励离开$|^放弃奖励$|^坚持退出$|^残忍离开$|^直接离开$|^仍要离开$", "clickableAncestor": true }
+  ],
+  "ad_claim": [
+    { "text": "开心收下" },
+    { "id": "tvConfirm", "textRegex": "收下|领取|^确定$" },
+    { "textRegex": "^领取奖励$|^立即领取$|^领取代券$|^领取$|^知道了$", "clickableAncestor": true }
+  ],
+  "ad_resume": [
+    { "textRegex": "抓住奖励机会|继续观看|继续播放|继续看视频|点击继续", "clickableAncestor": true },
+    { "desc": "继续播放", "clickableAncestor": true }
+  ],
+  "_note_ad_jump": "已实测出真实文案：优量汇卡片上那颗是「我要更快拿奖」，浏览回来之后变成「继续了解详情」，播放页底部常驻的是「立即打开」；穿山甲那三种卡上分别是「我要加速」「我要直接拿奖励」「去体验」（2026-08-23 实测，整棵树没有一个 clickable 节点，靠手势点它的 bounds 中心）。「我要直接拿奖励」名字像领奖、其实是跳转键（卡上自己写着「上滑或点击跳转到详情页或第三方应用」），所以只能进这一组，ad_claim／ad_resume 一律不许认它。requireArea + topmost 是 2026-08-23 加的：促销卡下面还压着一张下载卡（含「立即下载」，实测 id=5db6c3），DFS 会先撞上被盖住的那颗，点下去落在卡上什么都不发生 —— 空点还不报错，比报错更难查，所以多个命中时取画在最上层（DFS 最后）的那个。这里刻意用 requireArea（只要求有面积，挡掉 Lynx 树里那些零高度占位节点）而不是 visibleOnly：isVisibleToUser 在这种自绘树上报什么无法离线验证（本机 uiautomator dump 里根本没有这个属性），万一它对真按钮报 false，visibleOnly 就会把唯一能点的那颗也滤掉，那是最糟的失败方式。第二条候选是同一条正则去掉 requireArea（2026-08-23 实测补的）：有一张卡上连按钮那段文字的节点都是零面积的（实到 bounds=[0,111][0,111]），第一条候选把它挡掉之后整支广告就没有可点的目标了；退到第二条命中它之后，点击那一步会向上借最近一个有面积的祖先矩形来点，比「认不出按钮」强。顺序不能反：有面积的那颗永远优先。另外两条兜底不在这个文件里：查节点时先查活动窗口、再查菠萝包别的窗口（实测淘宝那支试玩广告，活动窗口只有 21 个节点、一个字都没有，按钮在另一层窗口里）；连这样都认不出按钮时，改点整张卡的中心（卡上写着「上滑或点击跳转到详情页或第三方应用」，整张卡就是跳转热区）—— 认不出按钮永远不许改按「跳过」，那是把奖励扔掉。默认不点（设置页「替我按广告里的跳转按钮」默认关）；就算开着，也只在 ad_promo 那张卡把视频停住、不点就拿不到奖励的时候才点 —— 正常播着的广告底部那颗「立即打开」一律不点。定时任务里永远不点。点完会在落地页按 ad_dwell_hint 算出的时长停留（够广告主要求的秒数再加几秒缓冲）让你看，再按全局返回把你带回广告页。这里刻意不含「放弃奖励」「跳过」「退出」。",
+  "ad_jump": [
+    { "textRegex": "^我要更快拿奖$|^我要加速$|^我要直接拿奖励$|^去体验$|^继续了解详情$|^立即打开$|^立即下载$|^点击下载$|^立即安装$|^去看看$|^立即体验$|^查看详情$|^了解详情$|^立即预约$", "clickableAncestor": true, "requireArea": true, "topmost": true },
+    { "textRegex": "^我要更快拿奖$|^我要加速$|^我要直接拿奖励$|^去体验$|^继续了解详情$|^立即打开$|^立即下载$|^点击下载$|^立即安装$|^去看看$|^立即体验$|^查看详情$|^了解详情$|^立即预约$", "clickableAncestor": true, "topmost": true },
+    { "id": "btn_native_creative", "requireArea": true }
+  ],
+  "ad_close": [
+    { "id": "iv_close" },
+    { "id": "img_close" },
+    { "id": "tt_video_ad_close" },
+    { "desc": "关闭", "clickableAncestor": true },
+    { "text": "×", "clickableAncestor": true }
+  ],
+
+  "captcha_hint": [
+    { "textRegex": "验证码|拖动滑块|安全验证|人机验证|请完成验证" }
+  ],
+
+  "_note_settings": "setting_title 在「我的」页最底部，必须先往下翻才看得见；btnLoginOut 在设置页最底部，同理。",
+  "settings_entry": [
+    { "id": "setting_title", "clickableAncestor": true },
+    { "text": "设置", "clickableAncestor": true }
+  ],
+  "logout_button": [
+    { "id": "btnLoginOut", "clickableAncestor": true },
+    { "textRegex": "退出登录|退出当前账号|注销登录", "clickableAncestor": true }
+  ],
+  "_note_login": "未验证：下面这些都还是猜的。校准要真的退出一次登录，会有验证码风险，所以留到你决定切号时再抓。",
+  "logout_confirm": [
+    { "textRegex": "^确定$|^确认$|^退出$", "clickableAncestor": true }
+  ],
+  "login_entry": [
+    { "textRegex": "^登录$|登录/注册|立即登录|点击登录", "clickableAncestor": true }
+  ],
+  "login_switch_to_password": [
+    { "textRegex": "密码登录|账号密码登录|使用密码登录", "clickableAncestor": true }
+  ],
+  "login_agree_checkbox": [
+    { "id": "cb_agree" },
+    { "className": "CheckBox" }
+  ],
+  "login_account_field": [
+    { "className": "EditText", "index": 0 }
+  ],
+  "login_password_field": [
+    { "className": "EditText", "index": 1 }
+  ],
+  "login_submit": [
+    { "textRegex": "^登录$|^登 录$|立即登录", "clickableAncestor": true }
+  ],
+  "login_error": [
+    { "textRegex": "密码错误|账号或密码|登录失败|账号不存在" }
+  ],
+  "_note_login_kinds": "未验证：一键登录页是 com.sfacg 里的 LoginAuthActivity（阿里云号码认证），本机号码那颗按钮、以及底部微信/QQ/微博三个图标都还没抓到 id —— 图标只有图形没有文字，desc 是猜的。三方授权页属于 com.tencent.mm / com.tencent.mobileqq / 微博客户端，本 App 的无障碍范围只有 com.sfacg，看不见也点不了，所以这三种账号一律停下来等你手点。",
+  "login_one_tap": [
+    { "textRegex": "本机号码一键登录|一键登录|本机号码登录", "clickableAncestor": true }
+  ],
+  "login_switch_phone": [
+    { "textRegex": "切换手机号或邮箱登录|切换手机号|其他手机号|邮箱登录", "clickableAncestor": true }
+  ],
+  "login_wechat": [
+    { "desc": "微信", "clickableAncestor": true },
+    { "text": "微信", "clickableAncestor": true }
+  ],
+  "login_qq": [
+    { "desc": "QQ", "clickableAncestor": true },
+    { "text": "QQ", "clickableAncestor": true }
+  ],
+  "login_weibo": [
+    { "desc": "微博", "clickableAncestor": true },
+    { "text": "微博", "clickableAncestor": true }
+  ],
+
+  "_note_search": "搜索入口在书库页（search_layout）；搜索页输入框 inputSearch，没有可见的「搜索」按钮（search_cancel 是取消），输入后结果自己出来。结果行书名是 tvbBookTitle。",
+  "search_entry": [
+    { "id": "search_layout" },
+    { "id": "search_img", "clickableAncestor": true },
+    { "desc": "搜索" }
+  ],
+  "search_field": [
+    { "id": "inputSearch" },
+    { "className": "EditText", "index": 0 }
+  ],
+  "search_submit": [
+    { "text": "搜索", "clickableAncestor": true }
+  ],
+  "catalog_entry": [
+    { "id": "mulu_list", "clickableAncestor": true },
+    { "id": "iv_mulu", "clickableAncestor": true },
+    { "text": "目录", "clickableAncestor": true }
+  ],
+
+  "_note_buy": "购买走的是「目录 → 下载 → 选择章节」这条批量页，不是阅读器里的付费墙：阅读器是 FLAG_SECURE 且只暴露容器节点，读不到也点不了。选择章节页：点行本身才会勾选（点 item_cb 没反应），tvSelect=已选 N 章，需 N 火券，tvAccount=账户余额，tv_download=立即下载；余额不够时底部换成 tvChargeTips/tvCharge。",
+  "download_entry": [
+    { "id": "download_layout", "clickableAncestor": true },
+    { "text": "下载", "clickableAncestor": true }
+  ],
+  "chapter_locked": [
+    { "id": "title_lock" }
+  ],
+  "chapter_owned": [
+    { "id": "title_check" },
+    { "text": "已下载" }
+  ],
+  "selected_count": [
+    { "id": "tvSelect" },
+    { "textRegex": "已选\\s*\\d+\\s*章" }
+  ],
+  "price_hint": [
+    { "textRegex": "需\\s*\\d+\\s*(火券|代券|券)" }
+  ],
+  "subscribe_button": [
+    { "id": "tv_download", "clickableAncestor": true },
+    { "text": "立即下载", "clickableAncestor": true }
+  ],
+  "_note_subscribe_confirm": "未验证：点「立即下载」之后有没有二次确认、成功文案是什么，都要等你放开真实购买那一次才知道。所以真买成功与否不靠这两个 key 判断，靠章节行的锁有没有消失。注意「已下载」不能放进 subscribe_done：它是每一行的 title_check 标记，买之前就有别的章带着它。",
+  "subscribe_confirm": [
+    { "textRegex": "确认购买|确认订阅|确认下载|^确定$|^确认$", "clickableAncestor": true }
+  ],
+  "subscribe_done": [
+    { "textRegex": "下载完成|下载成功|购买成功|订阅成功" }
+  ],
+  "insufficient_coupons": [
+    { "id": "tvChargeTips" },
+    { "id": "tvCharge" },
+    { "textRegex": "余额不足|火券不足|去充值" }
+  ]
+}
