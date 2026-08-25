@@ -151,23 +151,23 @@ public class EntrySummaryTest {
 
     @Test
     public void deviceOnlyChaptersAreNeverAddedIntoTheAccountsOwnCount() {
-        // 「本机显示已拥有」在 8 个号名下各有一条记录，它答不出买家。加进「这个号买了几章」
-        // 就会出现 8 个号各自声称拥有同一批章、总数比全书还多（真花过钱的只有 4 章）。
+        // 免费章（source=OWNED）在 8 个号名下各有一条记录，一分券都没花。加进「这个号买了几章」
+        // 就会出现 8 个号各自声称买过同一批章、总数比全书还多（真花过钱的只有 4 章）。
         AccountStat s = stat("主号", 4, 80, 18);
         s.deviceCount = 47;
         assertTrue(AccountStatText.line(s), AccountStatText.line(s).startsWith("4 章"));
-        assertTrue(AccountStatText.line(s), AccountStatText.line(s).contains("本机另有 47 章"));
+        assertTrue(AccountStatText.line(s), AccountStatText.line(s).contains("另有 47 章免费"));
 
         String sum = AccountStatText.summary(Arrays.asList(s));
         assertTrue(sum, sum.contains("1 个号共 4 章"));
         assertTrue(sum, !sum.contains("47"));      // 8 个号加起来会是 376，那个数没有意义
-        assertTrue(sum, sum.contains("不含本机显示已拥有的章"));
+        assertTrue(sum, sum.contains("不含免费章"));
     }
 
     @Test
     public void withoutDeviceOnlyRecordsTheCaveatIsNotMentioned() {
         String sum = AccountStatText.summary(Arrays.asList(stat("主号", 4, 80, 18)));
-        assertTrue(sum, !sum.contains("本机"));
+        assertTrue(sum, !sum.contains("免费"));
     }
 
     // ---------- 这本书的账本 ----------
@@ -187,8 +187,8 @@ public class EntrySummaryTest {
                 Purchase.of(11, 2, 0, 15, Purchase.SRC_MANUAL));
         String s = ChapterLedgerText.summary(chapters, purchases);
         assertTrue(s, s.contains("登记 3 章"));
-        assertTrue(s, s.contains("已有归属 2 章"));
-        assertTrue(s, s.contains("还差 1 章"));
+        assertTrue(s, s.contains("已订阅 2 章"));
+        assertTrue(s, s.contains("还要买 1 章"));
     }
 
     @Test
@@ -200,22 +200,22 @@ public class EntrySummaryTest {
                 Purchase.of(10, 1, 0, 15, Purchase.SRC_AUTO),
                 Purchase.of(11, 1, 0, 15, Purchase.SRC_AUTO));
         String s = ChapterLedgerText.summary(chapters, purchases);
-        assertTrue(s, s.contains("已有归属 1 章"));
-        assertTrue(s, s.contains("还差 1 章"));
+        assertTrue(s, s.contains("已订阅 1 章"));
+        assertTrue(s, s.contains("还要买 1 章"));
     }
 
     @Test
     public void deviceOnlyOwnershipIsReportedSeparately() {
-        // 「已下载」是本机状态、8 个号共用，答不出买家：它不能算进归属，
-        // 否则自动订阅会以为这一章有人买过而跳过它，最后拼不出完整一本。
+        // 免费章（source=OWNED）一分券都不用花，但它也不是「谁买的」：单独报一栏，
+        // 而且绝不能算进「还要买」—— 算进去会让人以为 8 个号拼不出完整一本。
         List<Chapter> chapters = Arrays.asList(chapter(1, 1), chapter(2, 2));
         List<Purchase> purchases = Arrays.asList(
                 Purchase.of(10, 1, 0, 15, Purchase.SRC_AUTO),
                 Purchase.of(11, 2, 0, 0, Purchase.SRC_OWNED));
         String s = ChapterLedgerText.summary(chapters, purchases);
-        assertTrue(s, s.contains("已有归属 1 章"));
-        assertTrue(s, s.contains("还差 1 章"));
-        assertTrue(s, s.contains("另有 1 章只是本机显示已拥有"));
+        assertTrue(s, s.contains("已订阅 1 章"));
+        assertTrue(s, s.contains("免费 1 章"));
+        assertTrue(s, s.contains("还要买 0 章"));
     }
 
     @Test
@@ -224,7 +224,7 @@ public class EntrySummaryTest {
         List<Purchase> purchases = Arrays.asList(
                 Purchase.of(10, 999, 0, 15, Purchase.SRC_AUTO));
         String s = ChapterLedgerText.summary(chapters, purchases);
-        assertTrue(s, s.contains("已有归属 0 章"));
+        assertTrue(s, s.contains("已订阅 0 章"));
     }
 
     @Test

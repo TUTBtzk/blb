@@ -26,9 +26,9 @@ final class AccountStatText {
         // 火券只会是历史遗留：新流程只买「实付 0 火券」的章。有就得说，没有不提。
         if (s.totalCost > 0) sb.append('+').append(s.totalCost).append(" 火券");
         sb.append("　余 ").append(s.vouchers >= 0 ? String.valueOf(s.vouchers) : "?").append(" 代券");
-        // 「本机显示已拥有」答不出买家，不能算进这个号的章数，但也不能不说 ——
+        // 免费章（source=OWNED）不算这个号买的章数，但也不能不说 ——
         // 它是「这一章不用再买」的依据。
-        if (s.deviceCount > 0) sb.append("　本机另有 ").append(s.deviceCount).append(" 章");
+        if (s.deviceCount > 0) sb.append("　另有 ").append(s.deviceCount).append(" 章免费");
         return sb.toString();
     }
 
@@ -61,10 +61,10 @@ final class AccountStatText {
         if (spentCoupons > 0) sb.append('+').append(spentCoupons).append(" 火券");
         sb.append(" · 手上还剩 ").append(left).append(" 代券");
         if (unknown > 0) sb.append("（另有 ").append(unknown).append(" 个号没读到余额）");
-        // 「本机显示已拥有」那些章在 8 个号名下各有一条记录，加起来会是同一批章数的 8 倍，
-        // 所以这里只说明它们没算进来，不报数 —— 这本书到底有几章是这种情况，
+        // 免费章在 8 个号名下各有一条记录，加起来会是同一批章数的 8 倍，
+        // 所以这里只说明它们没算进来，不报数 —— 这本书到底有几章免费，
         // 由「这本书的账本」那一句按章去重后给出。
-        if (deviceOnly) sb.append("；不含本机显示已拥有的章（答不出是谁买的）");
+        if (deviceOnly) sb.append("；不含免费章（不用花券）");
         return sb.toString();
     }
 }

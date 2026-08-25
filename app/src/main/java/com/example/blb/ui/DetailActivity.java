@@ -324,9 +324,9 @@ public class DetailActivity extends AppCompatActivity {
         if (c.priceCoupons > 0) line1.append("　").append(c.priceCoupons).append(" 券");
         row.<TextView>findViewById(R.id.line1).setText(line1);
 
-        // 「谁买的」和「这台手机上看得见」必须分开说。source=OWNED 是照界面上的
-        // 「已下载」回填的，而「已下载」是本机状态、8 个号共用 —— 把它念成「已订阅：<8 个号>」
-        // 等于宣布这一章 8 个号都买过，而实际上可能一个号都没花过钱（2026-08-25 第49章那件事）。
+        // 「谁买的」和「不用买」必须分开说。source=OWNED 只在<b>免费章</b>上写（没有锁的行，
+        // 谁登录都看得到），2026-08-25 拿订阅清单逐章对过账：8 个号在这本书上只付费订阅过
+        // 第48／49／50／51 章，第1～47 章一分券都没花过 —— 它们是免费章，不是「谁买的说不清」。
         ChapterOwnership own = ChapterOwnership.of(purchases, c.id);
         List<String> buyers = new ArrayList<>();
         for (Long id : own.buyerIds) buyers.add(accountName(id));
@@ -335,14 +335,13 @@ public class DetailActivity extends AppCompatActivity {
         if (!buyers.isEmpty()) line2.append("已订阅：").append(TextUtils.join("、", buyers));
         if (deviceOnly > 0) {
             if (line2.length() > 0) line2.append(" · ");
-            line2.append(buyers.isEmpty()
-                    ? "本机显示已拥有（答不出是哪个号买的）" : "本机也显示已拥有");
+            line2.append(buyers.isEmpty() ? "免费章，谁登录都看得到（不用买）" : "也是免费章");
         }
         if (line2.length() == 0) line2.append("还没人订阅");
         row.<TextView>findViewById(R.id.line2).setText(line2);
 
-        // 色条＝这一章有没有归属。只有真买记录算绿；只是「本机显示已拥有」算灰 ——
-        // 它答不出买家，摘要里也是单独报的，两处得说同一件事。
+        // 色条＝这一章要不要花券买。只有真买记录算绿；免费章算灰 —— 它不需要谁去买，
+        // 点一下也没有号可切，摘要里也是单独报的，两处得说同一件事。
         StatusPalette tone = buyers.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
         row.findViewById(R.id.accent).setBackgroundColor(color(tone.foreground));
 
@@ -368,7 +367,7 @@ public class DetailActivity extends AppCompatActivity {
     private void onChapterClick(Chapter chapter) {
         ChapterOwnership own = ChapterOwnership.of(purchases, chapter.id);
         if (!own.hasBuyer()) {
-            // 只有「本机显示已拥有」的章也走这里：那种记录答不出买家，切号只能是瞎切。
+            // 免费章（source=OWNED）也走这里：它没有买家，切号只能是瞎切一个号。
             openChapterSheet(chapter);
             return;
         }
@@ -452,7 +451,7 @@ public class DetailActivity extends AppCompatActivity {
             Account a = accounts.get(i);
             Purchase owned = purchaseOf(a.id, chapter.id);
             String mark = owned == null ? "未订阅"
-                    : Purchase.SRC_OWNED.equals(owned.source) ? "界面显示已拥有"
+                    : Purchase.SRC_OWNED.equals(owned.source) ? "免费章（不用买）"
                     : "已订阅 " + describeCost(owned);
             labels[i] = a.displayName() + " — " + mark;
         }

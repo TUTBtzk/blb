@@ -17,7 +17,7 @@ import java.util.List;
  *
  * <p>为什么值得断死：切号是退登＋重登，是这个 App 里最招验证码的动作，而使用者手指动不了，
  * 撞上验证码就得等人。答错一次不是显示错了一行字，是白挨一次登录。
- * 尤其 {@code source='OWNED'}（「已下载」，本机状态、8 个号共用）答不出买家 ——
+ * 尤其 {@code source='OWNED'}（免费章，一章 8 条、8 个号名下各一条）没有买家 ——
  * 把它当买家等于随便挑个号切过去。
  */
 public class ChapterOwnershipTest {

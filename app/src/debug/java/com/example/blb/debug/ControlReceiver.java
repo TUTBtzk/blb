@@ -173,7 +173,7 @@ public class ControlReceiver extends BroadcastReceiver {
         int devices = 0;
         for (Purchase p : subs.loadPurchasesOfNovel(novel.id)) {
             if (p.chapterId != chapter.id) continue;
-            // OWNED ＝「本机显示已拥有」，8 个号共用、答不出买家。拿它当买家去切号，
+            // OWNED ＝免费章（一章 8 条、8 个号名下各一条），没有买家。拿它当买家去切号，
             // 等于随便挑一个号退登重登，白挨一次验证码。
             if (Purchase.SRC_OWNED.equals(p.source)) devices++;
             else if (found == 0) found = p.accountId;
@@ -185,7 +185,7 @@ public class ControlReceiver extends BroadcastReceiver {
         }
         if (found > 0) return found;
         Log.w(TAG, "第" + chapterNo + "章账本里没有买家"
-                + (devices > 0 ? "，只有 " + devices + " 条「本机显示已拥有」（答不出是谁买的）" : ""));
+                + (devices > 0 ? "，只有 " + devices + " 条免费章记录（免费章不用买，也没有买家）" : ""));
         return 0;
     }
 
