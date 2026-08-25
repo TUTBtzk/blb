@@ -33,6 +33,8 @@ public class AutomationService extends Service implements StepRunner.Host {
     public static final String ACTION_RUN_CHECKIN = "com.example.blb.action.RUN_CHECKIN";
     public static final String ACTION_RUN_SUBSCRIBE = "com.example.blb.action.RUN_SUBSCRIBE";
     public static final String ACTION_RUN_DAILY = "com.example.blb.action.RUN_DAILY";
+    /** 只切号，什么都不买，见 {@link SwitchAccountQueue}。 */
+    public static final String ACTION_SWITCH_ACCOUNT = "com.example.blb.action.SWITCH_ACCOUNT";
     public static final String ACTION_CONTINUE = "com.example.blb.action.CONTINUE";
     public static final String ACTION_SKIP = "com.example.blb.action.SKIP";
     public static final String ACTION_ABORT = "com.example.blb.action.ABORT";
@@ -43,6 +45,11 @@ public class AutomationService extends Service implements StepRunner.Host {
      * start-requested}），于是队列会自己又跑一趟。见 {@link #startQueue}。
      */
     private static final String EXTRA_FROM_UI = "com.example.blb.extra.FROM_UI";
+    /**
+     * 要切到哪个账号（{@link #ACTION_SWITCH_ACCOUNT} 用）。放在 intent 里而不是只放静态字段：
+     * 进程被杀之后系统重发的那趟 intent 会原样带着它回来，不然重发的一趟不知道该登谁。
+     */
+    private static final String EXTRA_ACCOUNT_ID = "com.example.blb.extra.ACCOUNT_ID";
 
     public static final String CHANNEL_ID = "blb_auto";
     private static final int NOTIF_ID = 1001;
@@ -60,7 +67,7 @@ public class AutomationService extends Service implements StepRunner.Host {
 
     /** 队列类型。通知标题和收尾文案都跟着它走，别让订阅跑完弹「签到任务结束」。 */
     private enum Mode {
-        CHECK_IN("签到"), SUBSCRIBE("集中订阅"), DAILY("每日流程");
+        CHECK_IN("签到"), SUBSCRIBE("集中订阅"), DAILY("每日流程"), SWITCH("切换账号");
 
         final String label;
 
@@ -72,6 +79,8 @@ public class AutomationService extends Service implements StepRunner.Host {
     private Thread worker;
     private String lastLine = "准备中…";
     private Mode mode = Mode.CHECK_IN;
+    /** 这一趟要切到哪个号（只有 {@link Mode#SWITCH} 用得上）。 */
+    private long switchAccountId;
     /** 整趟任务期间点着屏幕的那把锁，见 {@link #acquireScreenLock}。 */
     private PowerManager.WakeLock screenLock;
 
@@ -91,6 +100,20 @@ public class AutomationService extends Service implements StepRunner.Host {
     public static void startDaily(Context context) {
         Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_DAILY)
                 .putExtra(EXTRA_FROM_UI, true);
+        context.startService(intent);
+    }
+
+    /**
+     * 只切号：退出现在登着的号，登入 {@code accountId} 那个号。
+     *
+     * <p>章节列表点一下「已订阅：某号」的行就走这条路 —— 想看那一章就得登那个号，而这十几步
+     * 屏幕操作使用者做不了。已经登着它的时候这一趟什么都不会做。
+     */
+    public static void startSwitchAccount(Context context, long accountId) {
+        Intent intent = new Intent(context, AutomationService.class)
+                .setAction(ACTION_SWITCH_ACCOUNT)
+                .putExtra(EXTRA_FROM_UI, true)
+                .putExtra(EXTRA_ACCOUNT_ID, accountId);
         context.startService(intent);
     }
 
@@ -131,6 +154,10 @@ public class AutomationService extends Service implements StepRunner.Host {
                 break;
             case ACTION_RUN_DAILY:
                 startQueue(Mode.DAILY, fromUi);
+                break;
+            case ACTION_SWITCH_ACCOUNT:
+                switchAccountId = intent.getLongExtra(EXTRA_ACCOUNT_ID, 0);
+                startQueue(Mode.SWITCH, fromUi);
                 break;
             case ACTION_CONTINUE:
                 AutomationBus.submitDecision(StepRunner.Decision.CONTINUE);
@@ -205,6 +232,9 @@ public class AutomationService extends Service implements StepRunner.Host {
                     // 每日整套流程是「签到 → 广告 → 订阅」一条龙：签到和广告挣回来的代券
                     // 当场就拿去订阅，一个号买到代券不够再换下一个号。
                     text = DailyQueue.describe(DailyQueue.run(this, this));
+                    break;
+                case SWITCH:
+                    text = SwitchAccountQueue.run(this, this, switchAccountId);
                     break;
                 default:
                     text = describe(CheckInQueue.run(this, this));

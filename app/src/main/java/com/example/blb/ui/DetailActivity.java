@@ -2,6 +2,7 @@ package com.example.blb.ui;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -27,6 +28,8 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.blb.R;
 import com.example.blb.auto.AutomationBus;
+import com.example.blb.auto.AutomationService;
+import com.example.blb.auto.BlbAccessibilityService;
 import com.example.blb.data.Account;
 import com.example.blb.data.AccountDao;
 import com.example.blb.data.AccountStat;
@@ -239,7 +242,8 @@ public class DetailActivity extends AppCompatActivity {
     // ---------- 已登记的章节与订阅情况 ----------
 
     /**
-     * 章节列表整屏显示，交互（点一章补录／撤销、长按删章）整套搬过来。
+     * 章节列表整屏显示。交互：<b>点一章＝切到买过它的那个号</b>（见 {@link #onChapterClick}），
+     * 长按＝补录／撤销／删章（{@link #openChapterSheet}）。
      *
      * <p>原来它挤在订阅页下半屏的内嵌滚动区里：一本书六百多章，外层还能跟着一起滚，
      * 找一章要来回蹭很久。这一页只干一件事，滚起来不会跟别的东西打架。
@@ -249,8 +253,8 @@ public class DetailActivity extends AppCompatActivity {
         accountDao = Db.get(this).accountDao();
         title.setText(R.string.sub_records_header);
         chapterAdapter = new SimpleAdapter<Chapter>(R.layout.item_two_line, this::bindChapter)
-                .onClick((item, pos) -> openChapterSheet(item))
-                .onLongClick((item, pos) -> confirmDeleteChapter(item));
+                .onClick((item, pos) -> onChapterClick(item))
+                .onLongClick((item, pos) -> openChapterSheet(item));
         useList(chapterAdapter);
 
         dao.observeNovels().observe(this, this::onNovels);
@@ -323,13 +327,10 @@ public class DetailActivity extends AppCompatActivity {
         // 「谁买的」和「这台手机上看得见」必须分开说。source=OWNED 是照界面上的
         // 「已下载」回填的，而「已下载」是本机状态、8 个号共用 —— 把它念成「已订阅：<8 个号>」
         // 等于宣布这一章 8 个号都买过，而实际上可能一个号都没花过钱（2026-08-25 第49章那件事）。
+        ChapterOwnership own = ChapterOwnership.of(purchases, c.id);
         List<String> buyers = new ArrayList<>();
-        int deviceOnly = 0;
-        for (Purchase p : purchases) {
-            if (p.chapterId != c.id) continue;
-            if (Purchase.SRC_OWNED.equals(p.source)) deviceOnly++;
-            else buyers.add(accountName(p.accountId));
-        }
+        for (Long id : own.buyerIds) buyers.add(accountName(id));
+        int deviceOnly = own.deviceOnly;
         StringBuilder line2 = new StringBuilder();
         if (!buyers.isEmpty()) line2.append("已订阅：").append(TextUtils.join("、", buyers));
         if (deviceOnly > 0) {
@@ -344,7 +345,72 @@ public class DetailActivity extends AppCompatActivity {
         // 它答不出买家，摘要里也是单独报的，两处得说同一件事。
         StatusPalette tone = buyers.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
         row.findViewById(R.id.accent).setBackgroundColor(color(tone.foreground));
-        row.findViewById(R.id.badge).setVisibility(View.GONE);
+
+        // 有买家的行点一下就会切到那个号，这件事得在行上写明白：切号是退登重登，
+        // 误点一下要挨一次登录（还可能撞验证码），不该让人猜。
+        TextView badge = row.findViewById(R.id.badge);
+        badge.setVisibility(buyers.isEmpty() ? View.GONE : View.VISIBLE);
+        if (!buyers.isEmpty()) {
+            badge.setText("点→切号");
+            badge.setTextColor(color(StatusPalette.OK.foreground));
+            badge.setBackgroundTintList(
+                    ColorStateList.valueOf(color(StatusPalette.OK.container)));
+        }
+    }
+
+    /**
+     * 点一章：<b>有买家就切到那个号</b>（退出现在登着的号、登入买家），没买家才开补录窗口。
+     *
+     * <p>用户原话：「第48章显示五杯半雪碧订阅的，点击这一章就自动执行退出当前账号，
+     * 登入五杯半雪碧的账号」。所以这一下不再弹确认框 —— 他手指动不了，每多一次确认
+     * 就是多一次他按不动的门。补录／撤销挪到长按（{@link #openChapterSheet}）。
+     */
+    private void onChapterClick(Chapter chapter) {
+        ChapterOwnership own = ChapterOwnership.of(purchases, chapter.id);
+        if (!own.hasBuyer()) {
+            // 只有「本机显示已拥有」的章也走这里：那种记录答不出买家，切号只能是瞎切。
+            openChapterSheet(chapter);
+            return;
+        }
+        if (own.buyerIds.size() == 1) {
+            switchToBuyer(own.buyerIds.get(0), chapter);
+            return;
+        }
+        // 一章两个号买过是要修的错（钱白花了），但这一下不许替他猜切哪个。
+        String[] labels = new String[own.buyerIds.size()];
+        for (int i = 0; i < own.buyerIds.size(); i++) labels[i] = accountName(own.buyerIds.get(i));
+        new AlertDialog.Builder(this)
+                .setTitle("第" + chapter.chapterNo + "章有 " + labels.length + " 个号买过，切到哪个？")
+                .setItems(labels, (d, which) -> switchToBuyer(own.buyerIds.get(which), chapter))
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /** 真的去切号：交给 {@link AutomationService}，它整趟点着屏幕（无障碍只对亮屏有效）。 */
+    private void switchToBuyer(long accountId, Chapter chapter) {
+        Account account = accountById(accountId);
+        if (account == null) {
+            toast("账本里这一章记在 账号#" + accountId + " 名下，可账号页已经没有这个号了");
+            return;
+        }
+        if (!BlbAccessibilityService.isReady()) {
+            toast("无障碍服务没连上，切不了号（重装 App 会把它踢掉，要重新打开）");
+            return;
+        }
+        if (AutomationBus.isRunning()) {
+            toast("有任务正在跑，等它跑完再切号（免得两边抢界面）");
+            return;
+        }
+        toast("正在切到「" + account.displayName() + "」：退出当前账号再登它。"
+                + "进度看签到页的运行日志");
+        AutomationService.startSwitchAccount(this, accountId);
+    }
+
+    private Account accountById(long accountId) {
+        for (Account a : accounts) {
+            if (a.id == accountId) return a;
+        }
+        return null;
     }
 
     private String accountName(long accountId) {
@@ -370,7 +436,12 @@ public class DetailActivity extends AppCompatActivity {
         }
         return null;
     }
-    /** 点一章：列出所有账号，选谁就补录／撤销谁的订阅。 */
+    /**
+     * 长按一章（没人订阅的章点一下也到这里）：列出所有账号，选谁就补录／撤销谁的订阅。
+     *
+     * <p>删这一章也放在这里。原来它是长按，而长按现在被这个窗口占了 —— 撤销误记录这件事
+     * （{@code FORGET_OWNED} 那次）说明这个入口不能丢。
+     */
     private void openChapterSheet(Chapter chapter) {
         if (accounts.isEmpty()) {
             toast("先去账号页添加账号");
@@ -393,6 +464,7 @@ public class DetailActivity extends AppCompatActivity {
                     if (owned == null) askCostThenRecord(a, chapter);
                     else confirmDeletePurchase(a, owned);
                 })
+                .setNeutralButton("删除这一章", (d, w) -> confirmDeleteChapter(chapter))
                 .setNegativeButton(R.string.cancel, null)
                 .show();
     }

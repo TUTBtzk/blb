@@ -17,6 +17,7 @@ import com.example.blb.data.Chapter;
 import com.example.blb.data.CheckInLog;
 import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
+import com.example.blb.data.Purchase;
 import com.example.blb.data.SubscriptionDao;
 import com.example.blb.ui.DetailActivity;
 import com.example.blb.util.Prefs;
@@ -52,6 +53,10 @@ import java.util.List;
  * # 把某一个二级页面拉到前台看（他看得见、只是按不动）
  * adb shell am broadcast -a com.example.blb.debug.SHOW_PAGE -p com.example.blb --es page log
  * #   page = notice｜today｜log｜stats｜chapters，不带就默认 log
+ *
+ * # 切到某个号（＝章节列表点一下那一行）：按 id，或者「买过目标书第 N 章的那个号」
+ * adb shell am broadcast -a com.example.blb.debug.SWITCH_TO -p com.example.blb --el id 3
+ * adb shell am broadcast -a com.example.blb.debug.SWITCH_TO -p com.example.blb --ei chapter 48
  * </pre>
  */
 public class ControlReceiver extends BroadcastReceiver {
@@ -63,6 +68,7 @@ public class ControlReceiver extends BroadcastReceiver {
     private static final String ACTION_DAILY_NOW = "com.example.blb.debug.DAILY_NOW";
     private static final String ACTION_CHECKIN_NOW = "com.example.blb.debug.CHECKIN_NOW";
     private static final String ACTION_SHOW_PAGE = "com.example.blb.debug.SHOW_PAGE";
+    private static final String ACTION_SWITCH_TO = "com.example.blb.debug.SWITCH_TO";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -77,6 +83,7 @@ public class ControlReceiver extends BroadcastReceiver {
                 else if (ACTION_DAILY_NOW.equals(action)) runNow(app, true);
                 else if (ACTION_CHECKIN_NOW.equals(action)) runNow(app, false);
                 else if (ACTION_SHOW_PAGE.equals(action)) showPage(app, intent);
+                else if (ACTION_SWITCH_TO.equals(action)) switchTo(app, intent);
                 else Log.w(TAG, "不认识的动作：" + action);
             } catch (Throwable t) {
                 Log.e(TAG, "总控失败", t);
@@ -107,6 +114,79 @@ public class ControlReceiver extends BroadcastReceiver {
         Log.i(TAG, "已经请系统把「" + page + "」这一页拉到前台。"
                 + "小米／红米要允许本 App「后台弹出界面」，否则这一下会静静地不生效"
                 + "（设置页那段电池提示里要求过）。");
+    }
+
+    // ---------- 切到某个号 ----------
+
+    /**
+     * 退出现在登着的号、登入指定的那个号 —— 和章节列表点一下那一行走的是同一条路
+     * （{@link AutomationService#startSwitchAccount}）。
+     *
+     * <p>为什么这条命令也是必需的：那一行他点不了。{@code --ei chapter 48} 是他真正会用的
+     * 形式（「我要看第48章」），由账本回答「这一章是谁买的」，不用他自己去对照。
+     */
+    private void switchTo(Context app, Intent intent) {
+        long id = intent.getLongExtra("id", 0);
+        int chapterNo = intent.getIntExtra("chapter", 0);
+        if (id <= 0 && chapterNo > 0) {
+            id = buyerOfChapter(app, chapterNo);
+            if (id <= 0) return;
+        }
+        if (id <= 0) {
+            Log.w(TAG, "要指定切到哪个号：--el id <账号id>，或者 --ei chapter <章号>"
+                    + "（按账本里那一章的买家切）。账号 id 用 STATUS 那条命令看。");
+            return;
+        }
+        Account account = Db.get(app).accountDao().byId(id);
+        if (account == null) {
+            Log.w(TAG, "没有 id=" + id + " 这个账号（用 STATUS 看现有的 id）");
+            return;
+        }
+        if (!BlbAccessibilityService.isReady()) {
+            Log.w(TAG, "无障碍服务没连上，切不了号（重装会把它踢掉，要用 adb 重新打开）");
+            return;
+        }
+        if (AutomationBus.isRunning()) {
+            Log.w(TAG, "已经有一趟在跑了，这次什么都不做（免得两趟互相抢界面）");
+            return;
+        }
+        Log.i(TAG, "开始切到「" + account.displayName() + "」（" + account.loginKindLabel()
+                + "）：退出当前账号再登它。屏幕要亮着且已解锁；"
+                + "碰上验证码会停下等人（绝不自动过验证码）。进度看 adb logcat -s BlbAuto");
+        AutomationService.startSwitchAccount(app, id);
+    }
+
+    /** 账本里买过目标书第 N 章的那个号。答不出就说清为什么，绝不瞎切一个号。 */
+    private long buyerOfChapter(Context app, int chapterNo) {
+        SubscriptionDao subs = Db.get(app).subscriptionDao();
+        Novel novel = SubscribeRun.resolveTarget(subs, null);
+        if (novel == null) {
+            Log.w(TAG, "没有集中订阅目标那本书，答不出第" + chapterNo + "章是谁买的");
+            return 0;
+        }
+        Chapter chapter = subs.chapterByNo(novel.id, chapterNo);
+        if (chapter == null) {
+            Log.w(TAG, "《" + novel.title + "》账本里没登记第" + chapterNo + "章");
+            return 0;
+        }
+        long found = 0;
+        int devices = 0;
+        for (Purchase p : subs.loadPurchasesOfNovel(novel.id)) {
+            if (p.chapterId != chapter.id) continue;
+            // OWNED ＝「本机显示已拥有」，8 个号共用、答不出买家。拿它当买家去切号，
+            // 等于随便挑一个号退登重登，白挨一次验证码。
+            if (Purchase.SRC_OWNED.equals(p.source)) devices++;
+            else if (found == 0) found = p.accountId;
+            else {
+                Log.w(TAG, "第" + chapterNo + "章有多个号买过（账本里是要修的错），"
+                        + "这条命令不替你猜；用 --el id 指名要切哪个");
+                return 0;
+            }
+        }
+        if (found > 0) return found;
+        Log.w(TAG, "第" + chapterNo + "章账本里没有买家"
+                + (devices > 0 ? "，只有 " + devices + " 条「本机显示已拥有」（答不出是谁买的）" : ""));
+        return 0;
     }
 
     // ---------- 每日定时 ----------

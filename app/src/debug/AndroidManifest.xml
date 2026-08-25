@@ -130,6 +130,10 @@
           SHOW_PAGE 把某一个二级页面（日志／今日状态／各账号累计／已登记章节／会替你按什么）
           拉到前台 —— 那五页原来是一级页面上五处「信息多、窗口小」的地方，现在各占一整屏，
           可它们都要点一下才进得去，而用户点不了。他看得见、只是按不动，所以这一条最实用。
+          SWITCH_TO 退出现在登着的号、登入指定的号（按账号 id，或者按账本里某一章的买家）——
+          和章节列表点一下那一行是同一条路，而那一行他也点不了。具体命令行写在 ControlReceiver
+          的类注释里（XML 注释里放不了 adb 那两个连字符的参数名）。
+          它只切号，不买任何东西；「本机显示已拥有」那种记录答不出买家，绝不拿它瞎切一个号。
 
           它一条购买记录都不写，最坏结果是「多跑一趟队列」或「多开一次定时」，
           而花钱仍然被「只花代券、代券不够就换号、结果不明整趟停下」那套护栏卡着；
@@ -144,6 +148,7 @@
                 <action android:name="com.example.blb.debug.DAILY_NOW" />
                 <action android:name="com.example.blb.debug.CHECKIN_NOW" />
                 <action android:name="com.example.blb.debug.SHOW_PAGE" />
+                <action android:name="com.example.blb.debug.SWITCH_TO" />
             </intent-filter>
         </receiver>
     </application>
