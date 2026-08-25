@@ -38,11 +38,10 @@
         <!--
           第三个 debug 组件：自动订阅的 adb 入口（SubscribeProbeReceiver）。
           LEDGER 只读地把台账念进 logcat，并自检「一章只许一个号」（把私有数据库拷出设备是被拒绝的动作）；
-          RUN_SUBSCRIBE 启动订阅队列，强制干跑，一分券都不花；
-          BUY_ONE_CHAPTER 真买，但这一趟只准买 1 章，买成就收工 ——
-          那颗「允许真实购买」的开关用户按不着也关不回去，所以真买只能是一次性授权；
-          BUY_UNTIL_BROKE 真买到所有号的代券都花光（判据已经用 BUY_ONE_CHAPTER 在真机上验过一次），
-          它跟 BUY_ONE_CHAPTER 一样跑完自动把干跑拨回来；
+          RUN_SUBSCRIBE 启动订阅队列 —— 真的订阅，按队列顺序一章一章往下买，
+          一个号买到代券不够下一章就换下一个号，不限章数（BUY_UNTIL_BROKE 是它的别名）。
+          干跑功能已整套删除，所以没有「只走到按钮前停下」这种模式，也没有「一趟只准买 N 章」的授权了；
+          花钱仍然被「只花代券、代券不够就换号、结果不明整趟停下」那套护栏卡着。
           RECORD_BOUGHT 按「我的 → 代券 → 订阅清单」里看到的事实补录一条真实购买
           （2026-08-24 那趟券扣了却因为判据错了没记账，不补录下一趟会有第二个号再买同一章）；
           FORGET_OWNED 删掉误回填的「已拥有」记录 —— 2026-08-25 发现第49章只有皓平买过、
@@ -55,7 +54,6 @@
             <intent-filter>
                 <action android:name="com.example.blb.debug.LEDGER" />
                 <action android:name="com.example.blb.debug.RUN_SUBSCRIBE" />
-                <action android:name="com.example.blb.debug.BUY_ONE_CHAPTER" />
                 <action android:name="com.example.blb.debug.BUY_UNTIL_BROKE" />
                 <action android:name="com.example.blb.debug.SEED_NOVEL" />
                 <action android:name="com.example.blb.debug.RECORD_BOUGHT" />
@@ -123,18 +121,16 @@
         <!--
           第八个 debug 组件：不用碰屏幕的总控（ControlReceiver）。
           上面七个都是「验一件事」的探针，这一个是这个 App 平时真正被开动的方式。
-          「每日自动签到」是设置页上一颗开关、「允许真实购买」是另一颗开关加一次确认对话框、
-          「跑今天的流程」是首页一颗按钮 —— 用户手指动不了，这三样他一个都按不了，
-          所以在有它之前这个 App 只能靠旁人替他按才跑得起来。
+          「每日自动签到」是设置页上一颗开关、「跑今天的流程」是首页一颗按钮 ——
+          用户手指动不了，这两样他都按不了，所以在有它之前这个 App 只能靠旁人替他按才跑得起来。
 
           STATUS 只读，一条命令念出「准备好了吗、今天做了什么、下一步买哪章」；
           SCHEDULE 开关每日定时并改时间，走的是设置页那同一份状态和 DailyScheduler.apply；
-          AUTHORIZE_BUY 给常驻真买授权（BuyMandate：到期自动失效 + 每天限额，比设置页那颗永久
-          布尔严），REVOKE_BUY 当场收回并拨回干跑；
           DAILY_NOW／CHECKIN_NOW 不等定时立刻跑一趟，跟首页那颗按钮完全同一条路。
 
           它一条购买记录都不写，最坏结果是「多跑一趟队列」或「多开一次定时」，
-          而真买仍然被 BuyMandate 的两条边界和「只花代券」那套护栏卡着；release 构建里没有它。
+          而花钱仍然被「只花代券、代券不够就换号、结果不明整趟停下」那套护栏卡着；
+          release 构建里没有它。
         -->
         <receiver
             android:name="com.example.blb.debug.ControlReceiver"
@@ -142,8 +138,6 @@
             <intent-filter>
                 <action android:name="com.example.blb.debug.STATUS" />
                 <action android:name="com.example.blb.debug.SCHEDULE" />
-                <action android:name="com.example.blb.debug.AUTHORIZE_BUY" />
-                <action android:name="com.example.blb.debug.REVOKE_BUY" />
                 <action android:name="com.example.blb.debug.DAILY_NOW" />
                 <action android:name="com.example.blb.debug.CHECKIN_NOW" />
             </intent-filter>

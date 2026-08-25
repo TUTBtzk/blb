@@ -45,11 +45,9 @@ public final class DailyQueue {
         /** 这一趟你新看完的广告数（不含今天之前已经记下的）。 */
         public int adsWatched;
         public int bought;
-        public int dryRun;
         public int ownedAlready;
         public int subscribeFailed;
         public int spent;
-        public boolean wasDryRun;
         /** 第 3 步跑了没有；没跑的原因在 subscribeNote 里。 */
         public boolean subscribing;
         public String subscribeNote;
@@ -74,12 +72,7 @@ public final class DailyQueue {
      *                 等你回 App 点「跑今天的流程」再补。
      */
     public static Summary run(Context context, StepRunner.Host host, boolean attended) {
-        try {
-            return runOnce(context, host, attended);
-        } finally {
-            // 无论从哪条路退出去都把干跑拨回来：真买是一次性授权，而用户关不掉那颗开关。
-            SubscribeRun.restoreDryRunAfterRealBuy(context, host);
-        }
+        return runOnce(context, host, attended);
     }
 
     private static Summary runOnce(Context context, StepRunner.Host host, boolean attended) {
@@ -136,10 +129,7 @@ public final class DailyQueue {
                 loggedIn.nowIs(account);
                 Texts.Balance balance = checkInAndAds(runner, host, checkInDao, accountDao,
                         account, ymd, quota, adMode, summary);
-                if (plan != null && plan.reachedBuyLimit(tally.bought)) {
-                    // 保险丝：真买那一趟只准买这么多章。签到和广告照做，订阅这一步不再往下。
-                    host.log("  真买上限到了（" + plan.buyLimit + " 章），这个号不订阅");
-                } else if (plan != null) {
+                if (plan != null) {
                     SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
                             balance, touched, tally);
                 }
@@ -164,7 +154,6 @@ public final class DailyQueue {
             }
         }
         summary.bought = tally.bought;
-        summary.dryRun = tally.dryRun;
         summary.ownedAlready = tally.ownedAlready;
         summary.subscribeFailed = tally.failed;
         summary.spent = tally.spent;
@@ -208,16 +197,9 @@ public final class DailyQueue {
     private static SubscribeRun.Plan planSubscribe(Context context, SubscriptionDao subs,
                                                    SelectorSet selectors, Summary summary,
                                                    StepRunner.Host host) {
-        boolean dryRun = Prefs.isDryRun(context);
         String note = null;
-        Novel novel = null;
-        if (!dryRun && !Prefs.isRealBuyConfirmed(context)) {
-            note = "还没在设置页确认过「允许真实购买」，这轮不订阅";
-        }
-        if (note == null) {
-            novel = SubscribeRun.resolveTarget(subs, host);
-            if (novel == null) note = "还没设定集中订阅的目标小说，这轮只签到和看广告";
-        }
+        Novel novel = SubscribeRun.resolveTarget(subs, host);
+        if (novel == null) note = "还没设定集中订阅的目标小说，这轮只签到和看广告";
         if (note == null) {
             List<String> missing = selectors.missing(Keys.REQUIRED_FOR_SUBSCRIBE);
             if (!missing.isEmpty()) {
@@ -233,9 +215,7 @@ public final class DailyQueue {
 
         SubscribeRun.Plan plan = SubscribeRun.Plan.from(context, novel);
         summary.subscribing = true;
-        summary.wasDryRun = dryRun;
         host.log(plan.describe());
-        SubscribeRun.clearOldDryRuns(subs, plan, host);
         return plan;
     }
 
@@ -318,8 +298,7 @@ public final class DailyQueue {
         if (s.skipped > 0) sb.append("，跳过 ").append(s.skipped);
         sb.append("；广告 ").append(s.adsWatched).append(" 个");
         if (s.subscribing) {
-            sb.append('；').append(s.wasDryRun ? "订阅干跑 " : "订阅 ").append(s.bought + s.dryRun)
-                    .append(" 章");
+            sb.append("；订阅 ").append(s.bought).append(" 章");
             if (s.spent > 0) sb.append("（花 ").append(s.spent).append(" 代券）");
             if (s.ownedAlready > 0) sb.append("，补记 ").append(s.ownedAlready);
             if (s.subscribeFailed > 0) sb.append("，没走通 ").append(s.subscribeFailed);

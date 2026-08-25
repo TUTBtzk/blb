@@ -17,7 +17,6 @@ import com.example.blb.R;
 import com.example.blb.auto.AutomationBus;
 import com.example.blb.auto.AutomationService;
 import com.example.blb.auto.BlbAccessibilityService;
-import com.example.blb.auto.BuyMandate;
 import com.example.blb.auto.DailyQueue;
 import com.example.blb.auto.StepRunner;
 
@@ -56,10 +55,6 @@ public class DailyCheckInWorker extends Worker implements StepRunner.Host {
         AutomationBus.clearLog();
         AutomationBus.setRunning(true);
         AutomationBus.setStatus("每日流程运行中");
-        // 没人值守的这一趟能不能花钱，全看常驻授权（到期自动失效、每天有额度）——
-        // 「允许真实购买」原来是设置页上一颗开关，而这个 App 的使用者按不动屏幕：
-        // 不给它一个自己会到头的授权，签到和广告挣回来的代券就永远花不出去。见 BuyMandate。
-        BuyMandate.arm(getApplicationContext(), this);
         DailyQueue.Summary summary = null;
         try {
             summary = DailyQueue.run(getApplicationContext(), this, false);

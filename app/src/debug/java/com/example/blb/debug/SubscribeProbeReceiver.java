@@ -38,19 +38,15 @@ import java.util.Map;
  * 确认「台账里到底有没有东西」，末尾还做一次「一章只许一个号」的自检（{@link #auditOwners}）。
  * 它一个字都不写。把私有数据库拷出设备是被拒绝的动作，所以只能让 App 自己念出来。
  *
- * <p>{@code RUN_SUBSCRIBE} 启动订阅队列，<b>强制干跑</b>：一分券都不花，产出是一份能核对判定的日志。
- *
- * <p>{@code BUY_ONE_CHAPTER} 真买，而且<b>只买一章</b>就整趟收工（见 {@link #buyOne}）；
- * {@code BUY_UNTIL_BROKE} 真买到所有号的代券都花光（见 {@link #buyUntilBroke}）。
- * 两个都是一次性授权：跑完干跑自动拨回来。
+ * <p>{@code RUN_SUBSCRIBE} 启动订阅队列：<b>真的订阅</b>，按队列顺序一章一章往下买，
+ * 一个号买到代券不够下一章就换下一个号，不限章数（{@code BUY_UNTIL_BROKE} 是它的别名）。
+ * 干跑功能已整套删除，所以没有「只走到按钮前停下」这种模式了。
  *
  * <p>{@code FORGET_OWNED} 删掉误回填的「已拥有」记录（见 {@link #forgetOwned}），真买记录不许删。
  *
  * <pre>
  * adb shell am broadcast -a com.example.blb.debug.LEDGER -p com.example.blb
  * adb shell am broadcast -a com.example.blb.debug.RUN_SUBSCRIBE -p com.example.blb
- * adb shell am broadcast -a com.example.blb.debug.BUY_ONE_CHAPTER -p com.example.blb
- * adb shell am broadcast -a com.example.blb.debug.BUY_UNTIL_BROKE -p com.example.blb
  * adb logcat -s BlbProbe:* BlbAuto:*
  * </pre>
  */
@@ -60,10 +56,10 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
 
     private static final String ACTION_LEDGER = "com.example.blb.debug.LEDGER";
     private static final String ACTION_RUN = "com.example.blb.debug.RUN_SUBSCRIBE";
-    private static final String ACTION_BUY_ONE = "com.example.blb.debug.BUY_ONE_CHAPTER";
     private static final String ACTION_SEED_NOVEL = "com.example.blb.debug.SEED_NOVEL";
     private static final String ACTION_RECORD = "com.example.blb.debug.RECORD_BOUGHT";
     private static final String ACTION_FORGET = "com.example.blb.debug.FORGET_OWNED";
+    /** {@link #ACTION_RUN} 的别名：以前它俩一个干跑一个真买，现在只有真买这一种。 */
     private static final String ACTION_BUY_ALL = "com.example.blb.debug.BUY_UNTIL_BROKE";
 
     /** 书名种子文件；用 stdin 重定向写进来，中文不经过命令行。 */
@@ -78,12 +74,10 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
         new Thread(() -> {
             try {
                 if (ACTION_LEDGER.equals(action)) ledger(app);
-                else if (ACTION_RUN.equals(action)) run(app);
-                else if (ACTION_BUY_ONE.equals(action)) buyOne(app);
+                else if (ACTION_RUN.equals(action) || ACTION_BUY_ALL.equals(action)) run(app);
                 else if (ACTION_SEED_NOVEL.equals(action)) seedNovel(app);
                 else if (ACTION_RECORD.equals(action)) recordBought(app, intent);
                 else if (ACTION_FORGET.equals(action)) forgetOwned(app, intent);
-                else if (ACTION_BUY_ALL.equals(action)) buyUntilBroke(app);
                 else Log.w(TAG, "不认识的动作：" + action);
             } catch (Throwable t) {
                 Log.e(TAG, "探针失败", t);
@@ -160,11 +154,9 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
         AppDatabase db = Db.get(app);
         SubscriptionDao subs = db.subscriptionDao();
 
-        Log.i(TAG, "干跑=" + Prefs.isDryRun(app)
-                + " 真买已确认=" + Prefs.isRealBuyConfirmed(app)
-                + " 安全阀=每号每轮最多 " + Prefs.maxChaptersPerRun(app) + " 章"
-                + " 真买保险丝=一趟最多 " + Prefs.realBuyLimit(app) + " 章（0＝不限）"
-                + " 每日代券上限=" + Prefs.dailySpendCap(app));
+        Log.i(TAG, "订阅：按队列顺序真买，一个号买到代券不够下一章就换号，不限章数"
+                + "；每号每日代券上限=" + (Prefs.dailySpendCap(app) == 0
+                ? "不限" : Prefs.dailySpendCap(app) + " 代券"));
 
         List<Account> accounts = db.accountDao().loadAll();
         Map<Long, String> names = new HashMap<>();
@@ -196,7 +188,7 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
         }
 
         List<PurchaseRow> rows = subs.loadAllRows();
-        Log.i(TAG, "账本共 " + rows.size() + " 条记录（含干跑痕迹）");
+        Log.i(TAG, "账本共 " + rows.size() + " 条记录");
         for (PurchaseRow r : rows) {
             Log.i(TAG, "  " + r.source + " " + r.accountDisplayName()
                     + " 《" + r.novelTitle + "》第" + r.chapterNo + "章"
@@ -253,7 +245,7 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
             return;
         }
         for (Purchase p : subs.loadPurchasesOfNovel(novel.id)) {
-            if (p.chapterId != chapter.id || !p.isReal() || p.accountId == account.id) continue;
+            if (p.chapterId != chapter.id || p.accountId == account.id) continue;
             Log.e(TAG, "拒绝写：第" + no + "章已经有别的号（id=" + p.accountId + "，" + p.source
                     + "）真买过 —— 一章只许一个号，先核对清楚");
             return;
@@ -281,7 +273,6 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
     private void auditOwners(SubscriptionDao subs, Novel novel, Map<Long, String> names) {
         Map<Long, List<Purchase>> byChapter = new HashMap<>();
         for (Purchase p : subs.loadPurchasesOfNovel(novel.id)) {
-            if (!p.isReal()) continue;   // 干跑痕迹不是归属
             List<Purchase> list = byChapter.get(p.chapterId);
             if (list == null) {
                 list = new ArrayList<>();
@@ -373,76 +364,24 @@ public class SubscribeProbeReceiver extends BroadcastReceiver {
                 + (next == null ? "没有了" : "第" + next.chapterNo + "章「" + next.title + "」"));
     }
 
-    /** 启动订阅队列 —— 只干跑。 */
+    /**
+     * 启动订阅队列 —— 真的订阅。
+     *
+     * <p>没有干跑、没有额度、没有章数上限：按队列顺序（所有号合起来还没买过的最小章）
+     * 一章一章往下买，一个号买到代券不够下一章就换下一个号，所有号都不够才收工。
+     *
+     * <p>护栏一条都没松：只花代券（实付里出现火券一律当买不起，绝不替他花火券）；
+     * 买哪一章看账本，所以一章只会归一个号；点了确认而结果不明＝整趟收工，绝不换号接着点；
+     * 买之前拿服务器端的「订阅清单 + 订阅明细」逐章对一次账，对不上就停。
+     *
+     * <pre>
+     * adb shell am broadcast -a com.example.blb.debug.RUN_SUBSCRIBE -p com.example.blb
+     * </pre>
+     */
     private void run(Context app) {
-        if (!Prefs.isDryRun(app)) {
-            // 这个动作永远不花钱：要真买请用 BUY_ONE_CHAPTER，它有自己的上限和自动回档。
-            Log.w(TAG, "干跑本来是关着的 —— 为这一趟验证强制打开，跑完仍然是开着的。"
-                    + "要真买请用 BUY_ONE_CHAPTER。");
-            Prefs.setDryRun(app, true);
-        }
-        Log.i(TAG, "启动订阅队列（干跑）—— 日志同时在 App 的签到页和 logcat 的 BlbAuto 里");
-        AutomationService.startSubscribe(app);
-    }
-
-    /**
-     * 真买，而且<b>这一趟只准买一章</b>。
-     *
-     * <p>为什么必须单独有这个入口：关掉干跑在界面上是「设置页按一颗开关＋确认一次」，
-     * 而用户手指动不了 —— 那颗开关他按不着，也<b>关不回去</b>。所以真买只能从这里授权，
-     * 而且做成一次性的：{@link Prefs#realBuyLimit} 设成 1，买成一章就整趟收工，
-     * 并由 {@code SubscribeRun.restoreDryRunAfterRealBuy} 把干跑自动拨回来 ——
-     * 忘了收尾也不会让明天的定时任务接着花他的券。
-     *
-     * <p>仍然要求先在设置页确认过「允许真实购买」（{@link Prefs#isRealBuyConfirmed}）：
-     * 花钱这件事不该只由一条 adb 广播决定。
-     *
-     * <pre>
-     * adb shell am broadcast -a com.example.blb.debug.BUY_ONE_CHAPTER -p com.example.blb
-     * </pre>
-     */
-    private void buyOne(Context app) {
-        if (!Prefs.isRealBuyConfirmed(app)) {
-            Log.w(TAG, "还没在设置页确认过「允许真实购买」——什么都没做。花钱这一步不能只靠 adb。");
-            return;
-        }
-        Prefs.setRealBuyLimit(app, 1);
-        Prefs.setDryRun(app, false);
-        Log.w(TAG, "启动订阅队列（真买，这一趟只准买 1 章）：买成就整趟收工、干跑自动拨回来。"
-                + "章节费只走代券，实付里出现火券一律当买不起。");
-        AutomationService.startSubscribe(app);
-    }
-
-    /**
-     * 真买，<b>按队列顺序一路买到所有号的代券都花光</b>（保险丝设成 0＝不限）。
-     *
-     * <p>这才是用户要的那件事的原话：「按队列顺序依次订阅，如果一个账号代券足够，
-     * 就订阅到代券花光，确保每一章只能有一个账号订阅」。判据已经用
-     * {@code BUY_ONE_CHAPTER} 在真机上验过一次（第50章，代券 33→13，账本记对了），
-     * 所以这一趟可以放开章数。
-     *
-     * <p>放开的只有「一趟最多买几章」，护栏一条都没松：
-     * <ul>
-     *   <li>只花代券 —— 实付里出现火券一律当买不起，换下一个号；</li>
-     *   <li>要买哪一章看账本（所有号合起来还没买过的最小章），一章只会归一个号；</li>
-     *   <li>点了「立即下载」而结果不明＝整趟收工，绝不换号接着点；</li>
-     *   <li>每号仍有安全阀（{@link Prefs#maxChaptersPerRun}，50 章）防选择器错位；</li>
-     *   <li>跑完（哪怕一章没买、哪怕中途中止）干跑自动拨回来，真买始终是一次性授权。</li>
-     * </ul>
-     *
-     * <pre>
-     * adb shell am broadcast -a com.example.blb.debug.BUY_UNTIL_BROKE -p com.example.blb
-     * </pre>
-     */
-    private void buyUntilBroke(Context app) {
-        if (!Prefs.isRealBuyConfirmed(app)) {
-            Log.w(TAG, "还没在设置页确认过「允许真实购买」——什么都没做。花钱这一步不能只靠 adb。");
-            return;
-        }
-        Prefs.setRealBuyLimit(app, 0);
-        Prefs.setDryRun(app, false);
         Log.w(TAG, "启动订阅队列（真买，不限章数）：按队列顺序，一个号买到代券不够下一章就换号，"
-                + "所有号都买不动为止。只花代券；结果不明立刻整趟收工；跑完干跑自动拨回来。");
+                + "所有号都买不动为止。只花代券；结果不明立刻整趟收工。"
+                + "日志同时在 App 的签到页和 logcat 的 BlbAuto 里。");
         AutomationService.startSubscribe(app);
     }
 }

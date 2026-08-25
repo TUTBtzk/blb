@@ -25,85 +25,36 @@ import java.util.Set;
  * 付费章归谁只认真实购买记录 —— 界面上那个「已下载」是本机状态、8 个号共用，读不出买家。
  *
  * <p>要买哪一章不看当前这个号，看账本：{@code findUnownedChaptersFrom} 给的是
- * <b>所有号合起来还没真买过</b>的最小章（干跑记录不算），所以各个号的券摊在不同章上，
+ * <b>所有号合起来还没买过</b>的最小章，所以各个号的券摊在不同章上，
  * 合起来把进度往前推，而不是几个号买同一章。{@code touched} 保证同一轮里一章只试一次。
  *
- * <p>停止条件是「这个号的代券不够 → 换下一个号」，不是章数。章数上限只是选择器错位时的安全阀。
+ * <p>停止条件只有一条：<b>这个号的代券不够下一章 → 换下一个号</b>；所有号都不够 → 收工。
+ * 没有章数上限 —— 一个号代券够就一直往下订到花光。
  */
 public final class SubscribeRun {
 
     /** 一轮里固定不变的参数。 */
     public static final class Plan {
         public final Novel novel;
-        public final boolean dryRun;
-        /** 安全阀：选择器一旦错位，最多错这么多章就停。真正的停止条件是代券花光。 */
-        public final int maxChapters;
+        /** 每号每日代券上限，0＝不限。 */
         public final int cap;
         public final long since;
-        /** 保险丝：这一整趟最多真买几章，0＝不限。见 {@link Prefs#realBuyLimit}。 */
-        public final int buyLimit;
-        /**
-         * 只用来在真买成一章的<b>当场</b>扣掉常驻授权的当日额度（{@link BuyMandate#noteBought}）。
-         * 单测里是 null —— 判定逻辑本身不需要它。
-         */
-        private final Context app;
 
-        public Plan(Novel novel, boolean dryRun, int maxChapters, int cap, long since,
-                    int buyLimit) {
-            this(null, novel, dryRun, maxChapters, cap, since, buyLimit);
-        }
-
-        private Plan(Context app, Novel novel, boolean dryRun, int maxChapters, int cap, long since,
-                     int buyLimit) {
-            this.app = app;
+        public Plan(Novel novel, int cap, long since) {
             this.novel = novel;
-            this.dryRun = dryRun;
-            this.maxChapters = maxChapters;
             this.cap = cap;
             this.since = since;
-            this.buyLimit = buyLimit;
         }
 
         public static Plan from(Context context, Novel novel) {
-            return new Plan(context.getApplicationContext(), novel, Prefs.isDryRun(context),
-                    Prefs.maxChaptersPerRun(context), Prefs.dailySpendCap(context),
-                    startOfToday(), Prefs.realBuyLimit(context));
-        }
-
-        /**
-         * 这一趟真买的章数够了吗 —— 够了就整趟收工，剩下的号一个都不动。
-         *
-         * <p>只数真买（{@code tally.bought}）：干跑一分券没花，不该占用这条额度。
-         */
-        public boolean reachedBuyLimit(int bought) {
-            return hasBuyLimit() && bought >= buyLimit;
-        }
-
-        /** 这一趟的保险丝装着吗（干跑那趟不算：干跑一分券都不花）。 */
-        public boolean hasBuyLimit() {
-            return !dryRun && buyLimit > 0;
-        }
-
-        /**
-         * 每个号这一轮最多试多少章。
-         *
-         * <p>它只是<b>安全阀</b>（选择器一旦错位，最多错这么多章就停），真正的停止条件是
-         * 「代券不够下一章 → 换号」。干跑以前只走 1 章，那样看不出「一个号连着订到余额不足」
-         * 到底对不对；现在干跑走同样的章数，靠 {@link SubscribeRun#stopBecauseBroke} 在内存里
-         * 模拟扣券来决定什么时候换号。
-         */
-        public int perAccount() {
-            return Math.max(1, maxChapters);
+            return new Plan(novel, Prefs.dailySpendCap(context), startOfToday());
         }
 
         public String describe() {
-            return (dryRun ? "订阅走干跑（不花券，模拟扣券来决定什么时候换号）" : "订阅是真实购买")
-                    + "：《" + novel.title + "》从第" + novel.startFrom() + "章起，"
-                    + "一个号连着往下订到代券不够为止再换下一个号（安全阀：每号最多 "
-                    + maxChapters + " 章）"
-                    + (cap > 0 ? "，每号每日上限 " + cap + " 代券" : "")
-                    + (hasBuyLimit()
-                    ? "；保险丝：这一趟只准真买 " + buyLimit + " 章，买到就收工并把干跑重新打开" : "");
+            return "订阅是真实购买：《" + novel.title + "》从第" + novel.startFrom() + "章起，"
+                    + "按队列顺序一章一章往下订，一个号订到代券不够为止再换下一个号"
+                    + "（不限章数）"
+                    + (cap > 0 ? "，每号每日上限 " + cap + " 代券" : "");
         }
     }
 
@@ -133,51 +84,8 @@ public final class SubscribeRun {
         return only;
     }
 
-    /**
-     * 每趟干跑开始前，把上一趟留下的干跑痕迹抹掉。
-     *
-     * <p>干跑记录是攒着的：上一趟判给甲的第 49 章会一直留在账本里，这一趟判给乙时两条并存，
-     * 账本看起来就像「同一章被两个号订了」—— 而「一章只归一个号」正是要靠账本核对的那条约束。
-     * 清掉之后账本里的 DRY_RUN 只讲这一趟的事。真买那一趟一条都不动（真记录本来就该攒）。
-     */
-    public static void clearOldDryRuns(SubscriptionDao subs, Plan plan, StepRunner.Host host) {
-        if (!plan.dryRun) return;
-        int stale = subs.countDryRuns(plan.novel.id);
-        if (stale <= 0) return;
-        subs.clearDryRuns(plan.novel.id);
-        if (host != null) {
-            host.log("先抹掉上一趟留下的 " + stale + " 条干跑痕迹（只是判定记录，一分券都没花过）"
-                    + "—— 这样这一趟的账本才能直接看出「一章只归一个号」");
-        }
-    }
-
-    /**
-     * 真买那一趟跑完，把干跑重新打开 —— 真买是一次性授权，用完自己回到安全档。
-     *
-     * <p>为什么非要自动回档：关掉干跑这件事在界面上是「设置页按一颗开关＋确认一次」，
-     * 而这个 App 的使用者手指动不了 —— 他<b>关不掉</b>。忘了关就等于下一趟（包括每天定时那趟）
-     * 继续花他的代券，而定时那趟没人在旁边看。
-     *
-     * <p>它现在<b>不看这一趟买成了几章</b>，只看「进来的时候干跑是关着的吗」，而且由调用方
-     * 放在 {@code finally} 里 —— 三种以前会漏掉回档的情况都被这样堵上：
-     * <ul>
-     *   <li>{@code BUY_UNTIL_BROKE} 那种授权上限是 0（买到代券花光），永远到不了上限；</li>
-     *   <li>一章都没买成的那趟（没买到就不回档＝开关一直开着）；</li>
-     *   <li>跑之前就中止的那趟（没有启用的账号、selectors 缺 key、没设目标小说）。</li>
-     * </ul>
-     */
-    public static void restoreDryRunAfterRealBuy(Context context, StepRunner.Host host) {
-        if (Prefs.isDryRun(context)) return;   // 本来就是安全档（干跑那趟）
-        Prefs.setDryRun(context, true);
-        if (host != null) {
-            host.log("真买那一趟到此结束 —— 已自动把干跑重新打开（真买是一次性授权）。"
-                    + "下一趟想再真买，要重新授权一次。");
-        }
-    }
-
     /** 计数。备注直接写进调用方的列表，省一次搬运。 */    public static final class Tally {
         public int bought;
-        public int dryRun;
         public int ownedAlready;
         public int failed;
         /** 实付代券累计。 */
@@ -220,9 +128,9 @@ public final class SubscribeRun {
         if (!auditLedger(r, host, subs, plan, account, tally)) return;
         if (!syncCatalog(r, host, subs, plan, account, tally)) return;
 
-        int perAccount = plan.perAccount();
+        // 整条队列一次取完，不设条数上限：停下来的理由只能是「代券不够下一章」。
         List<Chapter> chapters = subs.findUnownedChaptersFrom(
-                plan.novel.id, plan.novel.startFrom(), perAccount + touched.size());
+                plan.novel.id, plan.novel.startFrom());
         if (chapters.isEmpty()) {
             host.log("  没有待订阅的章节：从第" + plan.novel.startFrom()
                     + "章起的每一章都已经有号拥有了");
@@ -235,17 +143,12 @@ public final class SubscribeRun {
             if (host.isCancelled()) {
                 throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消");
             }
-            if (doneHere >= perAccount) {
-                host.log("  " + name + " 这一轮到此为止（安全阀：每号最多 "
-                        + perAccount + " 章）");
-                return;
-            }
             if (touched.contains(chapter.id)) continue;
 
             // 进页之前先算一次「还买得起吗」。章节表里的单价是历史遗留（旧版按火券登记，
             // 扫目录不会写它），所以优先用上一章的实付代券当估价。
             int estimate = lastPaid > 0 ? lastPaid : chapter.priceCoupons;
-            String stop = stopBecauseBroke(name, plan.dryRun, budget, estimate,
+            String stop = stopBecauseBroke(name, budget, estimate,
                     spentToday, plan.cap, chapter.chapterNo);
             if (stop != null) {
                 host.log("  " + stop);
@@ -254,19 +157,17 @@ public final class SubscribeRun {
 
             touched.add(chapter.id);
             host.log("  " + name + " 试第" + chapter.chapterNo + "章「" + chapter.title + "」");
-            SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter, plan.dryRun);
+            SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter);
             host.log("    " + result.message);
             if (result.coupons >= 0) account.lastKnownCoupons = result.coupons;
             if (result.vouchers >= 0) account.lastKnownVouchers = result.vouchers;
             if (result.coupons >= 0 || result.vouchers >= 0) {
                 accountDao.setBalance(account.id, result.coupons, result.vouchers);
-                // 干跑不扣券，页面上的余额一动不动 —— 拿它当预算，「买到余额不足」就永远不会
-                // 发生，干跑会一路勾到安全阀，把后面几个号该拿的章全占掉。所以干跑只信自己
-                // 模拟扣出来的那个数（见下面），真买才用页面上的新余额。
-                if (!plan.dryRun && result.vouchers >= 0) budget = result.vouchers;
+                // 买成之后页面上的余额就是权威预算：下一章买不买得起完全看它。
+                if (result.vouchers >= 0) budget = result.vouchers;
             }
 
-            if (!apply(subs, host, tally, account, chapter, result, plan)) {
+            if (!apply(subs, host, tally, account, chapter, result)) {
                 // 券不够只是这个号买不起，别把这一章从整轮里划掉 —— 后面的号可能买得起。
                 if (result.status == SubscribeTask.Status.INSUFFICIENT) touched.remove(chapter.id);
                 return;
@@ -274,20 +175,9 @@ public final class SubscribeRun {
             doneHere++;
             if (result.costVouchers > 0) lastPaid = result.costVouchers;
             if (result.status == SubscribeTask.Status.BOUGHT) spentToday += result.costVouchers;
-            if (plan.reachedBuyLimit(tally.bought)) {
-                host.log("  真买上限到了（这一趟只准真买 " + plan.buyLimit
-                        + " 章）—— 整趟收工，后面的号一个都不动");
-                return;
-            }
-            if (result.status == SubscribeTask.Status.DRY_RUN) {
-                budget -= result.costVouchers;
-                spentToday += result.costVouchers;
-                host.log("    干跑记账：模拟扣 " + result.costVouchers + " 代券，"
-                        + name + " 名下还剩 " + budget + " 代券（真实余额一分没动）");
-            }
         }
         if (doneHere > 0) {
-            host.log("  " + name + " 这一轮走了 " + doneHere + " 章，取到的这一批章都过完了");
+            host.log("  " + name + " 这一轮走了 " + doneHere + " 章，整条队列已经走到底了");
         }
     }
 
@@ -297,14 +187,14 @@ public final class SubscribeRun {
      * <p>拆成一个纯函数是为了能单测：这是「一个号订到余额不足再换下一个号」的判据本身，
      * 而它在真机上要跑一整趟 8 个号才看得到一次。
      *
-     * @param budget   这个号还剩多少代券（真买＝页面上刚读到的；干跑＝模拟扣券之后的）
+     * @param budget   这个号还剩多少代券（页面上刚读到的那个数）
      * @param estimate 下一章大概要多少代券，0＝不知道（那就进页面让菠萝包自己说）
      */
-    static String stopBecauseBroke(String name, boolean dryRun, int budget, int estimate,
+    static String stopBecauseBroke(String name, int budget, int estimate,
                                    int spentToday, int cap, int chapterNo) {
         if (estimate <= 0 || budget < 0) return null;
         if (budget < estimate) {
-            return name + (dryRun ? " 模拟扣券后只剩 " : " 只剩 ") + budget
+            return name + " 只剩 " + budget
                     + " 代券，不够买第" + chapterNo + "章（约 " + estimate + " 代券），换下一个号";
         }
         if (cap > 0 && spentToday + estimate > cap) {
@@ -435,12 +325,11 @@ public final class SubscribeRun {
      *
      * @throws StepRunner.StepFailure {@code MONEY_UNCLEAR} —— 点过「立即下载」而结果不明，
      *                                券可能已经扣了。这一条会被两个队列都当成<b>全局</b>失败，
-     *                                整趟就此收工。2026-08-24 那次事故就差这一下：失败不占真买
-     *                                保险丝的额度，于是三个号各点了一次，两个真扣了券。
+     *                                整趟就此收工。2026-08-24 那次事故就差这一下：三个号各点了
+     *                                一次，两个真扣了券。
      */
     private static boolean apply(SubscriptionDao subs, StepRunner.Host host, Tally tally,
-                                 Account account, Chapter chapter, SubscribeTask.Result result,
-                                 Plan plan)
+                                 Account account, Chapter chapter, SubscribeTask.Result result)
             throws StepRunner.StepFailure {
         String name = account.displayName();
         String label = "第" + chapter.chapterNo + "章";
@@ -450,16 +339,8 @@ public final class SubscribeRun {
                         result.cost, result.costVouchers, Purchase.SRC_AUTO));
                 tally.bought++;
                 tally.spent += result.costVouchers;
-                // 常驻授权的当日额度当场扣掉 —— 进程随时会被 MIUI 杀掉（SwipeUpClean），
-                // 等跑完再结算的话，系统重发的那一趟会拿着满额度把同样的章再买一遍。
-                if (plan != null && plan.app != null) BuyMandate.noteBought(plan.app, 1);
                 host.log("  " + name + " 订到" + label + "，花 " + result.costVouchers + " 代券"
                         + (result.cost > 0 ? "＋" + result.cost + " 火券（不该发生，请核对）" : ""));
-                return true;
-            case DRY_RUN:
-                subs.upsertPurchase(Purchase.of(account.id, chapter.id, 0, 0, Purchase.SRC_DRY_RUN));
-                tally.dryRun++;
-                host.log("  " + name + " " + label + " 干跑通过（判定买得起，没扣券）");
                 return true;
             case ALREADY:
                 // 免费章：谁登录都看得到，账本补一条，否则每轮都会再来一次。

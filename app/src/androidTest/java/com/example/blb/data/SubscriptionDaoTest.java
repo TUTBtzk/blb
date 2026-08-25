@@ -78,13 +78,12 @@ public class SubscriptionDaoTest extends DbTestBase {
     }
 
     @Test
-    public void countRealPurchaseIgnoresDryRun() {
+    public void countRealPurchaseCountsEveryRecord() {
         long acc = newAccount("a@x.com", 100, true, 1);
         long novel = newNovel("目标书", true);
         long ch = newChapter(novel, 1, 20);
 
-        buy(acc, ch, 0, Purchase.SRC_DRY_RUN);
-        assertEquals(0, subs.countRealPurchase(acc, ch));
+        assertEquals("一条都没有的时候是 0", 0, subs.countRealPurchase(acc, ch));
 
         buy(acc, ch, 20, Purchase.SRC_AUTO);
         assertEquals(1, subs.countRealPurchase(acc, ch));
@@ -119,16 +118,22 @@ public class SubscriptionDaoTest extends DbTestBase {
         assertNull("全买完了就不该再建议", subs.findNextUnownedChapter(novel));
     }
 
+    /**
+     * 免费章回填（{@code OWNED}）也算这一章有了归属：一分券都没花，但谁登录都看得到，
+     * 不该再有第二个号为它花券。
+     */
     @Test
-    public void dryRunRecordDoesNotMakeAChapterLookOwned() {
+    public void aFreeChapterBackfillAlsoCountsAsOwned() {
         long acc = newAccount("a@x.com", 100, true, 1);
         long novel = newNovel("目标书", true);
         long ch1 = newChapter(novel, 1, 20);
+        long ch2 = newChapter(novel, 2, 20);
 
-        buy(acc, ch1, 0, Purchase.SRC_DRY_RUN);
+        buy(acc, ch1, 0, Purchase.SRC_OWNED);
 
-        assertEquals("干跑只留痕，这一章还是没人真买", ch1, subs.findNextUnownedChapter(novel).id);
-        assertEquals(acc, subs.suggestBuyer(ch1).id);
+        assertEquals("第 1 章已经有归属了，下一章是第 2 章",
+                ch2, subs.findNextUnownedChapter(novel).id);
+        assertNull("这个号已经拥有第 1 章，不该再被建议去买它", subs.suggestBuyer(ch1));
     }
 
     /**
@@ -194,16 +199,16 @@ public class SubscriptionDaoTest extends DbTestBase {
     }
 
     @Test
-    public void accountStatsAndRowsOnlyCountRealPurchases() {
+    public void loadAllRowsCarriesEveryPurchaseForCsvExport() {
         long acc = newAccount("a@x.com", 100, true, 1);
         long novel = newNovel("目标书", true);
         long ch1 = newChapter(novel, 1, 20);
         long ch2 = newChapter(novel, 2, 30);
         buy(acc, ch1, 20, Purchase.SRC_AUTO);
-        buy(acc, ch2, 0, Purchase.SRC_DRY_RUN);
+        buy(acc, ch2, 0, Purchase.SRC_OWNED);
 
         List<PurchaseRow> rows = subs.loadAllRows();
-        assertEquals("导出要连干跑记录一起带走，界面上会区分显示", 2, rows.size());
+        assertEquals("导出要连免费章回填一起带走，界面上会区分显示", 2, rows.size());
         assertEquals(1, rows.get(0).chapterNo);
         assertEquals("目标书", rows.get(0).novelTitle);
     }

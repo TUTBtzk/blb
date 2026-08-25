@@ -8,7 +8,6 @@ import android.util.Log;
 import com.example.blb.auto.AutomationBus;
 import com.example.blb.auto.AutomationService;
 import com.example.blb.auto.BlbAccessibilityService;
-import com.example.blb.auto.BuyMandate;
 import com.example.blb.auto.Keys;
 import com.example.blb.auto.SelectorSet;
 import com.example.blb.auto.SubscribeRun;
@@ -26,15 +25,14 @@ import com.example.blb.work.DailyScheduler;
 import java.util.List;
 
 /**
- * 不用碰屏幕的总控（<b>只存在于 debug 构建</b>）：开关每日定时、给／收真买授权、当场跑一趟、
+ * 不用碰屏幕的总控（<b>只存在于 debug 构建</b>）：开关每日定时、当场跑一趟、
  * 一条命令问出「现在到底怎么样了」。
  *
  * <p>为什么它是这个 App 的必需件而不是调试玩具：使用者是渐冻症患者，手指动不了。
- * 「每日自动签到」是设置页上一颗开关、「允许真实购买」是另一颗开关加一次确认对话框、
- * 「跑今天的流程」是首页一颗按钮 —— 这三样他一个都按不了。也就是说在有这个接收器之前，
- * 这个 App 只能靠旁人替他按才跑得起来。adb 广播是他唯一按得动的按钮。
+ * 「每日自动签到」是设置页上一颗开关、「跑今天的流程」是首页一颗按钮 —— 这两样他都按不了。
+ * 也就是说在有这个接收器之前，这个 App 只能靠旁人替他按才跑得起来。adb 广播是他唯一按得动的按钮。
  *
- * <p>它<b>不碰账本</b>：只写 SharedPreferences（开关、授权）和启动队列，一条购买记录都不动。
+ * <p>它<b>不碰账本</b>：只写 SharedPreferences（开关）和启动队列，一条购买记录都不动。
  *
  * <pre>
  * # 现在怎么样了（只读，什么都不改）
@@ -44,11 +42,6 @@ import java.util.List;
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on true
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on true --ei hour 9
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on false
- *
- * # 常驻真买授权：从今天起 7 天、每天最多真买 2 章（不给参数＝1 天 1 章）
- * adb shell am broadcast -a com.example.blb.debug.AUTHORIZE_BUY -p com.example.blb \
- *     --ei days 7 --ei per_day 2
- * adb shell am broadcast -a com.example.blb.debug.REVOKE_BUY -p com.example.blb
  *
  * # 立刻跑一趟（不等定时）：整套流程／只签到
  * adb shell am broadcast -a com.example.blb.debug.DAILY_NOW -p com.example.blb
@@ -62,8 +55,6 @@ public class ControlReceiver extends BroadcastReceiver {
 
     private static final String ACTION_STATUS = "com.example.blb.debug.STATUS";
     private static final String ACTION_SCHEDULE = "com.example.blb.debug.SCHEDULE";
-    private static final String ACTION_AUTHORIZE = "com.example.blb.debug.AUTHORIZE_BUY";
-    private static final String ACTION_REVOKE = "com.example.blb.debug.REVOKE_BUY";
     private static final String ACTION_DAILY_NOW = "com.example.blb.debug.DAILY_NOW";
     private static final String ACTION_CHECKIN_NOW = "com.example.blb.debug.CHECKIN_NOW";
 
@@ -77,8 +68,6 @@ public class ControlReceiver extends BroadcastReceiver {
             try {
                 if (ACTION_STATUS.equals(action)) status(app);
                 else if (ACTION_SCHEDULE.equals(action)) schedule(app, intent);
-                else if (ACTION_AUTHORIZE.equals(action)) authorize(app, intent);
-                else if (ACTION_REVOKE.equals(action)) revoke(app);
                 else if (ACTION_DAILY_NOW.equals(action)) runNow(app, true);
                 else if (ACTION_CHECKIN_NOW.equals(action)) runNow(app, false);
                 else Log.w(TAG, "不认识的动作：" + action);
@@ -124,34 +113,6 @@ public class ControlReceiver extends BroadcastReceiver {
                 + "下一趟大约在 " + minutes / 60 + " 小时 " + minutes % 60 + " 分钟后";
     }
 
-    // ---------- 真买授权 ----------
-
-    /**
-     * 给常驻真买授权。参数：{@code --ei days N}（默认 1）、{@code --ei per_day M}（默认 1）。
-     *
-     * <p>默认最小：1 天 1 章。放开到几天几章由他自己说 —— 花的是他的代券。
-     */
-    private void authorize(Context app, Intent intent) {
-        int days = intent.getIntExtra("days", 1);
-        int perDay = intent.getIntExtra("per_day", 1);
-        BuyMandate m = BuyMandate.grant(app, days, perDay);
-        Log.w(TAG, "已授权真买：" + m.describe());
-        Log.i(TAG, "生效范围只有「每日整套流程」那条路（定时那趟，或 DAILY_NOW）。"
-                + "每趟跑完都会自动回到干跑，第二天授权还在、额度回满；"
-                + "过期后自动失效，不需要任何人去按什么。撤销：REVOKE_BUY");
-        Log.i(TAG, "护栏一条都没松：只花代券（实付里出现火券一律当买不起）、"
-                + "买哪一章看账本（所有号合起来还没买过的最小章）、"
-                + "买前先拿服务器端的订阅清单和订阅明细逐章对一次账、"
-                + "点了确认而结果不明立刻整趟停下。");
-        Log.i(TAG, describeSchedule(app));
-    }
-
-    private void revoke(Context app) {
-        BuyMandate.revoke(app);
-        Log.w(TAG, "已撤销真买授权，并当场拨回干跑 —— 从现在起一分券都不会花。"
-                + "签到、广告、干跑判定照旧。");
-    }
-
     // ---------- 立刻跑一趟 ----------
 
     /**
@@ -175,7 +136,6 @@ public class ControlReceiver extends BroadcastReceiver {
         if (daily) {
             Log.i(TAG, "开始跑整套流程（签到 → 广告 → 券够就订阅）。"
                     + "屏幕要亮着且已解锁；进度看 adb logcat -s BlbAuto");
-            Log.i(TAG, BuyMandate.read(app).describe());
             AutomationService.startDaily(app);
         } else {
             Log.i(TAG, "开始跑签到队列（只签到，不看广告不订阅）");
@@ -199,11 +159,9 @@ public class ControlReceiver extends BroadcastReceiver {
                 + (missing.isEmpty() ? "订阅需要的都配齐了"
                 : "订阅还缺 " + android.text.TextUtils.join("、", missing)));
 
-        Log.i(TAG, "花钱这一档：" + (Prefs.isDryRun(app)
-                ? "干跑（一分券都不花）" : "真买已武装，一趟最多 " + Prefs.realBuyLimit(app) + " 章"));
-        Log.i(TAG, "真买授权：" + BuyMandate.read(app).describe());
-        Log.i(TAG, "安全阀：每号每轮最多 " + Prefs.maxChaptersPerRun(app) + " 章；"
-                + "每号每日代券上限 " + (Prefs.dailySpendCap(app) == 0
+        Log.i(TAG, "花钱这一档：按队列顺序真的订阅 —— 一个号订到代券不够下一章就换下一个号，"
+                + "不限章数（实付里出现火券一律当买不起，绝不替你花火券）");
+        Log.i(TAG, "每号每日代券上限：" + (Prefs.dailySpendCap(app) == 0
                 ? "不限" : Prefs.dailySpendCap(app) + " 代券"));
         Log.i(TAG, "广告：每号每天 " + Prefs.adsPerAccount(app) + " 个"
                 + (Prefs.isAdAssist(app) ? "，按键由脚本替你按（视频照原速播给你看）"

@@ -61,22 +61,6 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         assertEquals(2, pending.get(0).chapterNo);
     }
 
-    /**
-     * 干跑记录不算已有 —— 否则干跑一遍就把整轮章节「用掉」了，真买时反而跳过。
-     * 这也是队列必须一次取一批、而不是循环取「下一章」的原因：干跑时那一章会一直返回。
-     */
-    @Test
-    public void dryRunRecordsDoNotHideChapters() {
-        long novel = newNovel("测试书", true);
-        long c1 = newChapter(novel, 1, 10);
-        long a = newAccount("a@x.com", 100, true, 0);
-        purchaseAt(a, c1, 0, Purchase.SRC_DRY_RUN, 1_000L);
-
-        List<Chapter> pending = subs.findUnownedChapters(novel, 10);
-        assertEquals(1, pending.size());
-        assertEquals(1, pending.get(0).chapterNo);
-    }
-
     @Test
     public void otherNovelsChaptersAreNotMixedIn() {
         long mine = newNovel("目标书", true);
@@ -114,20 +98,20 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         assertEquals(tieLate, buyers.get(2).id);
     }
 
+    /** 已经真买过这一章的号、以及停用的号，都不该再被推荐。 */
     @Test
-    public void buyersExcludeRealBuyersAndDisabledAccountsButKeepDryRunOnes() {
+    public void buyersExcludeRealBuyersAndDisabledAccounts() {
         long novel = newNovel("测试书", true);
         long c1 = newChapter(novel, 1, 10);
         long bought = newAccount("bought@x.com", 0, 900, true, 0);
         long off = newAccount("off@x.com", 0, 800, false, 1);
-        long dry = newAccount("dry@x.com", 0, 700, true, 2);
+        long rich = newAccount("rich@x.com", 0, 700, true, 2);
         long free = newAccount("free@x.com", 0, 600, true, 3);
         buy(bought, c1, 10, Purchase.SRC_AUTO);
-        purchaseAt(dry, c1, 0, Purchase.SRC_DRY_RUN, 1_000L);
 
         List<Account> buyers = subs.suggestBuyers(c1);
         assertEquals(2, buyers.size());
-        assertEquals(dry, buyers.get(0).id);
+        assertEquals(rich, buyers.get(0).id);
         assertEquals(free, buyers.get(1).id);
         for (Account a : buyers) {
             assertTrue(a.id != bought && a.id != off);
@@ -172,7 +156,7 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         purchaseAt(a, c1, 7, Purchase.SRC_AUTO, cutoff - 1);       // 昨天，不算
         purchaseAt(a, c2, 11, Purchase.SRC_AUTO, cutoff);          // 正好在边界上，算
         purchaseAt(a, c3, 13, Purchase.SRC_MANUAL, cutoff + 1);    // 手动补录也是真花的
-        purchaseAt(a, c4, 99, Purchase.SRC_DRY_RUN, cutoff + 2);   // 干跑不算
+        purchaseAt(a, c4, 0, Purchase.SRC_OWNED, cutoff + 2);      // 免费章，一分没花
 
         assertEquals(24, subs.spentSince(a, cutoff));
     }
@@ -254,17 +238,6 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         assertEquals(c3, subs.findNextUnownedChapterFrom(novel, from).id);
     }
 
-    /** 干跑记录不占位：干跑一遍之后真买那一趟必须还能看见同一章。 */
-    @Test
-    public void dryRunDoesNotConsumeAChapterForTheFromQueries() {
-        long novel = newNovel("测试书", true);
-        long c1 = newChapter(novel, 1, 10);
-        long a = newAccount("a@x.com", 0, 100, true, 0);
-        purchaseAt(a, c1, 0, Purchase.SRC_DRY_RUN, 1_000L);
-
-        assertEquals(c1, subs.findNextUnownedChapterFrom(novel, 1).id);
-    }
-
     // ---------- spentVouchersSince ----------
 
     /** 每日花费上限按代券算，所以只能加 cost_vouchers 那一列，火券那一列不能混进来。 */
@@ -279,7 +252,7 @@ public class SubscribeQueueDaoTest extends DbTestBase {
 
         purchaseAt(a, c1, 0, 9, Purchase.SRC_AUTO, cutoff - 1);      // 昨天，不算
         purchaseAt(a, c2, 0, 12, Purchase.SRC_AUTO, cutoff);         // 边界上，算
-        purchaseAt(a, c3, 0, 99, Purchase.SRC_DRY_RUN, cutoff + 1);  // 干跑一分钱没花
+        purchaseAt(a, c3, 0, 0, Purchase.SRC_OWNED, cutoff + 1);     // 免费章，一分钱没花
 
         assertEquals(12, subs.spentVouchersSince(a, cutoff));
         assertEquals("这一趟没动火券", 0, subs.spentSince(a, cutoff));
@@ -332,14 +305,15 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         assertEquals(target, SubscribeRun.resolveTarget(subs, null).id);
     }
 
-    // ---------- 干跑痕迹（每趟干跑开始前清掉） ----------
+    // ---------- 账本里每一条都是真的（干跑整套删除之后） ----------
 
     /**
-     * 清干跑痕迹只许动 DRY_RUN 那一种。真买、手动补录、锁位回填都是真台账，
-     * 删掉任何一条都会让那一章被重新买一遍 —— 那是真花钱。
+     * 真买、手动补录、免费章回填都是真台账，删掉任何一条都会让那一章被重新买一遍 ——
+     * 那是真花钱。干跑功能删掉之后账本里<b>不该再有</b>「只留痕、不算归属」的记录：
+     * 每一条都让那一章从待买队列里消失。
      */
     @Test
-    public void clearingDryRunsLeavesEveryRealRecordAlone() {
+    public void everyRecordCountsAsOwnership() {
         long novel = newNovel("测试书", true);
         long c1 = newChapter(novel, 1, 10);
         long c2 = newChapter(novel, 2, 10);
@@ -350,35 +324,13 @@ public class SubscribeQueueDaoTest extends DbTestBase {
         buy(a, c1, 0, 20, Purchase.SRC_AUTO);
         buy(a, c2, 0, 0, Purchase.SRC_OWNED);
         buy(b, c3, 25, Purchase.SRC_MANUAL);
-        purchaseAt(a, c4, 0, 0, Purchase.SRC_DRY_RUN, 1_000L);
-        purchaseAt(b, c4, 0, 0, Purchase.SRC_DRY_RUN, 2_000L);
 
-        assertEquals(2, subs.countDryRuns(novel));
-        subs.clearDryRuns(novel);
-        assertEquals(0, subs.countDryRuns(novel));
-
-        assertEquals("三条真记录一条都不许掉", 3, subs.loadPurchasesOfNovel(novel).size());
-        assertEquals("真买的那一章还是它自己的", 1, subs.countRealPurchase(a, c1));
+        assertEquals("三条记录一条都不许掉", 3, subs.loadPurchasesOfNovel(novel).size());
+        assertEquals(1, subs.countRealPurchase(a, c1));
         assertEquals(1, subs.countRealPurchase(a, c2));
         assertEquals(1, subs.countRealPurchase(b, c3));
-        assertEquals("干跑不占坑，第 4 章清完还是待买", c4,
-                subs.findNextUnownedChapterFrom(novel, 1).id);
-    }
-
-    /** 别的书的干跑痕迹不受牵连 —— 清的是这一趟这本书。 */
-    @Test
-    public void clearingDryRunsIsScopedToOneNovel() {
-        long mine = newNovel("目标书", true);
-        long other = newNovel("别的书", false);
-        long c1 = newChapter(mine, 1, 10);
-        long o1 = newChapter(other, 1, 10);
-        long a = newAccount("a@x.com", 0, 100, true, 0);
-        purchaseAt(a, c1, 0, 0, Purchase.SRC_DRY_RUN, 1_000L);
-        purchaseAt(a, o1, 0, 0, Purchase.SRC_DRY_RUN, 1_000L);
-
-        subs.clearDryRuns(mine);
-        assertEquals(0, subs.countDryRuns(mine));
-        assertEquals(1, subs.countDryRuns(other));
+        assertEquals("前三章都有归属了，下一章只能是第 4 章",
+                c4, subs.findNextUnownedChapterFrom(novel, 1).id);
     }
 
     // ---------- 章号搬家（作者往中间插了一章） ----------

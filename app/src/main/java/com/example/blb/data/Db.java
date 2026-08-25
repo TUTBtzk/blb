@@ -81,13 +81,31 @@ public final class Db {
         }
     };
 
+    /**
+     * v4 → v5：把账本里遗留的干跑记录（{@code source='DRY_RUN'}）全部删掉。
+     *
+     * <p>干跑功能整套删了，所有查询里那句「排除 DRY_RUN」也跟着删了。要是不先把这些行清掉，
+     * 它们下一秒就会被当成<b>真的有号买过这一章</b> —— 于是那些章会被永久跳过，
+     * 一本书直接漏订，正好撞在「不多订、不漏订，8 个号拼出完整一本」这条硬约束上。
+     *
+     * <p>删它们不丢任何真实数据：干跑记的是「判定买得起」，花费两列都是 0，一分券都没花过。
+     * 真实购买（AUTO）、手动补录（MANUAL）、按「已下载」回填（OWNED）一条都不动。
+     */
+    static final Migration MIGRATION_4_5 = new Migration(4, 5) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase db) {
+            db.execSQL("DELETE FROM purchase WHERE source = 'DRY_RUN'");
+        }
+    };
+
     public static AppDatabase get(Context context) {
         if (instance == null) {
             synchronized (Db.class) {
                 if (instance == null) {
                     instance = Room.databaseBuilder(
                                     context.getApplicationContext(), AppDatabase.class, NAME)
-                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4,
+                                    MIGRATION_4_5)
                             .build();
                 }
             }

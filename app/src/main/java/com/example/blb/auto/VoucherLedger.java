@@ -159,7 +159,7 @@ public final class VoucherLedger {
      * </ul>
      *
      * @param uiFire     界面那一行说花了多少火券
-     * @param ledgerPaid 账本里这个号在这本书上「花过券」的记录条数（干跑不算，免费章不算）
+     * @param ledgerPaid 账本里这个号在这本书上「花过券」的记录条数（免费章不算）
      * @param ledgerFire 账本记的火券花费合计，正常是 0
      */
     public static Audit reconcile(String who, String bookTitle, Reading ui,

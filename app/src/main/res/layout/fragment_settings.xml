@@ -99,16 +99,9 @@
                 android:orientation="vertical">
 
                 <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/dry_run"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_dry_run" />
-
-                <com.google.android.material.materialswitch.MaterialSwitch
                     android:id="@+id/daily"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
                     android:text="@string/settings_daily" />
 
                 <TextView
@@ -120,21 +113,6 @@
 
                 <EditText
                     android:id="@+id/daily_hour"
-                    style="@style/Blb.Field"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:importantForAutofill="no"
-                    android:inputType="number" />
-                <TextView
-                    style="@style/Blb.Text.Hint"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="@string/settings_max_chapters" />
-
-                <EditText
-                    android:id="@+id/max_chapters"
                     style="@style/Blb.Field"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"

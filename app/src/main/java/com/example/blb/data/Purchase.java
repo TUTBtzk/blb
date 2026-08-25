@@ -25,8 +25,6 @@ public class Purchase {
     public static final String SRC_AUTO = "AUTO";
     /** 你自己在 App 里手动补录的。 */
     public static final String SRC_MANUAL = "MANUAL";
-    /** 干跑：走完流程但没真的点确认，只留痕。 */
-    public static final String SRC_DRY_RUN = "DRY_RUN";
     /**
      * 界面证明这个号已经能看这一章（选择章节页那一行写着<b>「已下载」</b>，或者根本没有锁＝免费章），
      * 但花了多少券无从得知。
@@ -81,10 +79,5 @@ public class Purchase {
         p.source = source;
         p.purchasedAt = System.currentTimeMillis();
         return p;
-    }
-
-    /** 干跑记录不代表真的拥有这一章。 */
-    public boolean isReal() {
-        return !SRC_DRY_RUN.equals(source);
     }
 }

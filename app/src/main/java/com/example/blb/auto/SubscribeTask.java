@@ -43,8 +43,6 @@ public final class SubscribeTask {
     public enum Status {
         /** 真的订阅成功了（目标行出现「已下载」，或者页面上的代券掉了）。 */
         BOUGHT,
-        /** 干跑：勾中了目标章、读到了价格和余额，没点「立即下载」。 */
-        DRY_RUN,
         /** 免费章，谁登录都看得到，不用花券。 */
         ALREADY,
         /**
@@ -90,7 +88,7 @@ public final class SubscribeTask {
     private SubscribeTask() {
     }
 
-    public static Result run(StepRunner r, Novel novel, Chapter chapter, boolean dryRun)
+    public static Result run(StepRunner r, Novel novel, Chapter chapter)
             throws StepRunner.StepFailure {
         openChapterPicker(r, novel);
 
@@ -162,28 +160,6 @@ public final class SubscribeTask {
             return result;
         }
 
-        if (dryRun) {
-            Result result = new Result(Status.DRY_RUN, "干跑：已勾中" + label
-                    + "（已选 1 章）"
-                    + (price > 0 ? "，标价 " + price + " 券" : "")
-                    + "，" + pay.describe() + "，" + balance.describe()
-                    + " → 判定「只花代券，买得起」，但没点「立即下载」");
-            result.cost = pay.fire;
-            result.costVouchers = pay.voucher;
-            result.applyBalance(balance);
-            // 同一个号接着买下一章时还会回到这一页，勾必须先取消掉 —— 取消不掉就别往下走。
-            int left = unselect(r, row.node, label);
-            if (left != 0) {
-                Result stuck = new Result(Status.FAILED, label
-                        + " 判定「买得起」，但取消勾选之后「已选」还是 " + left
-                        + " 章。带着多余的勾去买下一章，会一次买下不止一章 —— 这个号就此停下");
-                stuck.applyBalance(balance);
-                leave(r);
-                return stuck;
-            }
-            leave(r);
-            return result;
-        }
         return buy(r, chapter, label, pay, balance);
     }
 

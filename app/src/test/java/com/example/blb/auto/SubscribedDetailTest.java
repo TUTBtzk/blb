@@ -281,15 +281,13 @@ public class SubscribedDetailTest {
         assertTrue(a.message, a.message.contains("作品相关"));
     }
 
-    /** 干跑痕迹和免费章都不算「花过券」，不参与逐章比对（口径和 countPaidPurchases 一致）。 */
+    /** 免费章不算「花过券」，不参与逐章比对（口径和 countPaidPurchases 一致）。 */
     @Test
-    public void dryRunsAndFreeChaptersAreNotCounted() {
-        PurchaseRow dry = row(ME, 51, "51   新章", 20, 0, NOW - 86_400_000L, WHO);
-        dry.source = "DRY_RUN";
+    public void freeChaptersAreNotCounted() {
         PurchaseRow free = row(ME, 3, "3   免费章", 0, 0, NOW - 86_400_000L, WHO);
         free.source = "OWNED";
         VoucherLedger.Audit a = audit(Arrays.asList(ui(ROW_50, "20")),
-                Arrays.asList(mine(50, "50   订婚事宜，梦玲失踪"), dry, free));
+                Arrays.asList(mine(50, "50   订婚事宜，梦玲失踪"), free));
         assertTrue(a.message, a.ok);
         assertTrue(a.message, a.checked);
     }

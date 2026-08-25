@@ -8,48 +8,21 @@ public final class Prefs {
 
     private static final String NAME = "blb_prefs";
 
-    private static final String KEY_DRY_RUN = "subscribe_dry_run";
     private static final String KEY_DAILY_ENABLED = "daily_enabled";
     private static final String KEY_DAILY_HOUR = "daily_hour";
-    private static final String KEY_REAL_BUY_CONFIRMED = "real_buy_confirmed";
     private static final String KEY_DAILY_SPEND_CAP = "daily_spend_cap";
-    private static final String KEY_MAX_CHAPTERS_PER_RUN = "max_chapters_per_run";
-    private static final String KEY_REAL_BUY_LIMIT = "real_buy_limit";
     private static final String KEY_ADS_PER_ACCOUNT = "ads_per_account";
     private static final String KEY_AD_ASSIST = "ad_assist_tap";
     private static final String KEY_AD_JUMP = "ad_press_jump";
     /** 「被系统杀掉之后自动接着跑」的当天计数，见 AutomationService。 */
     private static final String KEY_RESUME_YMD = "auto_resume_ymd";
     private static final String KEY_RESUME_COUNT = "auto_resume_count";
-    /** 常驻真买授权（有额度、有到期），见 {@code auto.BuyMandate}。 */
-    private static final String KEY_MANDATE_UNTIL = "standing_buy_until";
-    private static final String KEY_MANDATE_PER_DAY = "standing_buy_per_day";
-    private static final String KEY_MANDATE_YMD = "standing_buy_ymd";
-    private static final String KEY_MANDATE_DONE = "standing_buy_done";
 
     private Prefs() {
     }
 
     private static SharedPreferences sp(Context c) {
         return c.getApplicationContext().getSharedPreferences(NAME, Context.MODE_PRIVATE);
-    }
-
-    /** 默认开：自动订阅会花真火券，先干跑验证过流程再放开。 */
-    public static boolean isDryRun(Context c) {
-        return sp(c).getBoolean(KEY_DRY_RUN, true);
-    }
-
-    public static void setDryRun(Context c, boolean value) {
-        sp(c).edit().putBoolean(KEY_DRY_RUN, value).apply();
-    }
-
-    /** 关掉干跑前必须先明确确认一次。 */
-    public static boolean isRealBuyConfirmed(Context c) {
-        return sp(c).getBoolean(KEY_REAL_BUY_CONFIRMED, false);
-    }
-
-    public static void setRealBuyConfirmed(Context c, boolean value) {
-        sp(c).edit().putBoolean(KEY_REAL_BUY_CONFIRMED, value).apply();
     }
 
     public static boolean isDailyEnabled(Context c) {
@@ -75,39 +48,6 @@ public final class Prefs {
 
     public static void setDailySpendCap(Context c, int cap) {
         sp(c).edit().putInt(KEY_DAILY_SPEND_CAP, Math.max(0, cap)).apply();
-    }
-
-    /**
-     * 每个账号一轮最多买几章。这是<b>安全阀</b>，不是目标：正常的停止条件是
-     * 「这个号的代券不够 → 换下一个号」，一路买到所有号都买不动为止。
-     * 只有选择器错位时它才起作用 —— 那时候最多错这么多章就会停下。
-     */
-    public static int maxChaptersPerRun(Context c) {
-        return clamp(sp(c).getInt(KEY_MAX_CHAPTERS_PER_RUN, 50), 1, 50);
-    }
-
-    public static void setMaxChaptersPerRun(Context c, int n) {
-        sp(c).edit().putInt(KEY_MAX_CHAPTERS_PER_RUN, clamp(n, 1, 50)).apply();
-    }
-
-    /**
-     * 一整趟里最多<b>真买</b>几章，0＝不限。默认 1。
-     *
-     * <p>这是<b>保险丝</b>，跟 {@link #maxChaptersPerRun} 那个「每号安全阀」不是一回事：
-     * 安全阀防的是选择器错位买错章，这一条防的是「第一次开真买就一口气把所有号的券花掉」。
-     * 真买这条路在真机上一次都没走通过 —— 第一趟必须只买一章，让人看清账本记对了、券扣对了。
-     *
-     * <p>配套的是 {@link #setDryRun} 的自动回档（见 {@code SubscribeRun.restoreDryRunAfterRealBuy}）：
-     * 真买那一趟跑完就把干跑重新打开，不管买成几章、也不管是从哪条路退出去的。
-     * 这个 App 的使用者手指动不了，忘了关＝下一趟继续花钱，
-     * 而他自己关不掉 —— 所以真买是一次性授权，用完自己回到安全档。
-     */
-    public static int realBuyLimit(Context c) {
-        return Math.max(0, sp(c).getInt(KEY_REAL_BUY_LIMIT, 1));
-    }
-
-    public static void setRealBuyLimit(Context c, int n) {
-        sp(c).edit().putInt(KEY_REAL_BUY_LIMIT, Math.max(0, n)).apply();
     }
 
     /**
@@ -174,44 +114,9 @@ public final class Prefs {
     }
 
     // ---------- 常驻真买授权 ----------
-
-    /**
-     * 常驻真买授权的到期时刻（epoch ms，0＝没有授权）与每天准买几章。
-     *
-     * <p>为什么要有这一对，而不是只靠 {@link #isRealBuyConfirmed} 那颗布尔：
-     * 那颗布尔是永久的、而且只能在设置页按出来 —— 这个 App 的使用者手指动不了，
-     * 他既按不开也关不掉。每日定时那趟又是无人值守的，所以「能不能花钱」必须自己带上
-     * <b>额度</b>和<b>到期</b>：授权一到期自动回到干跑，当天的额度用完就停，
-     * 谁也不用去按一颗开关。判定逻辑（含跨天重置）在 {@code auto.BuyMandate} 里，可单测。
-     */
-    public static long buyMandateUntil(Context c) {
-        return Math.max(0L, sp(c).getLong(KEY_MANDATE_UNTIL, 0L));
-    }
-
-    public static int buyMandatePerDay(Context c) {
-        return Math.max(0, sp(c).getInt(KEY_MANDATE_PER_DAY, 0));
-    }
-
-    public static void setBuyMandate(Context c, long until, int perDay) {
-        sp(c).edit()
-                .putLong(KEY_MANDATE_UNTIL, Math.max(0L, until))
-                .putInt(KEY_MANDATE_PER_DAY, Math.max(0, perDay))
-                .apply();
-    }
-
-    /** 当日已真买章数的记账那天（yyyy-MM-dd），换一天就该从 0 重新数。 */
-    public static String buyMandateYmd(Context c) {
-        return sp(c).getString(KEY_MANDATE_YMD, "");
-    }
-
-    public static int buyMandateDone(Context c) {
-        return Math.max(0, sp(c).getInt(KEY_MANDATE_DONE, 0));
-    }
-
-    public static void setBuyMandateDone(Context c, String ymd, int done) {
-        sp(c).edit().putString(KEY_MANDATE_YMD, ymd).putInt(KEY_MANDATE_DONE, Math.max(0, done))
-                .apply();
-    }
+    //
+    // 已整套删除。自动订阅现在没有干跑、没有额度、没有到期：按队列顺序真的订阅，
+    // 一个号买到代券不够就换下一个号。「能不能花钱」的唯一判据是账号手里的代券够不够。
 
     private static int clamp(int v, int min, int max) {
         return Math.max(min, Math.min(max, v));

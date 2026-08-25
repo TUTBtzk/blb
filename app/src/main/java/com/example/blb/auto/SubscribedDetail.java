@@ -197,7 +197,8 @@ public final class SubscribedDetail {
      *       永久卡死。</li>
      * </ul>
      *
-     * @param novelRows 这本书上<b>所有号</b>的付费记录（干跑和免费章不算）；用来认出「一章两个号」
+     * @param novelRows 这本书上<b>所有号</b>的付费记录（免费章不算，它一分券都没花）；
+     *                  用来认出「一章两个号」
      * @param now       现在的时间戳，判「刚买完还没同步」用
      */
     public static VoucherLedger.Audit reconcile(String who, long accountId, String bookTitle,
@@ -225,7 +226,7 @@ public final class SubscribedDetail {
     }
 
     private static boolean paid(PurchaseRow p) {
-        return !"DRY_RUN".equals(p.source) && (p.costVouchers > 0 || p.costCoupons > 0);
+        return p.costVouchers > 0 || p.costCoupons > 0;
     }
 
     private static VoucherLedger.Audit compare(String head, String who, List<Entry> ui,

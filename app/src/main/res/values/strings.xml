@@ -71,20 +71,16 @@
     <string name="sub_run_title">开始自动订阅？</string>
     <string name="sub_need_target">先把一本小说设为「集中订阅目标」（用上面的「选择小说」）。自动订阅只认目标小说，不会去猜。</string>
     <string name="sub_nothing_to_do">这本书登记的章节都已经有人订阅过了，没有要跑的。先用「添加章节」登记新章。</string>
-    <string name="sub_dry_run_note">干跑模式：只走到「订阅」按钮前停下，不会点它，不会扣火券。要真买，去设置页关掉干跑并单独确认一次。</string>
-    <string name="sub_real_buy_note">真实购买模式：会真的花掉火券。选择器一旦错位就可能买错章，先确认干跑跑通过。</string>
-    <string name="sub_real_buy_unconfirmed">干跑已关，但还没在设置页确认过「允许真实购买」。为防误扣火券，本轮不会跑 —— 去设置页确认后再来。</string>
+    <string name="sub_real_buy_note">这是真实购买：会真的花掉账号里的代券。按队列顺序一章一章往下订，一个号订到代券不够就换下一个号，不限章数。实付里出现火券一律当买不起（不会替你花火券）。选择器一旦错位就可能买错章。</string>
 
     <string name="settings_accessibility">无障碍服务</string>
     <string name="settings_open_accessibility">去系统设置开启／关闭</string>
     <string name="settings_selector_check">检查 selectors.json</string>
     <string name="settings_inspector">节点探测器</string>
     <string name="settings_export_selectors">把内置选择器导出到可编辑位置</string>
-    <string name="settings_dry_run">自动订阅只干跑（不真的花火券）</string>
     <string name="settings_daily">每天自动签到</string>
     <string name="settings_daily_hour">签到时间（小时，0–23）</string>
     <string name="settings_battery">电池／自启白名单</string>
-    <string name="settings_max_chapters">每个账号每轮最多订阅几章（安全阀，正常是买到代券花光才换号）</string>
     <string name="settings_ads_per_account">每个账号每天几个广告（界面读不到「还剩几次」时按这个提醒）</string>
     <string name="settings_ad_assist">替我点广告按钮（视频照真实时长播完，不快进不跳过）</string>
     <string name="settings_ad_assist_hint">关掉之后回到「只提醒」：脚本只数出还剩几个，每个都停下来等你自己点开和领取。</string>

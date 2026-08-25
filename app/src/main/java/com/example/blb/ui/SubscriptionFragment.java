@@ -54,8 +54,8 @@ import java.util.List;
 /**
  * 订阅账本页：谁订了哪本书的哪一章，全在这里。
  *
- * <p>这一页不碰自动化，纯记账 —— 即使自动订阅始终干跑，这份账本本身就能回答
- * 「这一章我用哪个号买过了没有」。
+ * <p>账本是「这一章归谁」的唯一权威：自动订阅按它挑下一章，也只有它答得出
+ * 「这一章我用哪个号买过了没有」。界面上那个「已下载」是本机状态、8 个号共用，答不出买家。
  */
 public class SubscriptionFragment extends Fragment {
 
@@ -284,19 +284,17 @@ public class SubscriptionFragment extends Fragment {
         if (c.priceCoupons > 0) line1.append("　").append(c.priceCoupons).append(" 券");
         row.<TextView>findViewById(R.id.line1).setText(line1);
 
-        List<String> real = new ArrayList<>();
-        List<String> dry = new ArrayList<>();
+        List<String> owners = new ArrayList<>();
         for (Purchase p : purchases) {
             if (p.chapterId != c.id) continue;
-            (p.isReal() ? real : dry).add(accountName(p.accountId));
+            owners.add(accountName(p.accountId));
         }
         StringBuilder line2 = new StringBuilder();
-        line2.append(real.isEmpty() ? "还没人订阅" : "已订阅：" + TextUtils.join("、", real));
-        if (!dry.isEmpty()) line2.append("　干跑记录：").append(TextUtils.join("、", dry));
+        line2.append(owners.isEmpty() ? "还没人订阅" : "已订阅：" + TextUtils.join("、", owners));
         row.<TextView>findViewById(R.id.line2).setText(line2);
 
-        // 色条＝这一章有没有真的订阅过（干跑不算）：绿＝有人真买了，灰＝还没有。
-        StatusPalette tone = real.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
+        // 色条＝这一章有没有归属：绿＝有号拥有它，灰＝还没有。
+        StatusPalette tone = owners.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
         row.findViewById(R.id.accent).setBackgroundColor(
                 ContextCompat.getColor(row.getContext(), tone.foreground));
         row.findViewById(R.id.badge).setVisibility(View.GONE);
@@ -330,7 +328,6 @@ public class SubscriptionFragment extends Fragment {
             Account a = accounts.get(i);
             Purchase owned = purchaseOf(a.id, chapter.id);
             String mark = owned == null ? "未订阅"
-                    : !owned.isReal() ? "仅干跑记录"
                     : Purchase.SRC_OWNED.equals(owned.source) ? "界面显示已拥有"
                     : "已订阅 " + describeCost(owned);
             labels[i] = a.displayName() + " — " + mark;
@@ -551,26 +548,17 @@ public class SubscriptionFragment extends Fragment {
                     .show();
             return;
         }
-        boolean dryRun = Prefs.isDryRun(ctx);
-        if (!dryRun && !Prefs.isRealBuyConfirmed(ctx)) {
-            new AlertDialog.Builder(ctx)
-                    .setMessage(R.string.sub_real_buy_unconfirmed)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show();
-            return;
-        }
-
         Novel novel = current;
-        int max = Prefs.maxChaptersPerRun(ctx);
         int cap = Prefs.dailySpendCap(ctx);
         Db.io(() -> {
-            List<Chapter> pending = dao.findUnownedChapters(novel.id, max);
-            post(() -> confirmSubscribe(novel, pending, dryRun, cap));
+            // 整条队列一次取完，不设条数上限：停下来的理由只能是「这个号的代券不够下一章」。
+            List<Chapter> pending = dao.findUnownedChaptersFrom(novel.id, novel.startFrom());
+            post(() -> confirmSubscribe(novel, pending, cap));
         });
     }
 
     /** 把这一轮到底会动哪几章、花多少券摊在眼前，再问一次。 */
-    private void confirmSubscribe(Novel novel, List<Chapter> pending, boolean dryRun, int cap) {
+    private void confirmSubscribe(Novel novel, List<Chapter> pending, int cap) {
         Context ctx = getContext();
         if (ctx == null) return;
         if (pending.isEmpty()) {
@@ -580,25 +568,26 @@ public class SubscriptionFragment extends Fragment {
                     .show();
             return;
         }
+        // 队列可能有几百章，标题栏里只摊前几章＋总数，全部列出来会把对话框撑爆。
         List<String> nos = new ArrayList<>();
-        int price = 0;
-        for (Chapter c : pending) {
+        for (Chapter c : pending.subList(0, Math.min(8, pending.size()))) {
             nos.add("第" + c.chapterNo + "章");
-            price += Math.max(0, c.priceCoupons);
         }
-        StringBuilder sb = new StringBuilder("《").append(novel.title).append("》\n本轮最多处理 ")
-                .append(pending.size()).append(" 章：").append(TextUtils.join("、", nos));
-        if (price > 0) sb.append("\n登记单价合计 ").append(price).append(" 券");
-        if (cap > 0) sb.append("\n每号每日花费上限 ").append(cap).append(" 券");
-        sb.append("\n\n").append(getString(dryRun
-                ? R.string.sub_dry_run_note : R.string.sub_real_buy_note));
+        StringBuilder sb = new StringBuilder("《").append(novel.title).append("》\n")
+                .append("还没有任何号买过的章共 ").append(pending.size()).append(" 章，")
+                .append("从第").append(pending.get(0).chapterNo).append("章起按顺序往下订：")
+                .append(TextUtils.join("、", nos))
+                .append(pending.size() > nos.size() ? "…" : "");
+        sb.append("\n\n不限章数：一个号订到代券不够下一章就换下一个号，所有号都不够才收工。");
+        if (cap > 0) sb.append("\n每号每日花费上限 ").append(cap).append(" 代券。");
+        sb.append("\n\n").append(getString(R.string.sub_real_buy_note));
         sb.append("\n\n跑的时候别动屏幕；撞到安全验证会停下来等你手动过。");
 
         new AlertDialog.Builder(ctx)
                 .setTitle(R.string.sub_run_title)
                 .setMessage(sb)
                 .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(dryRun ? "开始干跑" : "确认真实购买", (d, w) -> {
+                .setPositiveButton("确认，开始订阅", (d, w) -> {
                     AutomationService.startSubscribe(ctx);
                     toast("订阅队列已启动，去签到页看实时日志");
                 })
