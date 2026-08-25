@@ -13,3 +13,11 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 真机调试的临时产物（截图、logcat、拉出来的 prefs），不进版本库
+/.dumps/
+
+# 手滑落在仓库根上的 dump：uiautomator 的 *.xml、dumpsys window 的重定向产物。
+# 校准用的 dump 一律放 /.dumps/，别进版本库 —— 里面有账号昵称一类的现场数据。
+/*.xml
+/.win.*
