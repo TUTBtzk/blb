@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 描边按钮的边框：禁用时退成淡描边色，跟字一起变灰，免得看着还能按。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="?attr/colorOutlineVariant" android:state_enabled="false" />
+    <item android:color="?attr/colorOutline" />
+</selector>

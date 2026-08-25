@@ -1,8 +1,56 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+
+    <!--
+      主题只做两件事：把 colors.xml 那套值接到 Material 3 的颜色角色上，
+      再把控件默认样式换成 styles.xml 里那几个（大字号、大点击区）。
+
+      为什么字号和控件都比 Material 默认大一号：这个 app 的使用者手不能动，
+      屏幕上的东西只能看、按不动，所以可读性优先于紧凑 —— 宁可多滚一屏，
+      也不要为了塞得下而把字缩小。
+    -->
     <style name="Base.Theme.Blb自动签到" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your light theme here. -->
-        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        <item name="colorPrimary">@color/blb_primary</item>
+        <item name="colorOnPrimary">@color/blb_on_primary</item>
+        <item name="colorPrimaryContainer">@color/blb_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/blb_on_primary_container</item>
+        <item name="colorSecondary">@color/blb_secondary</item>
+        <item name="colorOnSecondary">@color/blb_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/blb_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/blb_on_secondary_container</item>
+        <item name="colorTertiary">@color/blb_secondary</item>
+        <item name="colorOnTertiary">@color/blb_on_secondary</item>
+
+        <item name="android:colorBackground">@color/blb_background</item>
+        <item name="colorOnBackground">@color/blb_on_surface</item>
+        <item name="colorSurface">@color/blb_surface</item>
+        <item name="colorOnSurface">@color/blb_on_surface</item>
+        <item name="colorSurfaceVariant">@color/blb_secondary_container</item>
+        <item name="colorOnSurfaceVariant">@color/blb_on_surface_variant</item>
+        <item name="colorSurfaceContainer">@color/blb_surface_container</item>
+        <item name="colorSurfaceContainerHigh">@color/blb_surface_container</item>
+        <item name="colorSurfaceContainerLow">@color/blb_surface</item>
+        <item name="colorOutline">@color/blb_outline</item>
+        <item name="colorOutlineVariant">@color/blb_outline_variant</item>
+
+        <item name="colorError">@color/blb_error</item>
+        <item name="colorOnError">@color/blb_on_error</item>
+        <item name="colorErrorContainer">@color/blb_error_container</item>
+        <item name="colorOnErrorContainer">@color/blb_on_error_container</item>
+
+        <!-- 状态栏/导航栏跟着背景走，不要留一条突兀的黑边 -->
+        <item name="android:statusBarColor">@color/blb_background</item>
+        <item name="android:navigationBarColor">@color/blb_surface_container</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">@bool/blb_light_system_bars</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">@bool/blb_light_system_bars</item>
+
+        <!-- 控件默认样式：布局里不写 style 也自动是大字号那一套 -->
+        <item name="materialButtonStyle">@style/Blb.Button</item>
+        <item name="materialCardViewStyle">@style/Blb.Card</item>
+        <item name="materialSwitchStyle">@style/Blb.Switch</item>
+        <item name="bottomNavigationStyle">@style/Blb.BottomNav</item>
+        <item name="floatingActionButtonStyle">@style/Blb.Fab</item>
+        <item name="extendedFloatingActionButtonStyle">@style/Blb.Fab.Extended</item>
+        <item name="materialAlertDialogTheme">@style/Blb.Dialog</item>
     </style>
 
     <style name="Theme.Blb自动签到" parent="Base.Theme.Blb自动签到" />

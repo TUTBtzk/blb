@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -19,6 +20,8 @@ import androidx.core.app.ServiceCompat;
 
 import com.example.blb.MainActivity;
 import com.example.blb.R;
+import com.example.blb.util.Prefs;
+import com.example.blb.util.Texts;
 
 /**
  * 拥有任务队列的前台 Service。它只负责生命周期、通知和线程，
@@ -33,10 +36,27 @@ public class AutomationService extends Service implements StepRunner.Host {
     public static final String ACTION_CONTINUE = "com.example.blb.action.CONTINUE";
     public static final String ACTION_SKIP = "com.example.blb.action.SKIP";
     public static final String ACTION_ABORT = "com.example.blb.action.ABORT";
+    /**
+     * 「这一趟是用户自己在界面上按出来的」。没有这个 extra 的启动只可能来自系统：
+     * 进程被杀之后 ActivityManager 会把原来那条 startService 请求重发一遍（实测
+     * {@code Scheduling restart of crashed service … AutomationService in 10000ms for
+     * start-requested}），于是队列会自己又跑一趟。见 {@link #startQueue}。
+     */
+    private static final String EXTRA_FROM_UI = "com.example.blb.extra.FROM_UI";
 
     public static final String CHANNEL_ID = "blb_auto";
     private static final int NOTIF_ID = 1001;
     private static final String TAG = "BlbAuto";
+    /** 屏幕锁的保险丝：一趟 8 个号最多也就十几分钟，两小时是防「忘了放」用的。 */
+    private static final long SCREEN_LOCK_LIMIT_MS = 2 * 60 * 60 * 1000L;
+    /**
+     * 开跑前等无障碍服务连上来的时间。系统把被杀掉的无障碍服务排在 30 s 后重启
+     * （{@code … BlbAccessibilityService in 30000ms for connection}），而队列自己 10 s 就回来了，
+     * 所以这里必须等得比 30 s 长，否则每次被杀都换来一句「无障碍服务未开启」。
+     */
+    private static final long A11Y_WAIT_MS = 45_000;
+    /** 一天里最多自动接着跑几趟，见 {@link Prefs#autoResumes}。 */
+    private static final int MAX_AUTO_RESUMES = 3;
 
     /** 队列类型。通知标题和收尾文案都跟着它走，别让订阅跑完弹「签到任务结束」。 */
     private enum Mode {
@@ -52,20 +72,25 @@ public class AutomationService extends Service implements StepRunner.Host {
     private Thread worker;
     private String lastLine = "准备中…";
     private Mode mode = Mode.CHECK_IN;
+    /** 整趟任务期间点着屏幕的那把锁，见 {@link #acquireScreenLock}。 */
+    private PowerManager.WakeLock screenLock;
 
     public static void startCheckIn(Context context) {
-        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_CHECKIN);
+        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_CHECKIN)
+                .putExtra(EXTRA_FROM_UI, true);
         context.startService(intent);
     }
 
     public static void startSubscribe(Context context) {
-        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_SUBSCRIBE);
+        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_SUBSCRIBE)
+                .putExtra(EXTRA_FROM_UI, true);
         context.startService(intent);
     }
 
     /** 签到 → 广告 → 订阅，一个号一趟走完。 */
     public static void startDaily(Context context) {
-        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_DAILY);
+        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_DAILY)
+                .putExtra(EXTRA_FROM_UI, true);
         context.startService(intent);
     }
 
@@ -95,16 +120,17 @@ public class AutomationService extends Service implements StepRunner.Host {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
         if (action == null) return START_NOT_STICKY;
+        boolean fromUi = intent.getBooleanExtra(EXTRA_FROM_UI, false);
 
         switch (action) {
             case ACTION_RUN_CHECKIN:
-                startQueue(Mode.CHECK_IN);
+                startQueue(Mode.CHECK_IN, fromUi);
                 break;
             case ACTION_RUN_SUBSCRIBE:
-                startQueue(Mode.SUBSCRIBE);
+                startQueue(Mode.SUBSCRIBE, fromUi);
                 break;
             case ACTION_RUN_DAILY:
-                startQueue(Mode.DAILY);
+                startQueue(Mode.DAILY, fromUi);
                 break;
             case ACTION_CONTINUE:
                 AutomationBus.submitDecision(StepRunner.Decision.CONTINUE);
@@ -121,21 +147,19 @@ public class AutomationService extends Service implements StepRunner.Host {
         return START_NOT_STICKY;
     }
 
-    private void startQueue(Mode next) {
+    private void startQueue(Mode next, boolean fromUi) {
         if (worker != null && worker.isAlive()) {
             AutomationBus.append("已经有任务在跑了");
             return;
         }
-        if (!BlbAccessibilityService.isReady()) {
-            AutomationBus.append("无障碍服务没开启，先去系统设置里打开「blb自动签到」");
-            AutomationBus.setStatus("无障碍服务未开启");
-            stopSelf();
-            return;
-        }
+        String ymd = Texts.todayYmd();
+        if (fromUi) Prefs.clearAutoResumes(this, ymd);
+        else if (!allowAutoResume(ymd)) return;
 
         mode = next;
         startForegroundSafely(buildNotification(next.label + "队列启动中…", false));
-        AutomationBus.clearLog();
+        // 系统重发的那趟不清日志：上一趟被杀之前那几行是唯一的现场记录。
+        if (fromUi) AutomationBus.clearLog();
         AutomationBus.setRunning(true);
         AutomationBus.setStatus("运行中");
 
@@ -143,9 +167,36 @@ public class AutomationService extends Service implements StepRunner.Host {
         worker.start();
     }
 
+    /**
+     * 这趟不是用户按出来的，是系统把原来那条启动请求重发了 —— 要不要接着跑。
+     *
+     * <p>接着跑本身是必要的：用户按不动屏幕，被杀掉之后没人能替他重按一次。但得有上限，
+     * 万一某个号每次都卡在同一步，无限重启就变成反复退登重登，那是最招验证码的动作。
+     */
+    private boolean allowAutoResume(String ymd) {
+        int done = Prefs.autoResumes(this, ymd);
+        if (done >= MAX_AUTO_RESUMES) {
+            AutomationBus.append("今天进程已经被系统杀掉 " + done
+                    + " 次了，这次不再自动接着跑：再重来只会把同一个号反复重登（最招验证码）。"
+                    + "等你按一下「跑今天的流程」再继续。");
+            AutomationBus.setStatus("被系统杀了 " + done + " 次，等你按一下再继续");
+            stopSelf();
+            return false;
+        }
+        Prefs.noteAutoResume(this, ymd);
+        AutomationBus.append("上一趟被系统杀掉了（MIUI 的 SwipeUpClean），自动接着跑（第 "
+                + (done + 1) + " 次）；今天已经签完、广告也没剩的号会直接跳过。");
+        return true;
+    }
+
     private void runQueue(Mode current) {
         String text = current.label + "任务异常终止";
+        acquireScreenLock(current);
         try {
+            if (!awaitAccessibility()) {
+                text = "无障碍服务没连上，先去系统设置里打开「blb自动签到」";
+                return;
+            }
             switch (current) {
                 case SUBSCRIBE:
                     text = SubscribeQueue.describe(SubscribeQueue.run(this, this));
@@ -161,11 +212,73 @@ public class AutomationService extends Service implements StepRunner.Host {
             Log.e(TAG, current.label + "队列崩了", t);
             AutomationBus.append("队列异常终止：" + t);
         } finally {
+            releaseScreenLock();
             AutomationBus.setRunning(false);
             AutomationBus.setStatus(text);
             notifyFinished(current, text);
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
             stopSelf();
+        }
+    }
+
+    /**
+     * 等无障碍服务连上来再开跑。
+     *
+     * <p>不能像以前那样「没连上就立刻中止」：进程被 MIUI 杀掉之后，系统把队列排在 10 s 后重启、
+     * 把无障碍服务排在 30 s 后重启，队列一定先醒 —— 那一趟 [2/8] 就是这么报「无障碍服务未开启」
+     * 把整队掐死的，其实再等十几秒它自己就回来了。
+     */
+    private boolean awaitAccessibility() {
+        if (BlbAccessibilityService.isReady()) return true;
+        AutomationBus.append("无障碍服务还没连上，等它回来（最多 " + (A11Y_WAIT_MS / 1000) + " 秒）…");
+        if (BlbAccessibilityService.awaitReady(A11Y_WAIT_MS)) {
+            AutomationBus.append("无障碍服务连上了，开始跑");
+            return true;
+        }
+        AutomationBus.append("等了 " + (A11Y_WAIT_MS / 1000)
+                + " 秒无障碍服务还是没连上，这趟不跑了（去系统设置里把「blb自动签到」重新打开）");
+        return false;
+    }
+
+    /**
+     * 整趟任务期间把屏幕点着。
+     *
+     * <p>为什么非要这个：无障碍的点击和手势只对<b>亮着的屏幕</b>有效，而息屏之后顶上来的是
+     * 系统的息屏/锁屏窗口（{@code com.android.systemui}），我们既读不到菠萝包的树、也拉不起它。
+     * 2026-08-23 19:50 那一趟就是这么断的：跑到第 5 个号时屏幕已经自己睡了，后面 4 个号全部
+     * 报「拉不起菠萝包（当前前台是 com.android.systemui）」。手指动不了的人没法每隔一会儿
+     * 去戳一下屏幕，所以这件事必须由程序自己扛。
+     *
+     * <p>屏幕锁是 API 17 起标记 deprecated 的，但至今仍然有效，而且是普通 App 唯一能在没有
+     * 前台 Activity 的情况下把屏幕点着的手段；换 FLAG_KEEP_SCREEN_ON 只在我们自己的界面在
+     * 前台时有用，而这趟任务全程都在别人的界面上。{@code ACQUIRE_CAUSES_WAKEUP} 让定时那趟
+     * 在息屏时也能把屏幕唤起来——不过<b>屏幕锁屏密码解不开</b>，那种情况仍然要人先解锁。
+     */
+    @SuppressWarnings("deprecation")
+    private void acquireScreenLock(Mode current) {
+        releaseScreenLock();
+        try {
+            PowerManager pm = getSystemService(PowerManager.class);
+            if (pm == null) return;
+            screenLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
+                    | PowerManager.ACQUIRE_CAUSES_WAKEUP, "blb:" + current.name());
+            screenLock.setReferenceCounted(false);
+            // 上限只是保险丝：正常路径在 finally 里就放了。
+            screenLock.acquire(SCREEN_LOCK_LIMIT_MS);
+        } catch (Exception e) {
+            Log.w(TAG, "点不亮屏幕（拿不到屏幕锁）", e);
+            screenLock = null;
+        }
+    }
+
+    private void releaseScreenLock() {
+        PowerManager.WakeLock lock = screenLock;
+        screenLock = null;
+        if (lock == null) return;
+        try {
+            if (lock.isHeld()) lock.release();
+        } catch (Exception e) {
+            Log.w(TAG, "放屏幕锁时出错", e);
         }
     }
 
@@ -193,6 +306,10 @@ public class AutomationService extends Service implements StepRunner.Host {
     @Override
     public void log(String message) {
         lastLine = message;
+        // 也进 logcat：跑队列的时候绝不能 uiautomator dump（会把我们的无障碍服务顶下去），
+        // 所以 `adb logcat -s BlbAuto` 是真机验证时唯一能实时看到进度的窗口。
+        // 密码永远不经过这里（只在内存里经 KeyStoreBox 传给输入框）。
+        Log.i(TAG, message);
         AutomationBus.append(message);
         notifyManager().notify(NOTIF_ID, buildNotification(message, false));
     }

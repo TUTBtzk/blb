@@ -12,15 +12,24 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
  * 唯一能读写菠萝包界面的组件。它只提供「原子操作」（找根节点、点、输入、返回、导出节点树），
  * 具体流程编排在 {@link StepRunner} 里。
+ *
+ * <p><b>界外硬闸</b>：无障碍配置里放行了微信／QQ／微博（三方登录的授权确认页长在那些 App 里），
+ * 但这里只开一道很窄的门 —— {@link #root()} 一律只交出 {@code com.sfacg} 的树，别的 App 的界面
+ * 从这条路一个节点都读不到；要读那颗授权键必须走 {@link #authRoot()}，而它只在
+ * {@link #armAuthGate()} 之后、且前台正是那三个 App 之一时才交出树。所以「读别人的界面」这件事
+ * 在结构上被限制在「正在等一颗授权键」这一小段时间里。
  */
 public class BlbAccessibilityService extends AccessibilityService {
 
@@ -29,9 +38,21 @@ public class BlbAccessibilityService extends AccessibilityService {
     /** 按下多久。零长度 + 60 ms 的点击实测按不动 Lynx／Canvas 画出来的按钮。 */
     private static final int TAP_MS = 110;
 
+    /**
+     * 允许在「等授权键」这一小段时间里读的三个 App。
+     *
+     * <p>实测只有 QQ 真的需要（微信和微博点完图标就直接登回菠萝包了），另两个留着是因为
+     * 它们随时可能改成也要确认一次 —— 到那时脚本停在授权页上，用户是按不动那颗键的。
+     */
+    private static final Set<String> AUTH_PACKAGES = new HashSet<>(Arrays.asList(
+            "com.tencent.mobileqq", "com.tencent.mm", "com.sina.weibo"));
+
     private static volatile BlbAccessibilityService instance;
 
     private volatile String lastEventPackage;
+
+    /** 界外硬闸的开关，只有 {@link StepRunner#confirmThirdPartyAuth} 那一小段时间里是开的。 */
+    private volatile boolean authGateOpen;
 
     /** 服务没开启时返回 null，调用方要给出「去系统设置开启无障碍」的提示。 */
     public static BlbAccessibilityService peek() {
@@ -39,6 +60,28 @@ public class BlbAccessibilityService extends AccessibilityService {
     }
 
     public static boolean isReady() {
+        return instance != null;
+    }
+
+    /**
+     * 等无障碍服务连上来，最多等 {@code timeoutMs}。
+     *
+     * <p>为什么要等：MIUI 的 SwipeUpClean 会把 {@code com.example.blb} 整个进程杀掉（实测
+     * 2026-08-23 20:26 和 20:35 各一次，{@code Killing …(adj 50): SwipeUpClean}），连带把这个
+     * 无障碍服务也带走；系统随后把两个服务分别排队重启，而 {@code AutomationService} 排在
+     * 10 s（内存压力下甚至 0 ms）、无障碍服务排在 30 s —— 也就是队列一定比无障碍服务先醒。
+     * 那一趟就是这么废掉的：[2/8] 报「无障碍服务未开启」直接把整队掐死，其实再等十几秒它就回来了。
+     */
+    public static boolean awaitReady(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (instance == null && System.currentTimeMillis() < deadline) {
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
         return instance != null;
     }
 
@@ -78,12 +121,59 @@ public class BlbAccessibilityService extends AccessibilityService {
 
     // ---------- 原子操作 ----------
 
+    /**
+     * 当前活动窗口的树，<b>只在它属于菠萝包时</b>才交出来；别的 App 在前台时返回 null。
+     *
+     * <p>这是界外硬闸的主闸。无障碍配置里放行了微信／QQ／微博之后，
+     * {@code getRootInActiveWindow()} 是真的能拿到那些 App 的整棵界面树的 —— 而流程里所有
+     * 「找控件」的路都汇到这里，所以只要这一处按包名挡住，那些 App 的内容就不会流进选择器、
+     * 日志、节点探测器和 CSV 里的任何地方。要点那颗授权键走 {@link #authRoot()}。
+     */
     public NodeView root() {
         try {
-            return AccessibilityNodeView.of(getRootInActiveWindow());
+            AccessibilityNodeInfo r = getRootInActiveWindow();
+            if (r == null) return null;
+            CharSequence pkg = r.getPackageName();
+            if (pkg == null || !TARGET_PACKAGE.contentEquals(pkg)) return null;
+            return AccessibilityNodeView.of(r);
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /** 打开界外硬闸：接下来允许读一个授权页，仅限找那颗「同意」。 */
+    public void armAuthGate() {
+        authGateOpen = true;
+    }
+
+    /** 关上界外硬闸。放在 finally 里，异常路径也不许把它留在开着的状态。 */
+    public void disarmAuthGate() {
+        authGateOpen = false;
+    }
+
+    /**
+     * 三方授权页的树。三个条件同时满足才交出来：硬闸开着、活动窗口的包名在
+     * {@link #AUTH_PACKAGES} 里。不满足任何一条返回 null。
+     *
+     * <p>调用方只允许拿它去匹配 {@code login_auth_confirm}（「同意／允许／确认登录」那一组），
+     * 见 {@link StepRunner#confirmThirdPartyAuth}。
+     */
+    public NodeView authRoot() {
+        if (!authGateOpen) return null;
+        try {
+            AccessibilityNodeInfo r = getRootInActiveWindow();
+            if (r == null) return null;
+            CharSequence pkg = r.getPackageName();
+            if (pkg == null || !AUTH_PACKAGES.contains(pkg.toString())) return null;
+            return AccessibilityNodeView.of(r);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 前台是不是那三个需要按「同意」的 App 之一（只看包名，不读内容）。 */
+    public boolean isAuthPackageForeground() {
+        return AUTH_PACKAGES.contains(String.valueOf(activePackage()));
     }
 
     /**
@@ -430,14 +520,36 @@ public class BlbAccessibilityService extends AccessibilityService {
                 && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
     }
 
+    /**
+     * 往回滚（回到列表顶部那一头）。
+     *
+     * <p>为什么需要它：实测在设置页按下「退出登录」之后直接回到「我的」页，而那个 ScrollView
+     * <b>还停在底部</b>（顶部那块 top_layout 高度塌成 2px），「立即登录」根本不在可见树里 ——
+     * 不往回滚就永远点不到它，整条切号链路断在这一步。
+     */
+    public boolean scrollBackward(NodeView view) {
+        AccessibilityNodeInfo node = AccessibilityNodeView.rawOf(view);
+        return node != null
+                && node.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+    }
+
     /** 没有可滚动节点时的退路：在屏幕中间从下往上划一段。 */
     public boolean swipeUp() {
+        return swipe(0.72f, 0.32f);
+    }
+
+    /** 同上，反方向（回到顶部那一头）。 */
+    public boolean swipeDown() {
+        return swipe(0.32f, 0.72f);
+    }
+
+    private boolean swipe(float fromRatio, float toRatio) {
         try {
             DisplayMetrics dm = getResources().getDisplayMetrics();
             float x = dm.widthPixels / 2f;
             Path path = new Path();
-            path.moveTo(x, dm.heightPixels * 0.72f);
-            path.lineTo(x, dm.heightPixels * 0.32f);
+            path.moveTo(x, dm.heightPixels * fromRatio);
+            path.lineTo(x, dm.heightPixels * toRatio);
             GestureDescription gesture = new GestureDescription.Builder()
                     .addStroke(new GestureDescription.StrokeDescription(path, 0, 320))
                     .build();

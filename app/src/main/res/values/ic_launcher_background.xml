@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      自适应图标的背景层：取自那张菠萝包图圆形背景的平均色。
+      前景层是 mipmap-*/ic_launcher_foreground.webp（圆形图案，四周透明），
+      所以圆形／方形／水滴各种遮罩下露出来的都是这块奶油色，不会出现白角。
+    -->
+    <color name="ic_launcher_background">#FDF4D0</color>
+</resources>

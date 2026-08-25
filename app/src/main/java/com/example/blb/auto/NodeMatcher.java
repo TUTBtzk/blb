@@ -1,5 +1,7 @@
 package com.example.blb.auto;
 
+import com.example.blb.util.Texts;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -177,6 +179,63 @@ public final class NodeMatcher {
         int n = node.childCount();
         for (int i = 0; i < n; i++) {
             collectCorner(node.child(i), w, h, depth + 1, visited, best, bestArea);
+        }
+    }
+
+    /** {@link #countAbove}：数字离标签最远能有多远（px），再远就是别的东西了。 */
+    private static final int LABEL_GAP_MAX = 140;
+    /** 允许数字和标签在垂直方向上略微重叠这么多（px），排版误差用。 */
+    private static final int LABEL_GAP_SLACK = 12;
+    /** 同一列的判定：中心横向偏移不超过标签自身半宽，且至少给这么多余量。 */
+    private static final int LABEL_COLUMN_SLACK = 40;
+
+    /**
+     * 读「标签正上方那个数字」。
+     *
+     * <p>专门为菠萝包「我的」页那一行余额准备：实测 2026-08-23，「我的帐户」这一行的
+     * <b>数字和标签都没有 resource-id</b>，三列的数字各自画在自己那个标签的正上方、
+     * 左右边界完全对齐：
+     * <pre>
+     *   '0'   [63,687][307,745]     '火券' [63,752][307,798]
+     *   '152' [307,687][552,745]    '金币' [307,752][552,798]
+     *   '10'  [552,687][797,745]    '代券' [552,752][797,798]
+     * </pre>
+     * 选择器语言里没有一条能表达「这个数字是属于那个标签的」，只能靠位置配对：取中心和标签
+     * 同一列、底边贴在标签上边、整段就是个数字的那个节点，多个候选取最近的。
+     *
+     * @return 读到的数字；标签没面积、附近没有数字节点，或者数字里掺了别的字都返回 -1
+     */
+    public static int countAbove(NodeView root, NodeView label) {
+        if (root == null || !hasArea(label)) return -1;
+        int[] lb = label.boundsInScreen();
+        int labelCx = (lb[0] + lb[2]) / 2;
+        int slack = Math.max(LABEL_COLUMN_SLACK, (lb[2] - lb[0]) / 2);
+        // {已读到的数字, 它和标签的垂直间距}
+        int[] best = {-1, Integer.MAX_VALUE};
+        collectAbove(root, label, lb[1], labelCx, slack, 0, new int[]{0}, best);
+        return best[0];
+    }
+
+    private static void collectAbove(NodeView node, NodeView label, int labelTop, int labelCx,
+                                     int slack, int depth, int[] visited, int[] best) {
+        if (node == null || depth > MAX_DEPTH || visited[0] >= MAX_VISITED) return;
+        visited[0]++;
+        if (node != label && hasArea(node)) {
+            int value = Texts.parseWholeCount(node.text());
+            if (value >= 0) {
+                int[] b = node.boundsInScreen();
+                int gap = labelTop - b[3];
+                int cx = (b[0] + b[2]) / 2;
+                if (gap >= -LABEL_GAP_SLACK && gap <= LABEL_GAP_MAX
+                        && Math.abs(cx - labelCx) <= slack && gap < best[1]) {
+                    best[0] = value;
+                    best[1] = gap;
+                }
+            }
+        }
+        int n = node.childCount();
+        for (int i = 0; i < n; i++) {
+            collectAbove(node.child(i), label, labelTop, labelCx, slack, depth + 1, visited, best);
         }
     }
 

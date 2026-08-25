@@ -14,9 +14,13 @@ public final class Prefs {
     private static final String KEY_REAL_BUY_CONFIRMED = "real_buy_confirmed";
     private static final String KEY_DAILY_SPEND_CAP = "daily_spend_cap";
     private static final String KEY_MAX_CHAPTERS_PER_RUN = "max_chapters_per_run";
+    private static final String KEY_REAL_BUY_LIMIT = "real_buy_limit";
     private static final String KEY_ADS_PER_ACCOUNT = "ads_per_account";
     private static final String KEY_AD_ASSIST = "ad_assist_tap";
     private static final String KEY_AD_JUMP = "ad_press_jump";
+    /** 「被系统杀掉之后自动接着跑」的当天计数，见 AutomationService。 */
+    private static final String KEY_RESUME_YMD = "auto_resume_ymd";
+    private static final String KEY_RESUME_COUNT = "auto_resume_count";
 
     private Prefs() {
     }
@@ -68,13 +72,37 @@ public final class Prefs {
         sp(c).edit().putInt(KEY_DAILY_SPEND_CAP, Math.max(0, cap)).apply();
     }
 
-    /** 一轮自动订阅最多买几章，防止选择器错位时连续买错。 */
+    /**
+     * 每个账号一轮最多买几章。这是<b>安全阀</b>，不是目标：正常的停止条件是
+     * 「这个号的代券不够 → 换下一个号」，一路买到所有号都买不动为止。
+     * 只有选择器错位时它才起作用 —— 那时候最多错这么多章就会停下。
+     */
     public static int maxChaptersPerRun(Context c) {
-        return clamp(sp(c).getInt(KEY_MAX_CHAPTERS_PER_RUN, 3), 1, 50);
+        return clamp(sp(c).getInt(KEY_MAX_CHAPTERS_PER_RUN, 50), 1, 50);
     }
 
     public static void setMaxChaptersPerRun(Context c, int n) {
         sp(c).edit().putInt(KEY_MAX_CHAPTERS_PER_RUN, clamp(n, 1, 50)).apply();
+    }
+
+    /**
+     * 一整趟里最多<b>真买</b>几章，0＝不限。默认 1。
+     *
+     * <p>这是<b>保险丝</b>，跟 {@link #maxChaptersPerRun} 那个「每号安全阀」不是一回事：
+     * 安全阀防的是选择器错位买错章，这一条防的是「第一次开真买就一口气把所有号的券花掉」。
+     * 真买这条路在真机上一次都没走通过 —— 第一趟必须只买一章，让人看清账本记对了、券扣对了。
+     *
+     * <p>配套的是 {@link #setDryRun} 的自动回档（见 {@code SubscribeRun.restoreDryRunAfterRealBuy}）：
+     * 真买那一趟跑完就把干跑重新打开，不管买成几章、也不管是从哪条路退出去的。
+     * 这个 App 的使用者手指动不了，忘了关＝下一趟继续花钱，
+     * 而他自己关不掉 —— 所以真买是一次性授权，用完自己回到安全档。
+     */
+    public static int realBuyLimit(Context c) {
+        return Math.max(0, sp(c).getInt(KEY_REAL_BUY_LIMIT, 1));
+    }
+
+    public static void setRealBuyLimit(Context c, int n) {
+        sp(c).edit().putInt(KEY_REAL_BUY_LIMIT, Math.max(0, n)).apply();
     }
 
     /**
@@ -116,6 +144,28 @@ public final class Prefs {
 
     public static void setAdJump(Context c, boolean value) {
         sp(c).edit().putBoolean(KEY_AD_JUMP, value).apply();
+    }
+
+    /**
+     * 今天已经「被系统杀掉之后自动接着跑」几次了。
+     *
+     * <p>MIUI 会连进程一起把我们杀掉（SwipeUpClean），系统随后会把原来那条启动请求重发一遍，
+     * 于是队列自己又跑一趟。接着跑本身是好事（用户按不动屏幕，没人能替他重按一次），但必须
+     * 有上限：万一某个号每次都在同一步失败，无限重启就变成反复重登，那是最招验证码的动作。
+     */
+    public static int autoResumes(Context c, String ymd) {
+        SharedPreferences p = sp(c);
+        return ymd.equals(p.getString(KEY_RESUME_YMD, "")) ? p.getInt(KEY_RESUME_COUNT, 0) : 0;
+    }
+
+    public static void noteAutoResume(Context c, String ymd) {
+        int next = autoResumes(c, ymd) + 1;
+        sp(c).edit().putString(KEY_RESUME_YMD, ymd).putInt(KEY_RESUME_COUNT, next).apply();
+    }
+
+    /** 用户自己按了「跑今天的流程」就把计数清零：这是一趟新的、有人看着的运行。 */
+    public static void clearAutoResumes(Context c, String ymd) {
+        sp(c).edit().putString(KEY_RESUME_YMD, ymd).putInt(KEY_RESUME_COUNT, 0).apply();
     }
 
     private static int clamp(int v, int min, int max) {

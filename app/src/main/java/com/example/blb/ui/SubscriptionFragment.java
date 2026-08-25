@@ -19,9 +19,9 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.LiveData;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -104,8 +104,7 @@ public class SubscriptionFragment extends Fragment {
                 .onLongClick((item, pos) -> confirmDeleteChapter(item));
         RecyclerView list = v.findViewById(R.id.list);
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
-        list.addItemDecoration(new DividerItemDecoration(requireContext(),
-                DividerItemDecoration.VERTICAL));
+        // 行是卡片，卡片之间已经有间距，不再画分割线。
         list.setAdapter(adapter);
 
         exportLauncher = registerForActivityResult(
@@ -192,7 +191,17 @@ public class SubscriptionFragment extends Fragment {
             sb.append("\n从第").append(current.startFrom()).append("章开始订阅（点这里改）");
             target.setText(sb);
         }
-        empty.setVisibility(novels.isEmpty() ? View.VISIBLE : View.GONE);
+        // 空态要分两种：一本小说都没有，和有小说但这本还没登记章节。
+        // 原来只管前一种，于是「已登记的章节与订阅情况」下面会是一片什么都不说的空白。
+        if (novels.isEmpty()) {
+            empty.setText(R.string.sub_empty);
+            empty.setVisibility(View.VISIBLE);
+        } else if (chapters.isEmpty()) {
+            empty.setText(R.string.sub_no_chapters);
+            empty.setVisibility(View.VISIBLE);
+        } else {
+            empty.setVisibility(View.GONE);
+        }
         adapter.submit(chapters);
         refreshSuggestion();
     }
@@ -232,8 +241,10 @@ public class SubscriptionFragment extends Fragment {
         }
         List<String> parts = new ArrayList<>();
         for (AccountStat s : list) {
-            parts.add(s.displayName() + " " + s.chapterCount + " 章／" + s.totalCost
-                    + " 券（余 " + s.coupons + "）");
+            // 花费和余额都以代券为主：新流程只买「实付 0 火券」的章，火券只会是历史遗留。
+            parts.add(s.displayName() + " " + s.chapterCount + " 章／" + s.totalVouchers
+                    + " 代券" + (s.totalCost > 0 ? "+" + s.totalCost + " 火券" : "")
+                    + "（余代券 " + (s.vouchers >= 0 ? String.valueOf(s.vouchers) : "?") + "）");
         }
         stats.setText("累计：" + TextUtils.join("　", parts));
     }
@@ -283,6 +294,12 @@ public class SubscriptionFragment extends Fragment {
         line2.append(real.isEmpty() ? "还没人订阅" : "已订阅：" + TextUtils.join("、", real));
         if (!dry.isEmpty()) line2.append("　干跑记录：").append(TextUtils.join("、", dry));
         row.<TextView>findViewById(R.id.line2).setText(line2);
+
+        // 色条＝这一章有没有真的订阅过（干跑不算）：绿＝有人真买了，灰＝还没有。
+        StatusPalette tone = real.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
+        row.findViewById(R.id.accent).setBackgroundColor(
+                ContextCompat.getColor(row.getContext(), tone.foreground));
+        row.findViewById(R.id.badge).setVisibility(View.GONE);
     }
 
     private String accountName(long accountId) {
@@ -290,6 +307,16 @@ public class SubscriptionFragment extends Fragment {
             if (a.id == accountId) return a.displayName();
         }
         return "账号#" + accountId;
+    }
+
+    /** 一条记录花了多少：现在花的是代券，火券只有历史记录里才有。 */
+    private static String describeCost(Purchase p) {
+        if (p.costVouchers > 0 && p.costCoupons > 0) {
+            return p.costVouchers + " 代券+" + p.costCoupons + " 火券";
+        }
+        if (p.costVouchers > 0) return p.costVouchers + " 代券";
+        if (p.costCoupons > 0) return p.costCoupons + " 火券";
+        return "花费未记";
     }
 
     /** 点一章：列出所有账号，选谁就补录／撤销谁的订阅。 */
@@ -303,7 +330,9 @@ public class SubscriptionFragment extends Fragment {
             Account a = accounts.get(i);
             Purchase owned = purchaseOf(a.id, chapter.id);
             String mark = owned == null ? "未订阅"
-                    : (owned.isReal() ? "已订阅 " + owned.costCoupons + " 券" : "仅干跑记录");
+                    : !owned.isReal() ? "仅干跑记录"
+                    : Purchase.SRC_OWNED.equals(owned.source) ? "界面显示已拥有"
+                    : "已订阅 " + describeCost(owned);
             labels[i] = a.displayName() + " — " + mark;
         }
         new AlertDialog.Builder(requireContext())
@@ -342,9 +371,10 @@ public class SubscriptionFragment extends Fragment {
                 .setView(form)
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton(R.string.save, (d, w) -> {
+                    // 手动补录填的是代券：现在能买下来的章一律「实付 0 火券」。
                     int cost = Math.max(0, Texts.parseCount(input.getText().toString()));
                     Db.io(() -> dao.upsertPurchase(Purchase.of(
-                            account.id, chapter.id, cost, Purchase.SRC_MANUAL)));
+                            account.id, chapter.id, 0, cost, Purchase.SRC_MANUAL)));
                 })
                 .show();
     }
@@ -353,7 +383,7 @@ public class SubscriptionFragment extends Fragment {
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.sub_unmark)
                 .setMessage(account.displayName() + " 这一章的记录会被删掉。"
-                        + "这只改本地账本，不会退火券。")
+                        + "这只改本地账本，不会退代券。")
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton(R.string.delete, (d, w) ->
                         Db.io(() -> dao.deletePurchase(purchase)))
@@ -577,8 +607,13 @@ public class SubscriptionFragment extends Fragment {
 
     // ---------- CSV ----------
 
+    /**
+     * 新列 {@code cost_vouchers} 加在<b>末尾</b>而不是 cost_coupons 旁边：这样你以前导出的
+     * CSV 还能照原样导回来（前 7 列的位置一个都没动），缺这一列就按 0 算。
+     */
     private static final String CSV_HEADER =
-            "novel_title,chapter_no,chapter_title,account_login,cost_coupons,source,purchased_at";
+            "novel_title,chapter_no,chapter_title,account_login,cost_coupons,source,purchased_at,"
+                    + "cost_vouchers";
 
     private void writeCsv(@Nullable Uri uri) {
         if (uri == null) return;
@@ -596,7 +631,8 @@ public class SubscriptionFragment extends Fragment {
                             r.accountLoginName,
                             String.valueOf(r.costCoupons),
                             r.source,
-                            Texts.ymd(r.purchasedAt)).getBytes(StandardCharsets.UTF_8));
+                            Texts.ymd(r.purchasedAt),
+                            String.valueOf(r.costVouchers)).getBytes(StandardCharsets.UTF_8));
                     count++;
                 }
             } catch (Exception e) {
@@ -649,7 +685,9 @@ public class SubscriptionFragment extends Fragment {
                     String source = Csv.at(row, 5);
                     if (Texts.isBlank(source)) source = Purchase.SRC_MANUAL;
                     dao.upsertPurchase(Purchase.of(account.id, chapter.id,
-                            Math.max(0, Csv.intAt(row, 4)), source));
+                            Math.max(0, Csv.intAt(row, 4)),
+                            Math.max(0, Csv.intAt(row, 7)), // 旧 CSV 没这一列，按 0 算
+                            source));
                     added++;
                 }
             } catch (Exception e) {

@@ -63,22 +63,37 @@ public class MainActivity extends AppCompatActivity {
         outState.putInt(STATE_TAB, currentTab);
     }
 
+    /**
+     * 切到某个页签。
+     *
+     * <p>这里有两处必须小心，出过 bug：
+     * <ul>
+     *   <li>用 {@code commitNow()} 而不是 {@code commit()}。{@code commit()} 是排队执行的，
+     *       紧接着再调一次本方法时 {@code findFragmentByTag} 还看不到刚 add 的那个，于是会
+     *       用同一个 tag <b>再加一个</b> —— 两个同样的 Fragment 叠在容器里各自滚动，界面上
+     *       就是「今日状态」和「运行日志」的字互相压在一起（2026-08-23 20:42 的截图）。
+     *       {@code onCreate} 里 {@code setSelectedItemId} 会触发一次监听、后面又显式调一次，
+     *       正好踩中。</li>
+     *   <li>顺手把「tag 相同但不是 target」的旧副本 remove 掉：进程被杀后恢复状态时，
+     *       之前叠出来的那些副本会一起回来，只 hide 是不够的。</li>
+     * </ul>
+     */
     private void show(int tabId) {
         currentTab = tabId;
         String tag = "tab_" + tabId;
         Fragment target = getSupportFragmentManager().findFragmentByTag(tag);
         androidx.fragment.app.FragmentTransaction tx = getSupportFragmentManager().beginTransaction();
         for (Fragment f : getSupportFragmentManager().getFragments()) {
-            if (f != target) {
-                tx.hide(f);
-            }
+            if (f == target) continue;
+            if (tag.equals(f.getTag())) tx.remove(f);
+            else tx.hide(f);
         }
         if (target == null) {
             tx.add(R.id.container, create(tabId), tag);
         } else {
             tx.show(target);
         }
-        tx.commit();
+        tx.commitNow();
     }
 
     private Fragment create(int tabId) {

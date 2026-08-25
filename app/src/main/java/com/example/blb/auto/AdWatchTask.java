@@ -31,6 +31,11 @@ import com.example.blb.util.Texts;
  * 接着播（只按返回键，不读也不点那个 App 里的任何内容）—— 手按不动的人最怕的就是被留在
  * 别的 App 里出不来。开关关着的时候，撞上这种弹窗同样是按返回退回来。
  *
+ * <p><b>那几次是所有账号共用的</b>（2026-08-23 用户实测告知）：设备上一天总共 5 支，第一个号
+ * 看完之后，后面每个号打开签到面板看到的都是「已领完」。所以这一步对后 7 个号的正确行为就是
+ * 立刻收工 —— 判据是 {@link Keys#AD_EXHAUSTED}，在读次数和点入口之前先查。设置页那个
+ * 「每号每天几个」只是<b>界面计数读不到时</b>的上限，不是每个号真的能再看那么多。
+ *
  * <p><b>实测撞上的一种广告（优量汇「10秒更快拿奖」）</b>：播到一半弹一张卡把视频停住，卡上
  * 只有一颗「我要更快拿奖」（跳到广告主 App），没有「关掉接着看」的键；右上角关闭键弹的是
  * 「放弃奖励离开／抓住奖励机会」，按「抓住奖励机会」只关掉那个确认框，卡还在、视频还是停着。
@@ -57,6 +62,13 @@ public final class AdWatchTask {
     private static final long JUMP_EFFECT_MS = 4_000;
     /** 连着这么多支广告都「必须点进落地页才给奖励」，就别再往下耗了。 */
     private static final int MAX_PROMO_BLOCKED = 2;
+    /**
+     * 等菠萝包那张「开心收下」发放卡冒出来的时间。
+     *
+     * <p>2026-08-24 09:28 实测：第 3 支广告回到菠萝包时它还没出现，几秒后才弹，然后一直盖着
+     * 首页 —— 后面 7 个号全部卡死。只在「次数读不到或没变」时才等，所以正常路径不会白等。
+     */
+    private static final long GRANT_WAIT_MS = 8_000;
     private static final long POLL_MS = 1_000;
 
     /** 这一趟怎么按键。 */
@@ -121,9 +133,23 @@ public final class AdWatchTask {
         Result result = new Result();
         result.watched = Math.max(0, alreadyWatched);
 
-        if (r.findAny(Keys.AD_REWARD) == null) {
-            result.message = "签到页没有广告入口，跳过";
+        // 先问「今天还有没有次数」，再问「入口在不在」：领完之后入口那颗 sign_in_ad_goto 整个
+        // 从树里消失，ad_reward 却还会命中那条不可点的标题（「看小视频再领代券」），于是旧代码
+        // 以为入口还在、按配额去点它，每个号白等 20 秒 awaitAdStart（用户 2026-08-23 报的
+        // 「广告已经看完了，程序却一直尝试观看广告」就是这条）。而那 5 次是所有账号共用的，
+        // 所以第一个号看完之后，后面每个号都会走到这里。
+        if (r.findAny(Keys.AD_EXHAUSTED) != null) {
+            result.remaining = 0;
+            result.message = "今天的广告次数已经领完了（面板上写着「已领完」）";
             return result;
+        }
+
+        if (r.findAny(Keys.AD_REWARD) == null) {
+            // 也可能只是上一趟留下的发放卡盖着（模态、按返回关不掉）。收下它再看一眼。
+            if (!pressGrantIfAny(r) || r.findAny(Keys.AD_REWARD) == null) {
+                result.message = "签到页没有广告入口，跳过";
+                return result;
+            }
         }
 
         result.remaining = readRemaining(r);
@@ -138,7 +164,8 @@ public final class AdWatchTask {
         }
 
         r.log(accountName + " 今天还有 " + todo + " 个广告可领"
-                + (result.remaining < 0 ? "（界面计数读不到，按配额 " + quota + " 算）" : "")
+                + (result.remaining < 0
+                ? "（界面计数读不到，按配额 " + quota + " 算；那几次是所有账号共用的）" : "")
                 + (mode.assist ? "，由我替你点开" : "，需要你自己点")
                 + (mode.pressJump ? "；跳转键也替你按（会带你回来）" : ""));
 
@@ -184,7 +211,21 @@ public final class AdWatchTask {
      */
     private static Loop playOne(StepRunner r, String accountName, int i, int todo,
                                 Result result, Mode mode) throws StepRunner.StepFailure {
+        // 每一支开始前都再问一次「已领完」：todo 有可能是按配额算出来的（界面计数读不到时），
+        // 那个数字比真实次数大，多出来的那几轮就会去点一个已经没有的入口。
+        if (r.findAny(Keys.AD_EXHAUSTED) != null) {
+            result.remaining = 0;
+            result.message = result.watched > 0
+                    ? "领了 " + result.watched + " 个广告奖励，面板已经写「已领完」"
+                    : "今天的广告次数已经领完了（面板上写着「已领完」）";
+            return Loop.STOP;
+        }
         StepRunner.Outcome entry = r.findAny(Keys.AD_REWARD);
+        if (entry == null) {
+            // 「入口不见了」还有一个更常见的原因：上一支的发放卡盖在面板上（它一盖上来，
+            // 整棵树里只剩它那几个节点）。先把它收下，再回头找一次入口。
+            if (pressGrantIfAny(r)) entry = r.findAny(Keys.AD_REWARD);
+        }
         if (entry == null) {
             result.message = "广告入口不见了（可能已领完），停在第 " + i + " 个";
             return Loop.STOP;
@@ -198,8 +239,15 @@ public final class AdWatchTask {
 
         // 先确认视频真的顶上来了。少了这一步，签到页还没被盖住就会被当成「已经看完回来了」。
         if (!awaitAdStart(r)) {
+            // 点了没反应最常见的原因就是「入口其实已经没了」：领完之后 sign_in_ad_goto 从树里
+            // 消失，能命中的只剩那条不可点的标题。把这一句写进日志，免得下次又从零查一遍。
+            boolean gone = r.findAny(Keys.AD_EXHAUSTED) != null
+                    || r.findAny(Keys.AD_REWARD) == null;
+            if (gone) result.remaining = 0;
             result.message = "点了广告入口，但视频没起来（等了 "
-                    + AD_START_TIMEOUT_MS / 1000 + " 秒），停在第 " + i + " 个";
+                    + AD_START_TIMEOUT_MS / 1000 + " 秒）"
+                    + (gone ? "——今天的次数其实已经领完了，点到的是那行不可点的标题"
+                            : "，停在第 " + i + " 个");
             return Loop.STOP;
         }
 
@@ -223,11 +271,47 @@ public final class AdWatchTask {
         // 签到面板上做 —— 读不到就得记成「没确认到」，连这个号剩下的广告一起丢掉。
         if (!back) back = reopenSignPage(r);
 
+        // 回到菠萝包之后，代券是它自己弹一张「领取成功 ＋3 开心收下／已发放到"我的-我的钱包"中」
+        // 来发的（2026-08-23 14:42 实测，用户截图确认）。这张弹窗盖在签到面板上，面板因此怎么
+        // 刷都刷不出来；而按下那颗「开心收下」既是把奖励收进账号，也是<b>最硬的到账证据</b> ——
+        // 比面板上那句不会就地刷新的次数可靠得多。所以先收下，再去读次数。
+        //
+        // 2026-08-24 09:28 的教训：这张卡是<b>延迟</b>弹的（那次第 3 支广告回来时它还没出现），
+        // 只查一次就走会漏掉它，而漏掉的后果不是少一条佐证 —— 它是模态卡，会一直盖着首页，
+        // 让后面每一个号的 ensureHome 都在「等 mine_tab」超时。所以这里给它一个等待窗口。
+        boolean granted = pressGrantIfAny(r);
+
         int now = readRemaining(r);
+        // 面板上那句「今日还剩 N 次」是打开面板的那一刻拉的，从广告页回来它一个字都不会变：
+        // 2026-08-23 14:31 那一支实测，代券真的到了账（force-stop 菠萝包重开再看是 1），
+        // 面板上却还写着 2，于是脚本拿一张过期的界面判「没确认到奖励」并停下。所以次数没变时
+        // 先把面板关掉重开一次，让它重新拉一遍再读。
+        //
+        // 读不到次数（-1）最常见的原因也是那张发放卡：它一盖上来，整棵树里只有它那几个节点。
+        // 所以在刷面板之前再等它一次 —— 这一次值得多等几秒，因为不按掉它后面全都跑不动。
+        if (now < 0 || (before >= 0 && now == before)) {
+            if (!granted) granted = awaitGrant(r, GRANT_WAIT_MS) && pressGrantIfAny(r);
+            refreshSignPanel(r);
+            now = readRemaining(r);
+        }
         if (now >= 0) result.remaining = now;
 
         // 验收：剩余次数减了才算领到。读不到次数时退一步，用「回到了签到页」当佐证。
         boolean rewarded = before >= 0 && now >= 0 ? now < before : back;
+        if (!rewarded && granted) {
+            // 「领取成功」那张弹窗自己写明了代券已发放到钱包，比面板上的旧数字可信。
+            rewarded = true;
+            r.log("  面板上的次数还写着 " + now + "（它不会就地刷新），但菠萝包已经弹过"
+                    + "「领取成功」并且我按下了「开心收下」，按到账算");
+        }
+        if (!rewarded && play == Play.EARNED) {
+            // 第三证据：播放页自己写了「恭喜获得奖励／已完成浏览N秒，提前获得奖励」。
+            // 今天三支实测都是这句出现之后代券确实到账（面板 3→2→1→已领完），所以按到账算 ——
+            // 但要在日志里说清依据是哪一条，别让「已看 N 个」看着像凭空来的。
+            rewarded = true;
+            r.log("  界面上的次数还是 " + now + "（面板没刷出来），但播放页明确写了「恭喜获得奖励」，"
+                    + "按到账算；下一支开始前会再核对一次次数");
+        }
         if (!rewarded) {
             result.skipped = true;
             result.message = "第 " + i + " 个广告没确认到奖励（"
@@ -236,8 +320,12 @@ public final class AdWatchTask {
             return Loop.STOP;
         }
         result.watched++;
+        // 这里刻意用 now、不用 result.remaining：读不到次数时 result.remaining 还是上一支留下的
+        // 旧数字，打出来就成了「已到账，还剩 4 次」这种看着确定、其实过期的话（2026-08-24 那趟
+        // 第 3 支就是这么打的，实际那会儿面板被发放卡盖着，一个数字都读不到）。
         r.log("  第 " + i + " 个广告的奖励已到账"
-                + (result.remaining >= 0 ? "，还剩 " + result.remaining + " 次" : ""));
+                + (now >= 0 ? "，还剩 " + now + " 次"
+                : "（这会儿读不出面板上的次数，下一支开始前会再核对一次）"));
         return Loop.NEXT;
     }
 
@@ -540,6 +628,44 @@ public final class AdWatchTask {
     }
 
     /**
+     * 有那张代券发放卡就按下「开心收下」。
+     *
+     * <p>先认 {@link Keys#REWARD_GRANT}（只认这张卡自己的节点），认不到再退回
+     * {@link Keys#AD_CLAIM}（广告 SDK 自己那颗「领取奖励」）。顺序不能反：宽的那一组
+     * 在别的页面上也可能命中。
+     *
+     * @return true = 真的按下去了（＝奖励收进账号了，这是最硬的到账证据）
+     */
+    private static boolean pressGrantIfAny(StepRunner r) throws StepRunner.StepFailure {
+        StepRunner.Outcome grant = r.findAny(Keys.REWARD_GRANT);
+        if (grant == null) grant = r.findAny(Keys.AD_CLAIM);
+        if (grant == null) return false;
+        r.log("  菠萝包弹出了「领取成功」，替你按下「开心收下」把代券收进账号");
+        return r.pressOrLog(grant.key, grant.node);
+    }
+
+    /**
+     * 等那张发放卡冒出来（菠萝包是延迟弹的，实测能晚好几秒）。
+     *
+     * <p>只在「次数读不到或没变」的时候才等，所以正常那条路不会白等：面板一读就出数字的那几支
+     * 广告（2026-08-24 的第 1 支就是）根本走不到这里。
+     */
+    private static boolean awaitGrant(StepRunner r, long timeoutMs) throws StepRunner.StepFailure {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        boolean logged = false;
+        while (System.currentTimeMillis() < deadline) {
+            r.checkCancelled();
+            if (r.findAny(Keys.REWARD_GRANT) != null) return true;
+            if (!logged) {
+                r.log("  面板读不出来，等一下菠萝包那张「开心收下」（它常常晚几秒才弹）");
+                logged = true;
+            }
+            r.waitMillis(POLL_MS);
+        }
+        return false;
+    }
+
+    /**
      * 从别处自己走回签到面板（书架 → 签到入口），只为了读「今日还剩 N 次」。
      *
      * <p>只走我们自己认得的那两颗入口键，不碰广告里的任何东西；一路上按不动就如实记日志、
@@ -561,9 +687,42 @@ public final class AdWatchTask {
         return onSignPage(r);
     }
 
+    /**
+     * 把签到面板关掉重开一次，好让「今日还剩 N 次」重新拉一遍。
+     *
+     * <p>2026-08-23 14:31 实测：那一支广告的代券确实到了账（force-stop 菠萝包重开之后面板写着
+     * 「今日还剩1次」），但从广告页回来时面板上那句<b>一个字都没变</b>，还是打开面板那一刻的 2。
+     * 脚本于是把已经到手的奖励记成「没确认到」并停下，白丢了这个号剩下的广告。
+     *
+     * <p>只按返回 + 点我们自己认得的那颗签到入口，读不到就交回调用方；失败不抛出去 ——
+     * 刷不出来顶多是少一条佐证，不该因此把这个号判失败。
+     */
+    private static void refreshSignPanel(StepRunner r) throws StepRunner.StepFailure {
+        r.log("  面板上的次数是打开时拉的，从广告页回来不会自己变 —— 关掉重开一次再读");
+        try {
+            r.back();
+            StepRunner.Outcome entry = r.findAny(Keys.CHECKIN_ENTRY, Keys.CHECKIN_DONE);
+            if (entry == null) {
+                StepRunner.Outcome shelf = r.findAny(Keys.SHELF_TAB);
+                if (shelf != null) r.pressOrLog(Keys.SHELF_TAB, shelf.node);
+                entry = r.findAny(Keys.CHECKIN_ENTRY, Keys.CHECKIN_DONE);
+            }
+            if (entry != null) r.pressOrLog(entry.key, entry.node);
+            r.waitForAny(8_000, Keys.AD_REMAINING, Keys.AD_REWARD, Keys.CHECKIN_DIALOG);
+        } catch (StepRunner.StepFailure e) {
+            if (e.kind == StepRunner.Kind.CANCELLED) throw e;
+            r.log("  " + e.getMessage());
+        }
+    }
+
     /** 只提醒模式：停下来等你自己看完点「继续」。 */
     private static boolean promptOne(StepRunner r, String accountName, int i, int todo,
                                     Result result) throws StepRunner.StepFailure {
+        if (r.findAny(Keys.AD_EXHAUSTED) != null) {
+            result.remaining = 0;
+            result.message = "今天的广告次数已经领完了（面板上写着「已领完」）";
+            return false;
+        }
         if (r.findAny(Keys.AD_REWARD) == null) {
             result.message = "广告入口不见了（可能已领完），停在第 " + i + " 个";
             return false;
@@ -584,8 +743,15 @@ public final class AdWatchTask {
         return true;
     }
 
-    /** 先试专门的计数控件，再退到广告入口自己那行文字（有的版本写在一起）。 */
+    /**
+     * 今天还能看几个。
+     *
+     * <p>顺序是「先看有没有『已领完』，再读计数」：领完之后计数那格（{@code sign_in_ad_count}）
+     * 的文案是「明日更新次数」，一个数字都没有，只有旁边那颗 {@code sign_in_ad_finished}
+     * 写着「已领完」。反过来先读计数就会读出 -1，调用方按配额去点一个已经没有的入口。
+     */
     private static int readRemaining(StepRunner r) throws StepRunner.StepFailure {
+        if (r.findAny(Keys.AD_EXHAUSTED) != null) return 0;
         int n = Texts.parseRemaining(r.peekText(Keys.AD_REMAINING));
         if (n >= 0) return n;
         return Texts.parseRemaining(r.peekText(Keys.AD_REWARD));

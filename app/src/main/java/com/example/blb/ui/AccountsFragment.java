@@ -15,8 +15,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -26,7 +26,6 @@ import com.example.blb.data.Account;
 import com.example.blb.data.AccountDao;
 import com.example.blb.data.Db;
 import com.example.blb.util.Texts;
-import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.util.List;
@@ -56,10 +55,12 @@ public class AccountsFragment extends Fragment {
 
         RecyclerView list = v.findViewById(R.id.list);
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
-        list.addItemDecoration(new DividerItemDecoration(requireContext(), DividerItemDecoration.VERTICAL));
+        // 行是卡片，卡片之间已经有 10dp 间距，不再画分割线。
         list.setAdapter(adapter);
 
-        v.<FloatingActionButton>findViewById(R.id.add).setOnClickListener(b -> edit(null));
+        // 悬浮按钮带上了文字（「添加账号」），所以是 ExtendedFloatingActionButton
+        // 而不是圆的那个 —— 这里按 View 取，换控件时不用跟着改类型。
+        v.findViewById(R.id.add).setOnClickListener(b -> edit(null));
 
         dao.observeAll().observe(getViewLifecycleOwner(), this::render);
     }
@@ -71,12 +72,22 @@ public class AccountsFragment extends Fragment {
     }
 
     private void bind(View row, Account a, int position) {
-        row.<TextView>findViewById(R.id.line1).setText(
-                a.displayName() + (a.enabled ? "" : "（已停用）"));
+        // 左侧色条＝这个号今晚能不能自己跑起来：停用＝灰、缺密码＝琥珀（切号会失败）、齐了＝绿。
+        boolean loginable = !a.needsPassword() || a.hasPassword();
+        StatusPalette tone = StatusPalette.forAccount(a.enabled, loginable);
+        row.findViewById(R.id.accent).setBackgroundColor(
+                ContextCompat.getColor(row.getContext(), tone.foreground));
+        row.findViewById(R.id.badge).setVisibility(View.GONE);
 
+        String title = a.displayName();
+        row.<TextView>findViewById(R.id.line1).setText(title + (a.enabled ? "" : "（已停用）"));
+
+        // 第二行只放第一行没有的信息：登录名和昵称跟标题一样时就别再重复一遍。
         StringBuilder sb = new StringBuilder();
-        sb.append(a.loginName);
-        sb.append(" · ").append(a.loginKindLabel());
+        if (!title.equals(a.loginName)) {
+            sb.append(a.loginName).append(" · ");
+        }
+        sb.append(a.loginKindLabel());
         if (a.needsPassword()) {
             sb.append(a.hasPassword() ? " · 已存密码" : " · 未存密码（切号会失败）");
         }
@@ -86,11 +97,8 @@ public class AccountsFragment extends Fragment {
         } else {
             sb.append(" · 还没签过");
         }
-        if (!Texts.isBlank(a.nickname)) {
+        if (!Texts.isBlank(a.nickname) && !a.nickname.equals(title)) {
             sb.append("\n菠萝包昵称：").append(a.nickname);
-        }
-        if (!a.canAutoLogin()) {
-            sb.append("\n切到这个号时要你手点一次授权");
         }
         row.<TextView>findViewById(R.id.line2).setText(sb);
     }
@@ -155,7 +163,7 @@ public class AccountsFragment extends Fragment {
             label.setText(existing.label);
             login.setText(existing.loginName);
             nickname.setText(existing.nickname);
-            coupons.setText(existing.lastKnownCoupons > 0
+            coupons.setText(existing.lastKnownCoupons >= 0
                     ? String.valueOf(existing.lastKnownCoupons) : "");
             vouchers.setText(existing.lastKnownVouchers >= 0
                     ? String.valueOf(existing.lastKnownVouchers) : "");

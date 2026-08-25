@@ -81,6 +81,34 @@ public final class Selector {
                 && desc == null && descContains == null && id == null && className == null;
     }
 
+    /**
+     * 复制一条，并把 text 换成运行时才知道的那串（书名、章节名）。
+     *
+     * <p>为什么需要：书名只有跑起来才知道，写不进 selectors.json；而「哪个 id 是书名行」
+     * 必须留在 json 里（菠萝包改版时不该重编译）。这个方法把两半拼起来 ——
+     * 「id 是 tv_think_text 且文本正好等于这本书的书名」。
+     *
+     * <p>实测这一步就是搜书点错行的根因：搜索框自己的文本也正好等于刚输进去的书名，
+     * 只按文本找会先命中输入框，点它什么都不会发生。
+     */
+    public Selector withText(String value) {
+        Selector s = new Selector();
+        s.text = trimToNull(value);
+        s.textContains = textContains;
+        s.textRegex = textRegex;
+        s.desc = desc;
+        s.descContains = descContains;
+        s.id = id;
+        s.className = className;
+        s.clickableOnly = clickableOnly;
+        s.clickableAncestor = clickableAncestor;
+        s.visibleOnly = visibleOnly;
+        s.requireArea = requireArea;
+        s.topmost = topmost;
+        s.index = index;
+        return s;
+    }
+
     Pattern regex() {
         if (textRegex == null || compileFailed) return null;
         if (compiled == null) {

@@ -3,32 +3,41 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground">
 
+    <!-- 卡片行自带外边距，所以列表只留左右 14dp 和底部给悬浮按钮让位的空间 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/list"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingBottom="88dp" />
+        android:paddingStart="14dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="96dp" />
 
     <TextView
         android:id="@+id/empty"
+        style="@style/Blb.Text.Body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical"
         android:padding="32dp"
         android:text="@string/accounts_empty"
         android:textAlignment="center"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone" />
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
+    <com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
         android:id="@+id/add"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:contentDescription="@string/accounts_add"
-        app:srcCompat="@android:drawable/ic_input_add" />
+        android:text="@string/accounts_add"
+        android:textSize="16sp"
+        app:icon="@drawable/ic_action_add" />
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 向下的小箭头：说明文字折叠／展开的提示，展开时在代码里旋转 180° -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M7.4,8.6 L12,13.2l4.6,-4.6L18,10l-6,6 -6,-6z" />
+</vector>

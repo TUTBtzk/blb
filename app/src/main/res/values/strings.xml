@@ -18,9 +18,9 @@
     <string name="account_vouchers_hint">代券余额（可留空，签到和看广告发的就是代券）</string>
     <string name="account_enabled">参与自动签到</string>
     <string name="account_kind_label">登录方式</string>
-    <string name="account_kind_hint_password">账号密码：可以全自动切号。</string>
-    <string name="account_kind_hint_one_tap">本机号码一键登录：能自动勾同意并点按钮，但号码由 SIM 卡决定，只能登成那一个号。</string>
-    <string name="account_kind_hint_third">微信／QQ／微博：授权页属于那个 App，本 App 的无障碍只覆盖菠萝包，看不见也点不了。切到这个号时会停下来等你点一次授权。</string>
+    <string name="account_kind_hint_password">账号密码：全自动。密码加密存在本机，切号时自动填。</string>
+    <string name="account_kind_hint_one_tap">本机号码一键登录：自动勾同意并按那颗大按钮。号码由 SIM 卡决定，只能登成本机那一个号。</string>
+    <string name="account_kind_hint_third">微信／QQ／微博：自动勾同意并点底部那个图标。实测微信和微博点完就登进去了；QQ 会跳到 QQ 里要按一次「同意」，那一颗也由程序替你按。</string>
     <string-array name="account_kinds">
         <item>账号密码</item>
         <item>本机号码一键登录</item>
@@ -32,8 +32,9 @@
     <string name="cancel">取消</string>
     <string name="delete">删除</string>
 
-    <string name="checkin_run_daily">跑今天的流程（签到 → 广告 → 订阅）</string>
-    <string name="checkin_run_now">立即为所有启用账号签到</string>
+    <string name="checkin_run_daily">跑今天的整套流程</string>
+    <string name="checkin_run_now">只签到</string>
+    <string name="checkin_run_hint">上面那颗＝一个号一个号走完签到 → 广告 → 订阅；下面那颗只给启用的账号签到，不看广告也不订阅。</string>
     <string name="checkin_stop">停止</string>
     <string name="checkin_continue">继续</string>
     <string name="checkin_skip">跳过此账号</string>
@@ -54,7 +55,7 @@
     <string name="sub_no_target">还没选目标小说。</string>
     <string name="sub_mark_owned">标记为某账号已订阅</string>
     <string name="sub_unmark">删除这条订阅记录</string>
-    <string name="sub_cost_prompt">这一章花了多少火券？</string>
+    <string name="sub_cost_prompt">这一章花了多少代券？</string>
 
     <string name="sub_target_novel">集中订阅的目标小说</string>
     <string name="sub_pick_novel">选择小说</string>
@@ -64,6 +65,7 @@
     <string name="sub_export_csv">导出 CSV</string>
     <string name="sub_import_csv">导入 CSV</string>
     <string name="sub_empty">还没有小说。先添加一本，再登记章节和订阅记录。</string>
+    <string name="sub_no_chapters">这本还没登记章节。用上面的「添加章节」或「导入章节」把要订阅的章号写进来。</string>
     <string name="sub_suggestion_none">没有待订阅的章节了。</string>
     <string name="sub_run">开始自动订阅</string>
     <string name="sub_run_title">开始自动订阅？</string>
@@ -82,7 +84,7 @@
     <string name="settings_daily">每天自动签到</string>
     <string name="settings_daily_hour">签到时间（小时，0–23）</string>
     <string name="settings_battery">电池／自启白名单</string>
-    <string name="settings_max_chapters">每轮最多订阅几章</string>
+    <string name="settings_max_chapters">每个账号每轮最多订阅几章（安全阀，正常是买到代券花光才换号）</string>
     <string name="settings_ads_per_account">每个账号每天几个广告（界面读不到「还剩几次」时按这个提醒）</string>
     <string name="settings_ad_assist">替我点广告按钮（视频照真实时长播完，不快进不跳过）</string>
     <string name="settings_ad_assist_hint">关掉之后回到「只提醒」：脚本只数出还剩几个，每个都停下来等你自己点开和领取。</string>
@@ -93,6 +95,11 @@
     <string name="settings_battery_hint">小米／红米会杀后台。请在系统设置里给本 App 允许自启动、后台弹出界面，并把省电策略设为「无限制」，否则每日自动签到会被杀掉。</string>
     <string name="settings_a11y_on">已开启</string>
     <string name="settings_a11y_off">未开启（自动化不可用）</string>
+    <string name="settings_section_run">运行方式</string>
+    <string name="settings_section_ads">广告辅助点击</string>
+    <string name="settings_section_system">系统权限</string>
+    <string name="sub_records_header">已登记的章节与订阅情况</string>
+    <string name="checkin_notice_header">这一趟里我会替你按什么</string>
 
     <string name="inspector_dump">抓取当前菠萝包界面</string>
     <string name="inspector_save">保存到文件</string>

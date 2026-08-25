@@ -10,6 +10,7 @@ import androidx.room.Transaction;
 import androidx.room.Update;
 
 import java.util.List;
+import java.util.Map;
 
 @Dao
 public interface SubscriptionDao {
@@ -80,6 +81,41 @@ public interface SubscriptionDao {
     @Delete
     void deleteChapter(Chapter chapter);
 
+    @Query("UPDATE chapter SET chapter_no = :chapterNo WHERE id = :id")
+    void setChapterNo(long id, int chapterNo);
+
+    @Query("DELETE FROM chapter WHERE id = :id")
+    void deleteChapterById(long id);
+
+    /**
+     * 作者动过目录之后，把账本里的章号整体搬到跟界面一致。
+     *
+     * <p><b>为什么要两段走</b>：(novel_id, chapter_no) 是唯一索引，第 68 章搬到 69 的时候
+     * 69 还被老的第 69 章占着 —— 一条一条改必然撞索引。所以先把所有要搬的章改成<b>负数</b>
+     * （负号跟正的章号永不重号，负数之间也各不相同），再一次性改回正数。
+     *
+     * <p>购买记录挂在 {@code chapter.id} 上，章号只是这一章现在排第几 —— 搬号不动任何一条
+     * 购买记录，「哪个号买过哪一章」原样保留。
+     */
+    @Transaction
+    default void realign(Map<Long, Integer> renumber, List<Long> dropIds, int newStartChapterNo,
+                         long novelId) {
+        if (dropIds != null) {
+            for (Long id : dropIds) {
+                if (id != null) deleteChapterById(id);
+            }
+        }
+        if (renumber != null && !renumber.isEmpty()) {
+            for (Map.Entry<Long, Integer> e : renumber.entrySet()) {
+                setChapterNo(e.getKey(), -e.getValue());
+            }
+            for (Map.Entry<Long, Integer> e : renumber.entrySet()) {
+                setChapterNo(e.getKey(), e.getValue());
+            }
+        }
+        if (newStartChapterNo > 0) setStartChapter(novelId, newStartChapterNo);
+    }
+
     /** 已存在 (novelId, chapterNo) 时返回既有行，避免唯一约束报错。 */
     @Transaction
     default Chapter ensureChapter(long novelId, int chapterNo, String title, int price) {
@@ -114,8 +150,56 @@ public interface SubscriptionDao {
             + "AND IFNULL(source, '') != 'DRY_RUN'")
     int countRealPurchase(long accountId, long chapterId);
 
+    @Query("SELECT COUNT(*) FROM purchase WHERE source = 'DRY_RUN' AND chapter_id IN "
+            + "(SELECT id FROM chapter WHERE novel_id = :novelId)")
+    int countDryRuns(long novelId);
+
+    /**
+     * 这个号在这本书上「花过券」的记录条数 —— 拿去和「我的 → 代券 → 订阅清单」里那一行的
+     * 「N章节」对账（见 {@code auto.VoucherLedger}）。
+     *
+     * <p>为什么按「花过券」筛而不是按 source：清单只数<b>付费订阅</b>。免费章记的是
+     * {@code OWNED}、花费 0，服务器不会把它算进「2章节」；干跑一分券没花，更不能算。
+     * 旧记录（v4 之前）代券列一律是 0、花费记在火券列上，所以两列都要看。
+     */
+    @Query("SELECT COUNT(*) FROM purchase WHERE account_id = :accountId "
+            + "AND chapter_id IN (SELECT id FROM chapter WHERE novel_id = :novelId) "
+            + "AND IFNULL(source, '') != 'DRY_RUN' AND (cost_coupons > 0 OR cost_vouchers > 0)")
+    int countPaidPurchases(long accountId, long novelId);
+
+    /**
+     * 账本自己记的火券花费合计。正常必须是 0 —— 用户不充值火券，
+     * 而清单那一行也该写着「0火券」。两边有一边不是 0 就说明有一边记错了。
+     */
+    @Query("SELECT CAST(IFNULL(SUM(cost_coupons), 0) AS INTEGER) FROM purchase "
+            + "WHERE account_id = :accountId "
+            + "AND chapter_id IN (SELECT id FROM chapter WHERE novel_id = :novelId) "
+            + "AND IFNULL(source, '') != 'DRY_RUN'")
+    int sumFireSpent(long accountId, long novelId);
+
+    /**
+     * 这本书里「有号真买过」的章。作者动过目录、要按标题重新对号的时候用它 ——
+     * 这些章绝不许被当成空登记删掉，删了就会被重新买一遍，那是真花钱。
+     */
+    @Query("SELECT DISTINCT chapter_id FROM purchase WHERE IFNULL(source, '') != 'DRY_RUN' "
+            + "AND chapter_id IN (SELECT id FROM chapter WHERE novel_id = :novelId)")
+    List<Long> realPurchasedChapterIds(long novelId);
+
+    /**
+     * 抹掉这本书的干跑痕迹。<b>只删 source='DRY_RUN' 这一种</b> —— 它记的是「判定买得起」，
+     * 一分券都没花，删掉不丢任何真实数据（真实购买、手动补录、锁位回填都不受影响）。
+     *
+     * <p>为什么要删：干跑痕迹是<b>攒着</b>的，上一趟判给甲的第 49 章会一直留在账本里，
+     * 下一趟判给乙时两条并存 —— 账本上看起来就像「一章被两个号订了」，而这正是要核对的那条约束。
+     * 每趟干跑开始前清一次，账本里的 DRY_RUN 就只讲这一趟的事。
+     */
+    @Query("DELETE FROM purchase WHERE source = 'DRY_RUN' AND chapter_id IN "
+            + "(SELECT id FROM chapter WHERE novel_id = :novelId)")
+    void clearDryRuns(long novelId);
+
     @Query("SELECT p.id AS purchaseId, p.account_id AS accountId, p.chapter_id AS chapterId, "
-            + "p.cost_coupons AS costCoupons, p.purchased_at AS purchasedAt, p.source AS source, "
+            + "p.cost_coupons AS costCoupons, p.cost_vouchers AS costVouchers, "
+            + "p.purchased_at AS purchasedAt, p.source AS source, "
             + "c.chapter_no AS chapterNo, c.title AS chapterTitle, n.title AS novelTitle, "
             + "a.label AS accountLabel, a.nickname AS accountNickname, a.login_name AS accountLoginName "
             + "FROM purchase p "
@@ -126,7 +210,8 @@ public interface SubscriptionDao {
     LiveData<List<PurchaseRow>> observeRecentRows(int limit);
 
     @Query("SELECT p.id AS purchaseId, p.account_id AS accountId, p.chapter_id AS chapterId, "
-            + "p.cost_coupons AS costCoupons, p.purchased_at AS purchasedAt, p.source AS source, "
+            + "p.cost_coupons AS costCoupons, p.cost_vouchers AS costVouchers, "
+            + "p.purchased_at AS purchasedAt, p.source AS source, "
             + "c.chapter_no AS chapterNo, c.title AS chapterTitle, n.title AS novelTitle, "
             + "a.label AS accountLabel, a.nickname AS accountNickname, a.login_name AS accountLoginName "
             + "FROM purchase p "
@@ -135,6 +220,32 @@ public interface SubscriptionDao {
             + "JOIN account a ON a.id = p.account_id "
             + "ORDER BY n.title ASC, c.chapter_no ASC, a.id ASC")
     List<PurchaseRow> loadAllRows();
+
+    /**
+     * 这本书上<b>所有号</b>「花过券」的记录，逐条带着章号、标题、花费和买入时间 ——
+     * 拿去跟「我的 → 代券 → 订阅清单 →（点整行）→ 订阅明细」那一页<b>逐章</b>对账
+     * （见 {@code auto.SubscribedDetail}）。
+     *
+     * <p>为什么要连别的号的一起取：明细页只说「这个号买过第 N 章」，而「一章只许一个号」是全队的
+     * 约束 —— 只有同时看得见别的号的记录，才认得出「菠萝包说这一章是甲买的、账本却记在乙名下」
+     * 这种归属错乱（2026-08-25 第49章那件事）。
+     *
+     * <p>筛「花过券」的口径和 {@link #countPaidPurchases} 一致：干跑不算、免费章（{@code OWNED}、
+     * 花费 0）不算 —— 明细页只列付费订阅。
+     */
+    @Query("SELECT p.id AS purchaseId, p.account_id AS accountId, p.chapter_id AS chapterId, "
+            + "p.cost_coupons AS costCoupons, p.cost_vouchers AS costVouchers, "
+            + "p.purchased_at AS purchasedAt, p.source AS source, "
+            + "c.chapter_no AS chapterNo, c.title AS chapterTitle, n.title AS novelTitle, "
+            + "a.label AS accountLabel, a.nickname AS accountNickname, a.login_name AS accountLoginName "
+            + "FROM purchase p "
+            + "JOIN chapter c ON c.id = p.chapter_id "
+            + "JOIN novel n ON n.id = c.novel_id "
+            + "JOIN account a ON a.id = p.account_id "
+            + "WHERE c.novel_id = :novelId AND IFNULL(p.source, '') != 'DRY_RUN' "
+            + "AND (p.cost_coupons > 0 OR p.cost_vouchers > 0) "
+            + "ORDER BY c.chapter_no ASC, a.id ASC")
+    List<PurchaseRow> loadPaidRowsOfNovel(long novelId);
 
     // ---------- 建议 ----------
 
@@ -173,29 +284,44 @@ public interface SubscriptionDao {
     @Query("UPDATE novel SET start_chapter_no = :chapterNo WHERE id = :id")
     void setStartChapter(long id, int chapterNo);
 
-    /** 这一章的候选账号，按「火券最多」排序；队列会挨个试，被花费上限挡住就换下一个。 */
+    /**
+     * 这一章的候选账号，按<b>代券</b>最多排序。队列会挨个试，被花费上限挡住就换下一个。
+     *
+     * <p>为什么不是火券：章节费两种券都能付，但菠萝包会先拿代券抵扣，而用户不充值火券 ——
+     * 火券多的号在这里毫无意义，能不能买下一章完全看代券。按火券排序会让「有 2000 火券、
+     * 0 代券」的号一直排在最前面，每轮都白走一趟。
+     */
     @Query("SELECT * FROM account WHERE enabled = 1 AND id NOT IN "
             + "(SELECT account_id FROM purchase WHERE chapter_id = :chapterId "
             + " AND IFNULL(source, '') != 'DRY_RUN') "
-            + "ORDER BY last_known_coupons DESC, sort_order ASC, id ASC")
+            + "ORDER BY last_known_vouchers DESC, sort_order ASC, id ASC")
     List<Account> suggestBuyers(long chapterId);
 
-    /** 某账号在 since 之后真实花掉的火券，用于每日花费上限。 */
+    /** 某账号在 since 之后真实花掉的火券。 */
     @Query("SELECT CAST(IFNULL(SUM(cost_coupons), 0) AS INTEGER) FROM purchase "
             + "WHERE account_id = :accountId AND purchased_at >= :since "
             + "AND IFNULL(source, '') != 'DRY_RUN'")
     int spentSince(long accountId, long since);
 
-    /** 这一章该让哪个号买：还没买过、已启用、火券最多的那个。 */
+    /** 某账号在 since 之后真实花掉的代券，每日花费上限按这个算（花的本来就是代券）。 */
+    @Query("SELECT CAST(IFNULL(SUM(cost_vouchers), 0) AS INTEGER) FROM purchase "
+            + "WHERE account_id = :accountId AND purchased_at >= :since "
+            + "AND IFNULL(source, '') != 'DRY_RUN'")
+    int spentVouchersSince(long accountId, long since);
+
+    /** 这一章该让哪个号买：还没买过、已启用、<b>代券</b>最多的那个。 */
     @Query("SELECT * FROM account WHERE enabled = 1 AND id NOT IN "
             + "(SELECT account_id FROM purchase WHERE chapter_id = :chapterId "
             + " AND IFNULL(source, '') != 'DRY_RUN') "
-            + "ORDER BY last_known_coupons DESC, sort_order ASC, id ASC LIMIT 1")
+            + "ORDER BY last_known_vouchers DESC, sort_order ASC, id ASC LIMIT 1")
     Account suggestBuyer(long chapterId);
 
     @Query("SELECT a.id AS accountId, a.label AS label, a.nickname AS nickname, "
             + "a.login_name AS loginName, a.last_known_coupons AS coupons, "
-            + "COUNT(p.id) AS chapterCount, CAST(IFNULL(SUM(p.cost_coupons), 0) AS INTEGER) AS totalCost "
+            + "a.last_known_vouchers AS vouchers, "
+            + "COUNT(p.id) AS chapterCount, "
+            + "CAST(IFNULL(SUM(p.cost_coupons), 0) AS INTEGER) AS totalCost, "
+            + "CAST(IFNULL(SUM(p.cost_vouchers), 0) AS INTEGER) AS totalVouchers "
             + "FROM account a LEFT JOIN purchase p "
             + "  ON p.account_id = a.id AND IFNULL(p.source, '') != 'DRY_RUN' "
             + "GROUP BY a.id ORDER BY a.sort_order ASC, a.id ASC")

@@ -33,11 +33,22 @@ public abstract class DbTestBase {
         db.close();
     }
 
+    /** 只记火券的账号；代券留在 -1（没读到过）。挑号顺序按代券排，所以这些号在排序上是并列的。 */
     protected long newAccount(String login, int coupons, boolean enabled, int sortOrder) {
+        return newAccount(login, coupons, -1, enabled, sortOrder);
+    }
+
+    /**
+     * 两种券都记的账号。挑号只看代券（{@code last_known_vouchers}）—— 章节费两种券都能付，
+     * 但菠萝包先扣代券，而用户不充值火券，所以火券多少不影响能不能买下一章。
+     */
+    protected long newAccount(String login, int coupons, int vouchers, boolean enabled,
+                              int sortOrder) {
         Account a = new Account();
         a.loginName = login;
         a.label = login;
         a.lastKnownCoupons = coupons;
+        a.lastKnownVouchers = vouchers;
         a.enabled = enabled;
         a.sortOrder = sortOrder;
         return accounts.insert(a);
@@ -61,5 +72,10 @@ public abstract class DbTestBase {
 
     protected long buy(long accountId, long chapterId, int cost, String source) {
         return subs.upsertPurchase(Purchase.of(accountId, chapterId, cost, source));
+    }
+
+    /** 两种券分别记的一笔购买。每日花费上限按代券算，所以代券那一列要能单独造。 */
+    protected long buy(long accountId, long chapterId, int cost, int costVouchers, String source) {
+        return subs.upsertPurchase(Purchase.of(accountId, chapterId, cost, costVouchers, source));
     }
 }

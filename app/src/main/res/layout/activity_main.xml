@@ -4,6 +4,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
     android:orientation="vertical">
 
     <androidx.fragment.app.FragmentContainerView
@@ -11,6 +12,12 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
+
+    <!-- 底栏和内容之间来一条细线：底栏底色跟卡片同色，不划一下会糊在一起 -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="?attr/colorOutlineVariant" />
 
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/nav"

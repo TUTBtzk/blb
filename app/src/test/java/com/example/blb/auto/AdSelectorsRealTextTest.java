@@ -89,6 +89,258 @@ public class AdSelectorsRealTextTest {
             "继续了解详情", "了解更多",
             "应用名称：闲鱼 | 开发者：浙江阿里巴巴闲鱼网络科技有限公司", "恭喜获得奖励"};
 
+    // 2026-08-23 14:42 实测（用户截图确认），回到菠萝包之后它自己弹的那张发奖弹窗：
+    // 标题「领取成功」、一个代券图标 + 「＋」「3」（数字是单独一个节点）、一颗「开心收下」，
+    // 底下写着「已发放到"我的-我的钱包"中」。uiautomator 只读出三段字：「+」「3」「开心收下」。
+    private static final String[] SFACG_REWARD_GRANT = {"+", "3", "开心收下"};
+
+    /**
+     * 菠萝包自己那张「领取成功／开心收下」必须认成 ad_claim。
+     *
+     * <p>它盖在签到面板上面，面板因此怎么都刷不出新的「今日还剩 N 次」—— 这就是脚本卡在
+     * 这一页的原因（用户原话：「这个程序就是卡在看完广告的这个页面」）。按下这颗键既是把代券
+     * 收进账号，也是最硬的到账证据（弹窗自己写着「已发放到"我的-我的钱包"中」）。
+     */
+    @Test
+    public void sfacgRewardGrantDialogIsRecognisedAsClaim() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        NodeView claim = hit(m, Keys.AD_CLAIM, SFACG_REWARD_GRANT);
+        assertNotNull("「开心收下」必须认出来，认不出就卡在这张弹窗上、面板永远刷不出新次数", claim);
+        assertTrue("实到的是：" + claim.text(), "开心收下".equals(claim.text()));
+        for (String key : new String[]{Keys.AD_SKIP, Keys.AD_ABANDON, Keys.AD_JUMP}) {
+            assertNull(key + " 不能在这张发奖弹窗上命中任何东西", hit(m, key, SFACG_REWARD_GRANT));
+        }
+    }
+
+    /**
+     * 2026-08-24 09:28 真机 dump 出来的那张发放卡，照原样搭一遍（含 id 和 bounds）。
+     *
+     * <p>这张树就是那趟事故的全部现场：整棵树里只有这几个节点 —— 没有底部 tab、没有签到面板、
+     * 没有「今日还剩 N 次」。脚本当时只会按返回（关不掉它），于是后面 7 个号每一个都在
+     * 「等 mine_tab」超时。
+     */
+    private static FakeNode grantCardTree() {
+        return FakeNode.node().add(
+                FakeNode.node().withId("com.sfacg:id/welfare_container")
+                        .withClass("android.widget.FrameLayout")
+                        .withBounds(188, 921, 892, 1534)
+                        .add(FakeNode.text("+").withId("com.sfacg:id/tvDrawable")
+                                        .withClass("android.widget.TextView")
+                                        .withBounds(429, 1107, 588, 1231),
+                                FakeNode.text("3").withId("com.sfacg:id/tvValue")
+                                        .withClass("android.widget.TextView")
+                                        .withBounds(599, 1127, 637, 1211)),
+                FakeNode.text("开心收下").withId("com.sfacg:id/tvConfirm")
+                        .withClass("android.widget.TextView")
+                        .clickable(true)
+                        .withBounds(385, 1280, 694, 1384),
+                FakeNode.text("已发放到\"我的-我的钱包\"中").withId("com.sfacg:id/tvTips")
+                        .withClass("android.widget.TextView")
+                        .withBounds(221, 1410, 859, 1497),
+                FakeNode.node().withId("com.sfacg:id/imgClose")
+                        .withClass("android.widget.ImageView")
+                        .clickable(true)
+                        .withBounds(498, 1581, 581, 1664));
+    }
+
+    /** reward_grant 在真实那棵树上必须命中「开心收下」那颗 tvConfirm，而不是旁边的 imgClose。 */
+    @Test
+    public void rewardGrantHitsTheConfirmKeyOnTheRealTree() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        NodeMatcher.Hit hit = NodeMatcher.find(grantCardTree(), m.get(Keys.REWARD_GRANT));
+        assertNotNull("认不出这张卡＝后面每个号都会卡在「等 mine_tab 超时」", hit);
+        assertTrue("实到的是：" + hit.node.text(), "开心收下".equals(hit.node.text()));
+        assertTrue("必须是可点的那颗（tvConfirm）", hit.node.clickable());
+    }
+
+    /**
+     * 这张卡盖着的时候，首页和签到面板的判据一个都不该命中 —— 这正是「它必须被点掉」的理由。
+     * 如果哪天有人把 home_ready 之类改宽，这条会先红。
+     */
+    @Test
+    public void grantCardBlocksEverythingElse() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        FakeNode tree = grantCardTree();
+        for (String key : new String[]{Keys.HOME_READY, Keys.MINE_TAB, Keys.AD_REWARD,
+                Keys.AD_REMAINING, Keys.CHECKIN_DIALOG, Keys.AD_EXHAUSTED}) {
+            assertNull(key + " 不该在这张发放卡上命中任何东西", NodeMatcher.find(tree, m.get(key)));
+        }
+    }
+
+    /**
+     * 2026-08-24 09:47 真机现场：优量汇播放页 + 那张「15秒更快拿奖」的促销卡。
+     *
+     * <p>屏幕上从上到下的可见文案，播放页原生那一层在前、后画上去的促销卡在后（DFS 顺序里
+     * 靠后＝画在上层，{@code topmost} 就靠这个分辨）。
+     */
+    private static final String[] GDT_PROMO_15S = {
+            "奖励将于 28 秒后发放",
+            "百度网盘", "会议记录没人手写了！边录音边转文字，快用百度…", "广告", "立即体验",
+            "应用名称：百度网盘 | 开发者：百度在线网络技术（北京）有限公司 | 应用版本：13.31.6",
+            "16+ | 权限详情 | 隐私协议 | 功能介绍 | 备案信息",
+            "15秒更快拿奖", "直接点击并浏览广告详情15秒即可获得奖励～",
+            "百度网盘", "会议记录没人手写了！边录…", "我要更快拿奖"};
+
+    /**
+     * 这张卡必须认成 ad_promo、跳转键必须取到卡上那颗「我要更快拿奖」，而不是播放页底部常驻的
+     * 「立即体验」（那颗在卡下面、被盖住，点它落在卡上什么都不会发生）。
+     */
+    @Test
+    public void gdtFifteenSecondPromoCardIsRecognised() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        assertNotNull("认不出这张卡＝脚本会以为视频在正常播，干等到 150 秒上限",
+                hit(m, Keys.AD_PROMO, GDT_PROMO_15S));
+        NodeView jump = hit(m, Keys.AD_JUMP, GDT_PROMO_15S);
+        assertNotNull("认不出跳转键就拿不到这一支的奖励", jump);
+        assertTrue("必须点卡上那颗，不能点被盖住的「立即体验」。实到的是：" + jump.text(),
+                "我要更快拿奖".equals(jump.text()));
+        assertNotNull("顶栏那句是「还没发奖」的硬证据", hit(m, Keys.AD_PENDING, GDT_PROMO_15S));
+        assertNotNull("要停几秒得从「浏览广告详情15秒」这句读", hit(m, Keys.AD_DWELL_HINT, GDT_PROMO_15S));
+    }
+
+    /**
+     * 同一张现场：这一家的关闭键没 id 没文字，{@code ad_skip} 一定认不出来。
+     *
+     * <p>这条断言是 {@link StepRunner} 里那段「认不出跳过就按右上角那颗关闭」的存在理由 ——
+     * 2026-08-24 09:47 那趟就是因为这里认不出、`escapeStuckAd` 直接 return false，而广告
+     * Activity 和菠萝包同属 com.sfacg（isTargetForeground 照样为 true），ensureHome 把它
+     * 误诊成「首页被弹窗盖住了」，后面 7 个号每个白等 12 秒、全部签到失败。
+     */
+    @Test
+    public void gdtPlaybackPageOffersNoSkipTarget() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        assertNull("优量汇这张播放页上没有能认出来的「跳过」，逃逸只能靠按位置点右上角",
+                hit(m, Keys.AD_SKIP, GDT_PROMO_15S));
+        assertNull("这时候奖励还没到手，ad_earned 一定不许命中（认了就会去点 X 而漏掉奖励）",
+                hit(m, Keys.AD_EARNED, GDT_PROMO_15S));
+        assertNull("「我要更快拿奖」是跳转键，绝不许被 ad_claim 认成领奖键",
+                hit(m, Keys.AD_CLAIM, GDT_PROMO_15S));
+        assertNull("也不许被 ad_resume 认成「让视频接着播」",
+                hit(m, Keys.AD_RESUME, GDT_PROMO_15S));
+    }
+
+    @Test
+    public void rewardGrantDoesNotFireOnOtherPages() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        assertNull("签到成功页那句不算发放卡",
+                hit(m, Keys.REWARD_GRANT, "好棒！签到成功", "+8代券", "奖励已发放到账号"));
+        assertNull("面板上的广告入口不算发放卡",
+                hit(m, Keys.REWARD_GRANT, "看小视频再领代券", "今日还剩3次", "免费领3代券"));
+        assertNull("广告 SDK 自己那颗领奖键不算（那条走 ad_claim）",
+                hit(m, Keys.REWARD_GRANT, "恭喜获得奖励", "领取奖励", "知道了"));
+        assertNull("穿山甲那颗伪装成领奖的下载键更不许认",
+                hit(m, Keys.REWARD_GRANT, "温馨提示",
+                        "继续看28秒或下载安装即可领奖，确定要退出吗？", "去领取奖励", "坚持退出"));
+    }
+
+    /** 领完之后面板上那格变成「已领完」，ad_remaining 要认得（Texts 把它读成 0 次）。 */
+    @Test
+    public void soldOutWordingIsStillReadByAdRemaining() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        NodeView done = hit(m, Keys.AD_REMAINING, "看小视频再领代券", "明日更新次数", "已领完");
+        assertNotNull("「已领完」要认出来，否则读到 -1、脚本会去点那个已经没有的入口", done);
+        assertTrue("实到的是：" + done.text(), "已领完".equals(done.text()));
+        assertTrue(0 == com.example.blb.util.Texts.parseRemaining(done.text()));
+        assertNull("常驻的「明日更新次数」不算次数",
+                hit(m, Keys.AD_REMAINING, "看小视频再领代券", "明日更新次数"));
+    }
+
+    // 2026-08-23 实测的签到面板广告那一行，两种状态照 uiautomator dump 原样写（id 很关键：
+    // 这个 bug 就是靠纯 id 候选绕过文字限定造成的，只用文字的 fixture 复现不出来）。
+    // 还有次数时：
+    //   [] | icon_sign_ad | [149,1424][286,1561]
+    //   [看小视频再领代券] | tvAdTitleTips
+    //   [今日还剩3次] | sign_in_ad_count
+    //   [免费领3代券] | sign_in_ad_goto      ← 可点的那颗
+    private static FakeNode adRowWithTriesLeft() {
+        return FakeNode.node().add(
+                FakeNode.node().withId("com.sfacg:id/icon_sign_ad")
+                        .withBounds(149, 1424, 286, 1561),
+                FakeNode.text("看小视频再领代券").withId("com.sfacg:id/tvAdTitleTips")
+                        .withBounds(300, 1440, 620, 1493),
+                FakeNode.text("今日还剩3次").withId("com.sfacg:id/sign_in_ad_count")
+                        .withBounds(300, 1500, 504, 1545),
+                FakeNode.text("免费领3代券").withId("com.sfacg:id/sign_in_ad_goto")
+                        .clickable(true).withBounds(647, 1446, 923, 1539));
+    }
+
+    // 领完之后（2026-08-23 19:19 用户截图 + 同一状态的 dump）：入口 sign_in_ad_goto **整个不在
+    // 树里**了，原地是一颗灰的 sign_in_ad_finished=「已领完」，而计数那格的文案换成了
+    // 「明日更新次数」—— 一个数字都没有。
+    private static FakeNode adRowExhausted() {
+        return FakeNode.node().add(
+                FakeNode.node().withId("com.sfacg:id/icon_sign_ad")
+                        .withBounds(149, 1424, 286, 1561),
+                FakeNode.text("看小视频再领代券").withId("com.sfacg:id/tvAdTitleTips")
+                        .withBounds(300, 1440, 620, 1493),
+                FakeNode.text("明日更新次数").withId("com.sfacg:id/sign_in_ad_count")
+                        .withBounds(300, 1500, 504, 1545),
+                FakeNode.text("已领完").withId("com.sfacg:id/sign_in_ad_finished")
+                        .withBounds(647, 1446, 923, 1539));
+    }
+
+    private static String idOf(NodeView node) {
+        if (node == null || node.viewId() == null) return null;
+        String id = node.viewId();
+        int slash = id.indexOf('/');
+        return slash < 0 ? id : id.substring(slash + 1);
+    }
+
+    /**
+     * 还有次数的那一行：计数读成 3，入口命中可点的那颗 sign_in_ad_goto，「已领完」认不到。
+     */
+    @Test
+    public void adRowWithTriesLeftReadsTheCountAndTheRealEntry() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        FakeNode row = adRowWithTriesLeft();
+        NodeMatcher.Hit count = NodeMatcher.find(row, m.get(Keys.AD_REMAINING));
+        assertNotNull(count);
+        assertTrue("要读 sign_in_ad_count 那格，实到的是：" + idOf(count.node),
+                "sign_in_ad_count".equals(idOf(count.node)));
+        assertTrue(3 == com.example.blb.util.Texts.parseRemaining(count.node.text()));
+        NodeMatcher.Hit entry = NodeMatcher.find(row, m.get(Keys.AD_REWARD));
+        assertNotNull(entry);
+        assertTrue("入口是 sign_in_ad_goto，实到的是：" + idOf(entry.node),
+                "sign_in_ad_goto".equals(idOf(entry.node)));
+        assertNull("还有次数的时候不许认出「已领完」",
+                NodeMatcher.find(row, m.get(Keys.AD_EXHAUSTED)));
+    }
+
+    /**
+     * 领完之后那一行：这是用户报的「广告已经看完了，程序却一直尝试观看广告」的现场。
+     *
+     * <p>三条实测机理都钉在这儿：①{@code sign_in_ad_count} 的文案变成「明日更新次数」，纯 id
+     * 候选会抢先命中它、读出 -1 —— 所以那两条 id 候选必须带文本限定；②「已领完」挂在一个
+     * 单独的 id {@code sign_in_ad_finished} 上，不是替换入口的文案；③入口 {@code sign_in_ad_goto}
+     * <b>整个不在树里</b>，而 ad_reward 还会命中那条不可点的标题「看小视频再领代券」，点它什么
+     * 都不会发生（旧代码因此每个号白等 20 秒 awaitAdStart）。所以 AdWatchTask 必须先查
+     * ad_exhausted 再谈入口。
+     */
+    @Test
+    public void exhaustedAdRowReadsZeroAndIsNotMistakenForAnEntry() throws Exception {
+        Map<String, List<Selector>> m = bundled();
+        FakeNode row = adRowExhausted();
+
+        NodeMatcher.Hit done = NodeMatcher.find(row, m.get(Keys.AD_EXHAUSTED));
+        assertNotNull("「已领完」必须认出来，这是今天不用再点的硬判据", done);
+        assertTrue("实到的是：" + idOf(done.node), "sign_in_ad_finished".equals(idOf(done.node)));
+
+        NodeMatcher.Hit count = NodeMatcher.find(row, m.get(Keys.AD_REMAINING));
+        assertNotNull(count);
+        assertFalse("「明日更新次数」不许被当成计数（这是那 20 秒白等的根因）",
+                "明日更新次数".equals(count.node.text()));
+        assertTrue("次数要读成 0，实到的文案是：" + count.node.text(),
+                0 == com.example.blb.util.Texts.parseRemaining(count.node.text()));
+
+        // 入口那一组在这一行上仍然会命中标题（版本换 id 时点整张卡还能开），所以它不能当判据。
+        NodeMatcher.Hit entry = NodeMatcher.find(row, m.get(Keys.AD_REWARD));
+        assertNotNull("ad_reward 在这一行上照旧会命中标题 —— 正是它不能单独当判据的原因", entry);
+        assertTrue("命中的是那条不可点的标题，实到的是：" + idOf(entry.node),
+                "tvAdTitleTips".equals(idOf(entry.node)));
+        assertFalse("标题本身不可点，点它（向上借卡片容器）什么都不会发生",
+                entry.node.clickable());
+    }
+
     /**
      * 领奖弹窗必须先被认成「奖励到手」，而不是被当成还要点的促销卡。
      *

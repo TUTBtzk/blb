@@ -1,71 +1,164 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+  签到页从上到下四块：现在在干什么（状态卡）→ 要不要我做决定（暂停卡）→
+  开跑的按钮 → 今天每个号怎么样（列表）→ 运行日志。
+
+  两处刻意的取舍：
+  · 那段很长的辅助点击说明默认只露两行、点一下展开 —— 它原来占掉小半屏，
+    把「现在跑到哪了」这个真正要看的信息挤到了屏幕外面。
+  · 主按钮 56dp 高、17sp、带图标：这个 app 的使用者手不能动，屏幕上的东西
+    是给他看的，看清比塞得下重要。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
     android:orientation="vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp">
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp">
 
-    <TextView
-        android:id="@+id/status"
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Blb.Card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textSize="15sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
-        android:text="@string/checkin_ad_notice"
-        android:textSize="12sp" />
-
-    <LinearLayout
-        android:id="@+id/pause_banner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#33FF9800"
-        android:orientation="vertical"
-        android:padding="12dp"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/pause_reason"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="14sp" />
+        android:layout_marginTop="12dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/resume"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/checkin_continue" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/skip"
-                android:layout_width="0dp"
+                <View
+                    android:id="@+id/run_dot"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_marginEnd="10dp"
+                    android:background="@drawable/bg_dot"
+                    android:backgroundTint="@color/blb_idle" />
+
+                <TextView
+                    android:id="@+id/status"
+                    style="@style/Blb.Text.Title"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/notice_toggle"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:layout_weight="1"
-                android:text="@string/checkin_skip" />
+                android:layout_marginTop="12dp"
+                android:background="?attr/selectableItemBackground"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    style="@style/Blb.Text.Section"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/checkin_notice_header" />
+
+                <ImageView
+                    android:id="@+id/notice_arrow"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_expand"
+                    app:tint="?attr/colorSecondary" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/ad_notice"
+                style="@style/Blb.Text.Hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:text="@string/checkin_ad_notice" />
         </LinearLayout>
-    </LinearLayout>
-
-    <Button
-        android:id="@+id/run_daily"
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/pause_banner"
+        style="@style/Blb.Card.Notice"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/checkin_run_daily" />
+        android:layout_marginTop="10dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="@color/blb_warn_container">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:baselineAligned="false"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginEnd="10dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_alert"
+                    app:tint="@color/blb_warn" />
+
+                <TextView
+                    android:id="@+id/pause_reason"
+                    style="@style/Blb.Text.Body"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textColor="@color/blb_warn" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/resume"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/checkin_continue"
+                    app:icon="@drawable/ic_action_run" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/skip"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="@string/checkin_skip"
+                    app:icon="@drawable/ic_action_skip" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/run_daily"
+        style="@style/Blb.Button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:text="@string/checkin_run_daily"
+        app:icon="@drawable/ic_action_daily" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -73,57 +166,75 @@
         android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/run"
+            style="@style/Blb.Button.Tonal"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="2"
-            android:text="@string/checkin_run_now" />
+            android:text="@string/checkin_run_now"
+            app:icon="@drawable/ic_action_run" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/stop"
+            style="@style/Blb.Button.Outlined"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:text="@string/checkin_stop" />
+            android:text="@string/checkin_stop"
+            app:icon="@drawable/ic_action_stop" />
     </LinearLayout>
+
+    <!-- 两颗按钮的区别放在下面这行小字里，按钮上只留短文案 —— 长文案会折成两行，很难扫。 -->
+    <TextView
+        style="@style/Blb.Text.Hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="@string/checkin_run_hint" />
 
     <TextView
         android:id="@+id/today_header"
+        style="@style/Blb.Text.Section"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:layout_marginTop="14dp"
+        android:layout_marginBottom="8dp" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
-
+        android:layout_weight="1"
+        android:clipToPadding="false" />
     <TextView
+        style="@style/Blb.Text.Section"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/checkin_log_header"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:layout_marginBottom="6dp"
+        android:text="@string/checkin_log_header" />
 
+    <!--
+      日志固定 120dp（约八行）而不是和列表平分：空着的时候原来占掉小半屏，
+      把「今天每个号怎么样」这个真正要看的列表挤到只剩一行半。
+    -->
     <ScrollView
         android:id="@+id/log_scroll"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginBottom="8dp"
-        android:layout_weight="1">
+        android:layout_height="120dp"
+        android:layout_marginBottom="10dp"
+        android:background="@drawable/bg_log"
+        android:clipToPadding="false"
+        android:padding="12dp"
+        android:scrollbars="none">
 
         <TextView
             android:id="@+id/log"
+            style="@style/Blb.Text.Log"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textSize="11sp" />
+            android:layout_height="wrap_content" />
     </ScrollView>
 
 </LinearLayout>

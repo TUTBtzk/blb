@@ -131,11 +131,15 @@ public class SubscriptionDaoTest extends DbTestBase {
         assertEquals(acc, subs.suggestBuyer(ch1).id);
     }
 
+    /**
+     * 挑号只看<b>代券</b>。火券多的号在这里毫无意义 —— 章节费两种券都能付，但菠萝包先扣代券，
+     * 而用户不充值火券，所以「2000 火券、0 代券」那个号排在最前面只会白走一趟。
+     */
     @Test
-    public void suggestBuyerPicksTheEnabledAccountWithMostCoupons() {
-        long poor = newAccount("poor@x.com", 10, true, 1);
-        long rich = newAccount("rich@x.com", 500, true, 2);
-        long richButOff = newAccount("off@x.com", 900, false, 3);
+    public void suggestBuyerPicksTheEnabledAccountWithMostVouchers() {
+        long poor = newAccount("poor@x.com", 0, 10, true, 1);
+        long rich = newAccount("rich@x.com", 0, 500, true, 2);
+        long richButOff = newAccount("off@x.com", 0, 900, false, 3);
         long novel = newNovel("目标书", true);
         long ch = newChapter(novel, 1, 20);
 
@@ -149,10 +153,23 @@ public class SubscriptionDaoTest extends DbTestBase {
         assertEquals(0, subs.countRealPurchase(richButOff, ch));
     }
 
+    /** 火券堆得再高也不该抢到前面：能不能买下一章完全看代券。 */
+    @Test
+    public void aPileOfFireCoinsDoesNotWinTheTurn() {
+        long fireOnly = newAccount("fire@x.com", 2000, 0, true, 1);
+        long vouchers = newAccount("voucher@x.com", 0, 15, true, 2);
+        long novel = newNovel("目标书", true);
+        long ch = newChapter(novel, 1, 20);
+
+        assertEquals(vouchers, subs.suggestBuyer(ch).id);
+        assertEquals(fireOnly, subs.suggestBuyers(ch).get(1).id);
+    }
+
+    /** 代券并列时按 sort_order 再按 id —— 顺序必须稳定，否则每轮换个号试，白重登。 */
     @Test
     public void suggestBuyerBreaksTiesBySortOrderThenId() {
-        long later = newAccount("later@x.com", 100, true, 9);
-        long earlier = newAccount("earlier@x.com", 100, true, 2);
+        long later = newAccount("later@x.com", 0, 100, true, 9);
+        long earlier = newAccount("earlier@x.com", 0, 100, true, 2);
         long novel = newNovel("目标书", true);
         long ch = newChapter(novel, 1, 20);
 
@@ -160,6 +177,20 @@ public class SubscriptionDaoTest extends DbTestBase {
 
         buy(earlier, ch, 20, Purchase.SRC_AUTO);
         assertEquals(later, subs.suggestBuyer(ch).id);
+    }
+
+    /** 代券还没读到过（-1）的号排在读到 0 的号后面，但仍然是候选 —— 到场再读余额才知道。 */
+    @Test
+    public void anAccountWithUnknownVouchersIsStillACandidate() {
+        long unknown = newAccount("unknown@x.com", 0, true, 1);
+        long zero = newAccount("zero@x.com", 0, 0, true, 2);
+        long novel = newNovel("目标书", true);
+        long ch = newChapter(novel, 1, 20);
+
+        List<Account> buyers = subs.suggestBuyers(ch);
+        assertEquals(2, buyers.size());
+        assertEquals(zero, buyers.get(0).id);
+        assertEquals(unknown, buyers.get(1).id);
     }
 
     @Test

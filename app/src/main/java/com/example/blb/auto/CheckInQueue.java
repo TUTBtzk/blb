@@ -61,6 +61,7 @@ public final class CheckInQueue {
 
         StepRunner runner = new StepRunner(context, selectors, host);
         String ymd = Texts.todayYmd();
+        LoggedIn loggedIn = new LoggedIn();
 
         for (int i = 0; i < accounts.size(); i++) {
             if (host.isCancelled()) {
@@ -76,13 +77,23 @@ public final class CheckInQueue {
                 summary.already++;
                 host.log("  今天已经签过，跳过");
                 if (existing.adAvailable) summary.adPending.add(name);
+                refreshBalanceIfCurrent(runner, accountDao, account, host, loggedIn);
                 continue;
             }
 
             try {
                 AccountSwitcher.ensureLoggedIn(runner, account, accountDao,
                         accounts.size() == 1);
+                loggedIn.nowIs(account);
                 CheckInTask.Result result = CheckInTask.run(runner);
+                // 签到面板上读不到余额（独立窗口，上面没有余额数字），到「我的」页补读一次，
+                // 否则账号页永远显示不出火券／代券。
+                if (result.coupons < 0 && result.vouchers < 0) {
+                    Texts.Balance mine = runner.readBalanceFromMine();
+                    result.coupons = mine.fire;
+                    result.vouchers = mine.voucher;
+                    host.log("  " + mine.describe());
+                }
                 record(checkInDao, account.id, ymd, result.status, result.adAvailable,
                         0, -1, result.message);
                 applyAccountUpdates(accountDao, account, result);
@@ -120,6 +131,52 @@ public final class CheckInQueue {
             }
         }
         return summary;
+    }
+
+    /**
+     * 「现在登着谁」的缓存。跳过的号也想在界面上有个余额数字，但不能每跳过一个就跑一趟
+     * 「我的」页 —— 登录状态只在真的切号时才变，所以整趟只问一次就够。
+     */
+    static final class LoggedIn {
+        boolean known;
+        String nickname;
+
+        /** 刚刚确认过登的是谁（{@code AccountSwitcher.ensureLoggedIn} 回来之后）。 */
+        void nowIs(Account account) {
+            known = true;
+            nickname = Texts.isBlank(account.nickname) ? null : account.nickname.trim();
+        }
+    }
+
+    /**
+     * 给「今天已经签完、这一趟被跳过」的号补一次余额 —— 但<b>只在它正好就是现在登着的
+     * 那个号</b>时才读。绝不为了读一个数字去切号：切号＝退登重登，是最招验证码的动作。
+     *
+     * <p>所以第一次跑完之后，界面上有余额的只会是最后登着的那个号；其余的号要等下一趟
+     * 轮到它们真的签到时才填上。这是有意的取舍。
+     */
+    static void refreshBalanceIfCurrent(StepRunner r, AccountDao dao, Account account,
+                                        StepRunner.Host host, LoggedIn loggedIn) {
+        if (Texts.isBlank(account.nickname)) return;
+        try {
+            if (!loggedIn.known) {
+                loggedIn.nickname = r.readNicknameFromMine();
+                loggedIn.known = true;
+            }
+            if (loggedIn.nickname == null
+                    || !loggedIn.nickname.equals(account.nickname.trim())) {
+                return;
+            }
+            Texts.Balance balance = r.readBalanceFromMine();
+            if (!balance.known()) return;
+            if (balance.fire >= 0) account.lastKnownCoupons = balance.fire;
+            if (balance.voucher >= 0) account.lastKnownVouchers = balance.voucher;
+            dao.setBalance(account.id, balance.fire, balance.voucher);
+            host.log("  它就是现在登着的号，顺手更新余额：" + balance.describe());
+        } catch (StepRunner.StepFailure e) {
+            // 读余额是顺手的事，读不到（包括这一刻被取消）都不该影响这一趟的结论。
+            if (e.kind != StepRunner.Kind.CANCELLED) host.log("  没读到它的余额：" + e.getMessage());
+        }
     }
 
     private static void applyAccountUpdates(AccountDao dao, Account account,
@@ -175,6 +232,8 @@ public final class CheckInQueue {
     static boolean isGlobal(StepRunner.Kind kind) {
         return kind == StepRunner.Kind.CANCELLED
                 || kind == StepRunner.Kind.NO_SERVICE
-                || kind == StepRunner.Kind.CONFIG;
+                || kind == StepRunner.Kind.CONFIG
+                // 订阅时点过「立即下载」但结果不明：券可能已经扣了，剩下的号连试都不许试。
+                || kind == StepRunner.Kind.MONEY_UNCLEAR;
     }
 }

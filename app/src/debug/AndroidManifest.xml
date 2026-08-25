@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  只在 debug 构建里合并进来的一个组件：账号灌库用的广播接收器。
+
+  为什么需要它：用户手指动不了，账号页那个「添加账号」对话框他自己填不了 8 遍。
+  而密码必须经 KeyStoreBox（AndroidKeyStore）加密后才能落库，那件事只能在 App 进程里做，
+  用 adb 直接写数据库是做不到的。
+
+  密码怎么不泄露：种子文件由 `adb shell run-as com.example.blb sh -c 'cat > files/account_seed.json'`
+  用 **stdin 重定向** 写进 App 私有目录 —— 密码不出现在 am／ps 的命令行里，也不进 logcat。
+  这个广播只带一个动作名、不带任何数据，导入完成后接收器立刻删掉种子文件。
+
+  exported=true 是 adb shell 发广播的必要条件。它能造成的最坏结果只是「重新导入一次那个文件」，
+  而那个文件在我们自己的私有目录里，别的 App 写不进去；release 构建里这整段都不存在。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <receiver
+            android:name="com.example.blb.debug.AccountSeedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.SEED_ACCOUNTS" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          第二个 debug 组件：只读地验一次「余额读得出来吗」（BalanceProbeReceiver）。
+          它不写任何数据，只把从「我的」页读到的火券／代券打进 logcat —— 为了看一眼余额
+          去跑正式队列会把 8 个号全退登重登，那是最招验证码的动作。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.BalanceProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.READ_BALANCE" />
+            </intent-filter>
+        </receiver>
+        <!--
+          第三个 debug 组件：自动订阅的 adb 入口（SubscribeProbeReceiver）。
+          LEDGER 只读地把台账念进 logcat，并自检「一章只许一个号」（把私有数据库拷出设备是被拒绝的动作）；
+          RUN_SUBSCRIBE 启动订阅队列，强制干跑，一分券都不花；
+          BUY_ONE_CHAPTER 真买，但这一趟只准买 1 章，买成就收工 ——
+          那颗「允许真实购买」的开关用户按不着也关不回去，所以真买只能是一次性授权；
+          BUY_UNTIL_BROKE 真买到所有号的代券都花光（判据已经用 BUY_ONE_CHAPTER 在真机上验过一次），
+          它跟 BUY_ONE_CHAPTER 一样跑完自动把干跑拨回来；
+          RECORD_BOUGHT 按「我的 → 代券 → 订阅清单」里看到的事实补录一条真实购买
+          （2026-08-24 那趟券扣了却因为判据错了没记账，不补录下一趟会有第二个号再买同一章）；
+          FORGET_OWNED 删掉误回填的「已拥有」记录 —— 2026-08-25 发现第49章只有皓平买过、
+          账本却挂着「皓平、五杯半雪碧」两个号，因为界面上的「已下载」是本机状态、8 个号共用。
+          它只删 source=OWNED，真买记录（AUTO／MANUAL）一律拒绝。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.SubscribeProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.LEDGER" />
+                <action android:name="com.example.blb.debug.RUN_SUBSCRIBE" />
+                <action android:name="com.example.blb.debug.BUY_ONE_CHAPTER" />
+                <action android:name="com.example.blb.debug.BUY_UNTIL_BROKE" />
+                <action android:name="com.example.blb.debug.SEED_NOVEL" />
+                <action android:name="com.example.blb.debug.RECORD_BOUGHT" />
+                <action android:name="com.example.blb.debug.FORGET_OWNED" />
+            </intent-filter>
+        </receiver>
+        <!--
+          第四个 debug 组件：搜书那三步的现场取样器（SearchProbeReceiver）。
+          干跑卡在「点了书名但没进详情页」，而这一步 uiautomator 抓不到 —— 搜索要输入中文书名，
+          adb shell input text 送不进中文。所以让 App 自己走一遍，书名从台账里取，
+          把每一屏的节点树打进 logcat。它一个字都不写。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.SearchProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.PROBE_SEARCH" />
+            </intent-filter>
+        </receiver>
+        <!--
+          第五个 debug 组件：「这一行到底买过没买过」的取样器（ChapterStateProbeReceiver）。
+          2026-08-24 第一次真买：券确实扣了（53→33、23→3），可选择章节页上那两行的锁一直没消失，
+          于是判成失败、账本一条没记。它把「买过的行」和「没买过的行」在同一屏上各自的节点树
+          打进 logcat —— 差别就是「已购买」的真正标记。它绝不点「立即下载」。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.ChapterStateProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.PROBE_CHAPTER" />
+            </intent-filter>
+        </receiver>
+        <!--
+          第六个 debug 组件：「我的 → 代券 → 订阅清单」那三屏的取样器（VoucherLedgerProbeReceiver）。
+          账本里「这一章归谁」现在只有一个来源 —— 我们自己写的购买记录；2026-08-25 第49章被误挂
+          两个号那件事就是它写歪了自己看不出来（发现它的是用户，靠的是菠萝包自己的订阅清单）。
+          那份清单是服务器端的事实，是唯一独立的第二来源，有了它才谈得上对账。
+          这三步在界面上是三次点按，用户按不着，所以让 App 自己走过去 dump。它一个字都不写。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.VoucherLedgerProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.PROBE_VOUCHER_LEDGER" />
+                <action android:name="com.example.blb.debug.PROBE_SUBSCRIBED_DETAIL" />
+            </intent-filter>
+        </receiver>
+        <!--
+          第七个 debug 组件：正式对一次账（LedgerAuditReceiver）。
+          上面那个是取样器（把三屏念出来供人校准选择器）；这一个跑的是订阅队列里真正会跑的那段
+          代码 —— VoucherLedger.read 走过去读「N章节 - M火券」，再跟 Room 里「这个号在这本书上
+          花过券的记录条数」对账。它不买任何东西，所以能在真买之前把「账本对不对」单独验一遍：
+          对不上的时候，正式跑订阅会在同一个地方抛 MONEY_UNCLEAR 整趟停下。
+          带 acct=N 核启用账号里的第 N 个（会切号）；带 all=true 挨个核 8 个号；
+          都不带就只核现在登着的那个号（按「我的」页的昵称对号，认不出就如实说、绝不乱猜）。
+          具体命令行写在 LedgerAuditReceiver 的类注释里。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.LedgerAuditReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.RECONCILE" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

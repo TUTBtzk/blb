@@ -6,12 +6,10 @@ import android.text.TextUtils;
 import com.example.blb.data.Account;
 import com.example.blb.data.AccountDao;
 import com.example.blb.data.AppDatabase;
-import com.example.blb.data.Chapter;
 import com.example.blb.data.CheckInDao;
 import com.example.blb.data.CheckInLog;
 import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
-import com.example.blb.data.Purchase;
 import com.example.blb.data.SubscriptionDao;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
@@ -63,15 +61,6 @@ public final class DailyQueue {
         }
     }
 
-    /** 第 3 步的参数快照，一轮里固定不变。 */
-    private static final class Plan {
-        Novel novel;
-        boolean dryRun;
-        int maxChapters;
-        int cap;
-        long since;
-    }
-
     private DailyQueue() {
     }
 
@@ -85,6 +74,15 @@ public final class DailyQueue {
      *                 等你回 App 点「跑今天的流程」再补。
      */
     public static Summary run(Context context, StepRunner.Host host, boolean attended) {
+        try {
+            return runOnce(context, host, attended);
+        } finally {
+            // 无论从哪条路退出去都把干跑拨回来：真买是一次性授权，而用户关不掉那颗开关。
+            SubscribeRun.restoreDryRunAfterRealBuy(context, host);
+        }
+    }
+
+    private static Summary runOnce(Context context, StepRunner.Host host, boolean attended) {
         AppDatabase db = Db.get(context);
         AccountDao accountDao = db.accountDao();
         CheckInDao checkInDao = db.checkInDao();
@@ -107,7 +105,8 @@ public final class DailyQueue {
             return summary;
         }
 
-        Plan plan = planSubscribe(context, subs, selectors, summary, host);
+        SubscribeRun.Plan plan = planSubscribe(context, subs, selectors, summary, host);
+        SubscribeRun.Tally tally = new SubscribeRun.Tally(summary.notes);
         StepRunner runner = new StepRunner(context, selectors, host);
         String ymd = Texts.todayYmd();
         int quota = Prefs.adsPerAccount(context);
@@ -115,6 +114,7 @@ public final class DailyQueue {
         AdWatchTask.Mode adMode = new AdWatchTask.Mode(
                 attended && Prefs.isAdAssist(context), attended && Prefs.isAdJump(context));
         Set<Long> touched = new HashSet<>();
+        CheckInQueue.LoggedIn loggedIn = new CheckInQueue.LoggedIn();
 
         for (int i = 0; i < accounts.size(); i++) {
             if (host.isCancelled()) {
@@ -124,16 +124,33 @@ public final class DailyQueue {
             Account account = accounts.get(i);
             host.log("[" + (i + 1) + "/" + accounts.size() + "] " + account.displayName()
                     + "（" + account.loginKindLabel() + "）");
+            if (nothingLeftToday(checkInDao, account, ymd, plan)) {
+                summary.alreadySigned++;
+                host.log("  今天这个号已经签完、广告也没剩，跳过（不必为它再退登重登一次）");
+                CheckInQueue.refreshBalanceIfCurrent(runner, accountDao, account, host, loggedIn);
+                continue;
+            }
             try {
                 AccountSwitcher.ensureLoggedIn(runner, account, accountDao,
                         accounts.size() == 1);
+                loggedIn.nowIs(account);
                 Texts.Balance balance = checkInAndAds(runner, host, checkInDao, accountDao,
                         account, ymd, quota, adMode, summary);
-                if (plan != null) {
-                    subscribe(runner, host, subs, accountDao, plan, account, balance,
-                            touched, summary);
+                if (plan != null && plan.reachedBuyLimit(tally.bought)) {
+                    // 保险丝：真买那一趟只准买这么多章。签到和广告照做，订阅这一步不再往下。
+                    host.log("  真买上限到了（" + plan.buyLimit + " 章），这个号不订阅");
+                } else if (plan != null) {
+                    SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
+                            balance, touched, tally);
                 }
             } catch (StepRunner.StepFailure e) {
+                if (e.kind == StepRunner.Kind.MONEY_UNCLEAR) {
+                    // 订阅那一步「点了立即下载但结果不明」。签到和广告这个号明明做完了，
+                    // 不能把它记成签到失败（那会让今天再退登重登一次去签一遍）。整趟停下。
+                    host.log("  " + e.getMessage());
+                    summary.abortReason = e.getMessage();
+                    break;
+                }
                 noteFailure(checkInDao, account, ymd, CheckInQueue.statusFor(e.kind),
                         e.getMessage(), summary);
                 host.log("  " + e.getMessage());
@@ -146,7 +163,29 @@ public final class DailyQueue {
                 host.log("  意外错误：" + e);
             }
         }
+        summary.bought = tally.bought;
+        summary.dryRun = tally.dryRun;
+        summary.ownedAlready = tally.ownedAlready;
+        summary.subscribeFailed = tally.failed;
+        summary.spent = tally.spent;
         return summary;
+    }
+
+    /**
+     * 这个号今天还有事可做吗。
+     *
+     * <p>签到已经成功（或本来就是已签到）、广告也没剩、这一轮又不订阅 —— 那就没有任何理由
+     * 再切到它：切号意味着退登重登，而重登是最招验证码的动作。
+     *
+     * <p>这条规则还顺手把「被系统杀掉之后自动接着跑」变得便宜又安全：MIUI 会把整个进程杀掉
+     * （SwipeUpClean），系统随后把原来那条启动请求重发一遍，队列于是从第 1 个号重新开始。
+     * 有了这一跳，重来的那趟会直接走到上次断掉的地方，而不是把前面几个号全部重登一遍。
+     */
+    private static boolean nothingLeftToday(CheckInDao dao, Account account, String ymd,
+                                            SubscribeRun.Plan plan) {
+        if (plan != null) return false;
+        CheckInLog today = dao.find(account.id, ymd);
+        return today != null && today.isSuccess() && !today.adAvailable;
     }
 
     /**
@@ -166,8 +205,9 @@ public final class DailyQueue {
     }
 
     /** 决定第 3 步跑不跑。任何一个前提不满足就只跑签到和广告，不是整队失败。 */
-    private static Plan planSubscribe(Context context, SubscriptionDao subs, SelectorSet selectors,
-                                      Summary summary, StepRunner.Host host) {
+    private static SubscribeRun.Plan planSubscribe(Context context, SubscriptionDao subs,
+                                                   SelectorSet selectors, Summary summary,
+                                                   StepRunner.Host host) {
         boolean dryRun = Prefs.isDryRun(context);
         String note = null;
         Novel novel = null;
@@ -175,7 +215,7 @@ public final class DailyQueue {
             note = "还没在设置页确认过「允许真实购买」，这轮不订阅";
         }
         if (note == null) {
-            novel = subs.targetNovel();
+            novel = SubscribeRun.resolveTarget(subs, host);
             if (novel == null) note = "还没设定集中订阅的目标小说，这轮只签到和看广告";
         }
         if (note == null) {
@@ -191,17 +231,11 @@ public final class DailyQueue {
             return null;
         }
 
-        Plan plan = new Plan();
-        plan.novel = novel;
-        plan.dryRun = dryRun;
-        plan.maxChapters = Prefs.maxChaptersPerRun(context);
-        plan.cap = Prefs.dailySpendCap(context);
-        plan.since = SubscribeQueue.startOfToday();
+        SubscribeRun.Plan plan = SubscribeRun.Plan.from(context, novel);
         summary.subscribing = true;
         summary.wasDryRun = dryRun;
-        host.log((dryRun ? "订阅走干跑（不花券）" : "订阅是真实购买") + "：《" + novel.title
-                + "》从第" + novel.startFrom() + "章起，本轮最多 " + plan.maxChapters + " 章"
-                + (plan.cap > 0 ? "，每号每日上限 " + plan.cap + " 券" : ""));
+        host.log(plan.describe());
+        SubscribeRun.clearOldDryRuns(subs, plan, host);
         return plan;
     }
 
@@ -244,12 +278,16 @@ public final class DailyQueue {
                     + " 撞上「必须点进落地页才给奖励」的广告，已放弃（要领这种得开跳转开关）");
         }
 
-        // 看完广告余额会变（签到和广告发的都是代券），重读一次才准。
+        // 余额只在「我的」页上读得到：签到面板是独立窗口，上面一个余额数字都没有。
+        // 这一趟必读 —— 2026-08-23 用户报的「所有账号都无法识别有多少代券」就是因为
+        // 以前只在签到面板上就地读，永远读不到。看完广告后余额会变（签到和广告发的都是代券），
+        // 所以放在广告之后读。
         Texts.Balance balance = Texts.balance(checkIn.coupons, checkIn.vouchers);
-        if (ads.watched > watchedBefore) {
-            Texts.Balance after = r.readBalance(2_500);
-            if (after.known()) balance = after;
+        if (!balance.known() || ads.watched > watchedBefore) {
+            Texts.Balance mine = r.readBalanceFromMine();
+            if (mine.known()) balance = mine;
         }
+        host.log("  " + balance.describe());
         if (balance.known()) {
             if (balance.fire >= 0) account.lastKnownCoupons = balance.fire;
             if (balance.voucher >= 0) account.lastKnownVouchers = balance.voucher;
@@ -271,109 +309,6 @@ public final class DailyQueue {
         return a + "；" + b;
     }
 
-    // ---------- 第 3 步：券够就订阅 ----------
-
-    /**
-     * 用当前这个号买尽量多的章，买不动了就交给下一个号。
-     *
-     * <p>只挑「还没有任何号真买过」的章（{@code findUnownedChaptersFrom} 已经排除了干跑记录），
-     * 所以各个号的券会摊在不同章上，合起来把可读的进度往前推，而不是几个号买同一章。
-     * {@code touched} 保证同一轮里一章只试一次。
-     */
-    private static void subscribe(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
-                                  AccountDao accountDao, Plan plan, Account account,
-                                  Texts.Balance balance, Set<Long> touched, Summary summary)
-            throws StepRunner.StepFailure {
-        String name = account.displayName();
-        int budget = balance.known() ? balance.usable() : account.usableCoupons();
-        int spentToday = plan.cap > 0 ? subs.spentSince(account.id, plan.since) : 0;
-
-        List<Chapter> chapters = subs.findUnownedChaptersFrom(
-                plan.novel.id, plan.novel.startFrom(), plan.maxChapters + touched.size());
-        if (chapters.isEmpty()) {
-            host.log("  没有待订阅的章节（都买过了，或还没登记章节）");
-            return;
-        }
-
-        for (Chapter chapter : chapters) {
-            if (host.isCancelled()) {
-                throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消");
-            }
-            if (summary.bought + summary.dryRun >= plan.maxChapters) {
-                host.log("  已到本轮章数上限 " + plan.maxChapters + "，不再订");
-                return;
-            }
-            if (touched.contains(chapter.id)) continue;
-
-            int price = chapter.priceCoupons;
-            if (!plan.dryRun && price > 0) {
-                if (budget > 0 && budget < price) {
-                    host.log("  " + name + " 只剩 " + budget + " 券，买不起第"
-                            + chapter.chapterNo + "章（需 " + price + "），换下一个号");
-                    return;
-                }
-                if (plan.cap > 0 && spentToday + price > plan.cap) {
-                    host.log("  " + name + " 今天已花 " + spentToday + " 券，再买会超上限，换下一个号");
-                    return;
-                }
-            }
-
-            touched.add(chapter.id);
-            SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter, plan.dryRun);
-            if (result.coupons >= 0) account.lastKnownCoupons = result.coupons;
-            if (result.vouchers >= 0) account.lastKnownVouchers = result.vouchers;
-            if (result.coupons >= 0 || result.vouchers >= 0) {
-                accountDao.setBalance(account.id, result.coupons, result.vouchers);
-                budget = account.usableCoupons();
-            }
-
-            if (!apply(subs, host, summary, account, chapter, result)) {
-                // 券不够只是这个号买不起，别把这一章从整轮里划掉——后面的号可能买得起。
-                if (result.status == SubscribeTask.Status.INSUFFICIENT) touched.remove(chapter.id);
-                return;
-            }
-            if (result.status == SubscribeTask.Status.BOUGHT) {
-                spentToday += result.cost > 0 ? result.cost : Math.max(0, price);
-            }
-        }
-    }
-
-    /** 写账本。返回 false 表示这个号别再往下买了。 */
-    private static boolean apply(SubscriptionDao subs, StepRunner.Host host, Summary summary,
-                                 Account account, Chapter chapter, SubscribeTask.Result result) {
-        String name = account.displayName();
-        String label = "第" + chapter.chapterNo + "章";
-        switch (result.status) {
-            case BOUGHT:
-                int cost = result.cost > 0 ? result.cost : chapter.priceCoupons;
-                subs.upsertPurchase(Purchase.of(account.id, chapter.id, cost, Purchase.SRC_AUTO));
-                summary.bought++;
-                summary.spent += cost;
-                host.log("  " + name + " 订到" + label + "，花 " + cost + " 券");
-                return true;
-            case DRY_RUN:
-                subs.upsertPurchase(Purchase.of(account.id, chapter.id, 0, Purchase.SRC_DRY_RUN));
-                summary.dryRun++;
-                host.log("  " + name + " " + label + " 干跑通过（只留痕，没扣券）");
-                return true;
-            case ALREADY:
-                // 界面说已经能看了，账本却没记，补上，否则每轮都会再来一次。
-                subs.upsertPurchase(Purchase.of(account.id, chapter.id,
-                        chapter.priceCoupons, Purchase.SRC_AUTO));
-                summary.ownedAlready++;
-                host.log("  " + name + " 本来就有" + label + "，已补记账本");
-                return true;
-            case INSUFFICIENT:
-                summary.notes.add(name + " 券不够");
-                host.log("  " + name + " 券不够，换下一个号");
-                return false;
-            default:
-                summary.subscribeFailed++;
-                host.log("  " + name + " " + label + " 没走通：" + result.message);
-                return false;
-        }
-    }
-
     public static String describe(Summary s) {
         if (s == null) return "每日流程异常终止";
         StringBuilder sb = new StringBuilder();
@@ -385,7 +320,7 @@ public final class DailyQueue {
         if (s.subscribing) {
             sb.append('；').append(s.wasDryRun ? "订阅干跑 " : "订阅 ").append(s.bought + s.dryRun)
                     .append(" 章");
-            if (s.spent > 0) sb.append("（花 ").append(s.spent).append(" 券）");
+            if (s.spent > 0) sb.append("（花 ").append(s.spent).append(" 代券）");
             if (s.ownedAlready > 0) sb.append("，补记 ").append(s.ownedAlready);
             if (s.subscribeFailed > 0) sb.append("，没走通 ").append(s.subscribeFailed);
         } else if (s.subscribeNote != null) {

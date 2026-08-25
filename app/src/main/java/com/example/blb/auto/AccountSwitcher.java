@@ -13,30 +13,50 @@ import com.example.blb.util.Texts;
  *
  * <p>反过来，账号页里<b>还没记昵称</b>的时候，「对不上」只说明我们不知道，不说明登错了 ——
  * 那种情况下绝不退登：只启用一个号时就把当前昵称记下来接着跑，多个号时停下来让你先填昵称。
- * 会把人退出来又登不回去（一键登录、微信这些的授权页本 App 点不了）是这里最坏的结果。
+ * 白退一次登再重登一遍，是这里最不必要、也最容易招验证码的动作。
  *
- * <p>四种登录方式的自动化程度天差地别：
+ * <p>还有一处刻意的顺序：昵称对不上时也不去猜，退登＋重登是<b>唯一</b>纠正手段，
+ * 而它的前提是这个号真的登得回来（见下面那条硬规矩）。
+ *
+ * <p><b>五种登录方式全部不用人插手</b>（2026-08-23 逐页实测校准）。这条链路是给手指动不了的人
+ * 用的，所以整个类里<b>没有一处「停下来等你点」</b> —— 唯一会挂起等人的是验证码
+ * （{@link StepRunner#guardCaptcha()}），那一处不能自动，也不该自动。
+ *
+ * <p>各方式实测走法：
  * <ul>
- *   <li><b>账号密码</b>：全自动。</li>
- *   <li><b>本机号码一键登录</b>：能自动勾同意并点按钮，但号码由 SIM 卡决定，
- *       所以只能登成那一个号。</li>
- *   <li><b>微信 / QQ / 微博</b>：授权页属于对应的客户端（com.tencent.mm 等），
- *       本 App 的无障碍范围只有 com.sfacg，看不见也点不了 —— 这一步一定停下来等你点。
- *       要让它自动，就得把无障碍权限扩到微信/QQ/微博上，那等于让本 App 能读那些
- *       App 的全部界面，代价太大，不做。</li>
+ *   <li><b>账号密码</b>：登录页先按「切换手机号或邮箱登录」才有输入框；按过之后用户协议
+ *       已经自动勾上（实测 {@code check_confirm_protocol} 的 checked 就是 true）。</li>
+ *   <li><b>本机号码一键登录</b>：勾同意 → 按中间那颗大按钮。号码由 SIM 卡决定，
+ *       只能登成本机那一个号。</li>
+ *   <li><b>微信 / 微博</b>：勾同意 → 点底部那个图标，点完就直接登回菠萝包了，没有中间页。</li>
+ *   <li><b>QQ</b>：同上，但会跳进 com.tencent.mobileqq 要按一颗「同意」。那一颗由
+ *       {@link StepRunner#confirmThirdPartyAuth} 隔着界外硬闸去按 —— 只在等这颗键的那几秒里
+ *       允许读 QQ 的树，只匹配 {@link Keys#LOGIN_AUTH_CONFIRM}，别的节点一个都不读。</li>
  * </ul>
+ *
+ * <p><b>顺序上的一条硬规矩</b>：任何「这个号根本登不回来」的判断都必须在退登<b>之前</b>做完
+ * （目前是账号密码方式没存密码这一种）。先退登再发现登不回去，等于把人锁在门外。
  */
 public final class AccountSwitcher {
 
     private static final long NAV_TIMEOUT = 10_000;
     private static final long LOGIN_TIMEOUT = 25_000;
+    /** 等三方 App 的授权页出来并按下「同意」的窗口。QQ 冷启动可能要好几秒。 */
+    private static final long AUTH_TIMEOUT = 20_000;
+    /** 退登后「我的」页停在底部，往回滚这么多次找「立即登录」。 */
+    private static final int SCROLL_TO_TOP_TIMES = 6;
 
     private AccountSwitcher() {
     }
 
     public static void ensureLoggedIn(StepRunner r, Account account, AccountDao dao,
                                       boolean soleEnabled) throws StepRunner.StepFailure {
-        r.ensureHome(3);
+        // 返回键额度按「订阅流程留下的最深处」给：上一个号买完章之后我们站在
+        // 选择章节页→目录→详情→搜索 这四层里，退到首页至少要 4 下。以前给 3 下，
+        // 2026-08-24 15:26 那趟 8 个号里有 3 个刚好卡在这个临界点上 ——
+        // 只留下一句「等 mine_tab 超时」，连登录都没开始。多按几下返回本身没有代价：
+        // 一看到首页就立刻停，广告残局另有 escapeStuckAd 的额度。
+        r.ensureHome(6);
         r.click(Keys.MINE_TAB, NAV_TIMEOUT);
 
         String current = r.readText(Keys.NICKNAME, 6_000);
@@ -46,7 +66,7 @@ public final class AccountSwitcher {
         }
         if (!known && !Texts.isBlank(current)) {
             // 这个号还没记过昵称。此时「昵称对不上」只说明我们不知道，不说明登错了号 ——
-            // 拿它当理由去退登，很可能把本来就登对的号踢下线，而一键登录／微信这些还登不回来。
+            // 拿它当理由去退登，很可能把本来就登对的号踢下线，白跑一趟重登。
             if (soleEnabled) {
                 // 只启用了这一个号，那现在登着的就只能是它，记下昵称接着跑。
                 account.nickname = current.trim();
@@ -66,22 +86,22 @@ public final class AccountSwitcher {
     private static void login(StepRunner r, Account account, AccountDao dao)
             throws StepRunner.StepFailure {
         String kind = account.loginKind == null ? Account.KIND_PASSWORD : account.loginKind;
-        if (!Account.KIND_PASSWORD.equals(kind) && !onLoginPage(r)) {
-            // 退出去之后这几种方式都得你亲手点（三方授权页在别的 App 里，一键登录页也还没实测），
-            // 所以退登之前先问一句 —— 别把你退出来又进不去。
-            waitForYou(r, account, "接下来要退出当前登录的账号，再用" + account.loginKindLabel()
-                    + "登回来 —— 那一步的授权页我点不了，需要你亲自点。"
-                    + "确定就点「继续」，不想换号就点「跳过此账号」");
+        String password = null;
+        if (Account.KIND_PASSWORD.equals(kind)) {
+            // 退登之前就把密码取出来：取不到就根本别退，不然人会被锁在门外。
+            password = readPassword(account);
         }
+
+        r.log("开始切到「" + account.displayName() + "」（" + account.loginKindLabel() + "）");
         logoutIfNeeded(r);
         openLoginPage(r);
 
         switch (kind) {
             case Account.KIND_PASSWORD:
-                submitPassword(r, account);
+                submitPassword(r, account, password);
                 break;
             case Account.KIND_PHONE_ONE_TAP:
-                oneTap(r, account);
+                oneTap(r);
                 break;
             default:
                 thirdParty(r, account, kind);
@@ -92,25 +112,35 @@ public final class AccountSwitcher {
 
     // ---------- 各种登录方式 ----------
 
-    private static void submitPassword(StepRunner r, Account account)
-            throws StepRunner.StepFailure {
+    /** 取明文密码。只在内存里传递，绝不写日志。取不出来就当场失败（此时还没退登）。 */
+    private static String readPassword(Account account) throws StepRunner.StepFailure {
         if (!account.hasPassword()) {
             throw new StepRunner.StepFailure(StepRunner.Kind.LOGIN_FAILED,
-                    "账号「" + account.displayName() + "」没有保存密码，无法自动切换");
+                    "账号「" + account.displayName() + "」没有保存密码，无法自动切换"
+                            + "（还没退登，当前账号没动）");
         }
-        String password;
         try {
-            password = KeyStoreBox.open(account.encPassword, account.encIv);
+            return KeyStoreBox.open(account.encPassword, account.encIv);
         } catch (KeyStoreBox.CryptoException e) {
             throw new StepRunner.StepFailure(StepRunner.Kind.LOGIN_FAILED,
-                    "取不出「" + account.displayName() + "」的密码：" + e.getMessage());
+                    "取不出「" + account.displayName() + "」的密码：" + e.getMessage()
+                            + "（还没退登，当前账号没动）");
         }
+    }
 
-        // 一键登录页要先「切换手机号或邮箱登录」才有输入框，再切到「密码登录」。
+    /**
+     * 账号密码登录。
+     *
+     * <p>实测入口是一键登录页上那颗小字「切换手机号或邮箱登录」；按过之后表单里的用户协议
+     * 已经自动勾上（{@code check_confirm_protocol} checked=true），所以 {@link #agree} 在这条
+     * 路上正常是个空动作 —— 留着它是为了万一哪天默认变了。
+     */
+    private static void submitPassword(StepRunner r, Account account, String password)
+            throws StepRunner.StepFailure {
         if (r.findAny(Keys.LOGIN_ACCOUNT_FIELD) == null) {
-            StepRunner.Outcome other = r.findAny(Keys.LOGIN_SWITCH_PHONE);
-            if (other != null) r.clickNode(Keys.LOGIN_SWITCH_PHONE, other.node);
+            r.click(Keys.LOGIN_SWITCH_PHONE, NAV_TIMEOUT);
         }
+        // 有些版本切过去还是验证码登录，要再点一下「密码登录」；没有这颗就说明已经是表单。
         StepRunner.Outcome pwSwitch = r.findAny(Keys.LOGIN_SWITCH_TO_PASSWORD);
         if (pwSwitch != null) {
             r.clickNode(Keys.LOGIN_SWITCH_TO_PASSWORD, pwSwitch.node);
@@ -123,30 +153,40 @@ public final class AccountSwitcher {
         r.guardCaptcha();
     }
 
-    private static void oneTap(StepRunner r, Account account) throws StepRunner.StepFailure {
+    /** 本机号码一键登录：勾同意，按中间那颗大按钮。 */
+    private static void oneTap(StepRunner r) throws StepRunner.StepFailure {
         agree(r);
-        StepRunner.Outcome button = r.findAny(Keys.LOGIN_ONE_TAP);
-        if (button == null) {
-            // 一键登录页是阿里云号码认证的界面，控件还没实测过；找不到就交给你点一下。
-            waitForYou(r, account, "找不到「本机号码一键登录」按钮，请手动点一下（记得先勾同意），"
-                    + "登进去后点「继续」");
-            return;
-        }
-        r.clickNode(Keys.LOGIN_ONE_TAP, button.node);
+        r.click(Keys.LOGIN_ONE_TAP, NAV_TIMEOUT);
         r.guardCaptcha();
     }
 
+    /**
+     * 微信／QQ／微博：勾同意，点底部那个图标，需要的话再隔着硬闸按那颗「同意」。
+     *
+     * <p>三个图标实测都没有 text 也没有 desc，只能按 id 认（{@code wxBtnLayout} /
+     * {@code qqBtnLayout} / {@code sinaBtnLayout}）。微信、微博点完就回菠萝包了，
+     * {@link StepRunner#confirmThirdPartyAuth} 那一趟会立刻发现前台已经是 com.sfacg 并返回 false，
+     * 一个节点都不会读。
+     */
     private static void thirdParty(StepRunner r, Account account, String kind)
             throws StepRunner.StepFailure {
         String key = keyFor(kind);
+        if (key == null) {
+            throw new StepRunner.StepFailure(StepRunner.Kind.CONFIG,
+                    "不认识的登录方式：" + kind);
+        }
         String name = account.loginKindLabel();
         agree(r);
-        StepRunner.Outcome icon = key == null ? null : r.findAny(key);
-        if (icon != null) r.clickNode(key, icon.node);
-        // 授权页在 name 那个 App 里，本 App 看不到，只能等你点完回来。
-        waitForYou(r, account, "请在" + name + "里完成授权登录"
-                + (icon == null ? "（图标没认出来，也需要你自己点开）" : "")
-                + "，回到菠萝包后点「继续」");
+        r.click(key, NAV_TIMEOUT);
+
+        boolean pressed = r.confirmThirdPartyAuth(name, AUTH_TIMEOUT);
+        if (!r.isTargetForeground()) {
+            r.log(pressed
+                    ? "按完「同意」还没回到菠萝包，主动把它拉回前台"
+                    : "还停在 " + r.activePackage() + "，没找到要按的授权键，先把菠萝包拉回前台");
+            r.launchTarget(LOGIN_TIMEOUT);
+        }
+        r.guardCaptcha();
     }
 
     private static String keyFor(String kind) {
@@ -162,23 +202,26 @@ public final class AccountSwitcher {
         }
     }
 
-    /** 勾「本人已阅读并同意…」。已经勾了就别再点，点一下反而取消。 */
+    /**
+     * 勾「本人已阅读并同意…」。<b>已经勾了就绝不能再点</b> —— 再点一下是取消。
+     *
+     * <p>一键登录页那个 {@code authsdk_checkbox_view} 是外层 FrameLayout，它自己的 checked
+     * 恒为 false；真正读得出状态的是里面那颗 CheckBox。所以 selectors.json 里候选顺序刻意让
+     * 能读出状态的节点排在前面（见 {@code _note_login_agree}），否则外层先命中就会把已经勾上的
+     * 协议取消掉，而这种错误在日志里看不出来 —— 只表现成「按了登录没反应」。
+     */
     private static void agree(StepRunner r) throws StepRunner.StepFailure {
         StepRunner.Outcome agree = r.findAny(Keys.LOGIN_AGREE_CHECKBOX);
-        if (agree != null && !agree.node.checked()) {
-            r.clickNode(Keys.LOGIN_AGREE_CHECKBOX, agree.node);
+        if (agree == null) {
+            r.log("这一页没有找到用户协议的勾选框（可能本来就不需要勾）");
+            return;
         }
-    }
-
-    private static void waitForYou(StepRunner r, Account account, String reason)
-            throws StepRunner.StepFailure {
-        StepRunner.Decision d = r.awaitUser(account.displayName() + "：" + reason);
-        if (d == StepRunner.Decision.SKIP) {
-            throw new StepRunner.StepFailure(StepRunner.Kind.SKIPPED,
-                    "你跳过了「" + account.displayName() + "」的登录");
-        }
-        if (d == StepRunner.Decision.ABORT) {
-            throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "登录时中止");
+        if (agree.node.checked()) return;
+        r.clickNode(Keys.LOGIN_AGREE_CHECKBOX, agree.node);
+        // 勾没勾上直接决定后面那颗登录键有没有用，所以复核一次并如实记下来。
+        StepRunner.Outcome after = r.findAny(Keys.LOGIN_AGREE_CHECKBOX);
+        if (after != null && !after.node.checked()) {
+            r.log("用户协议好像没勾上（点过一次了），登录键可能会没反应");
         }
     }
 
@@ -229,12 +272,20 @@ public final class AccountSwitcher {
 
     // ---------- 退登与进入登录页 ----------
 
-    /** 当前有人登录才需要退出；已经在未登录态直接进登录表单。 */
+    /**
+     * 当前有人登录才需要退出；已经在未登录态直接进登录表单。
+     *
+     * <p>实测路径（2026-08-23，逐页 dump 校准）：「我的」页往下翻 4 次才看得见「设置」→
+     * 设置页往下翻 4 次才看得见「退出登录」→ <b>按下去没有二次确认框</b>，直接就退了。
+     * 所以 {@code logout_confirm} 是「有就点、没有也正常」，不能等它。
+     */
     private static void logoutIfNeeded(StepRunner r) throws StepRunner.StepFailure {
-        if (onLoginPage(r)) {
-            return;
-        }
-        // 「设置」在「我的」页最底部，「退出登录」在设置页最底部，两处都得先往下翻。
+        if (onLoginPage(r)) return;
+        // 上一趟可能把「我的」页留在了底部，「立即登录」不在可见树里 —— 那样会被误判成
+        // 「还登着人」，白跑一趟退登。先滚回顶部再判一次。
+        r.scrollToTop(SCROLL_TO_TOP_TIMES);
+        if (onLoginPage(r)) return;
+
         StepRunner.Outcome settings = r.findAny(Keys.SETTINGS_ENTRY);
         if (settings == null) {
             r.click(Keys.MINE_TAB, NAV_TIMEOUT);
@@ -253,10 +304,12 @@ public final class AccountSwitcher {
         }
         r.clickNode(Keys.LOGOUT_BUTTON, logout.node);
 
+        // 实测没有确认框。有就点，没有也不算异常，所以只看当前屏、不等。
         StepRunner.Outcome confirm = r.findAny(Keys.LOGOUT_CONFIRM);
         if (confirm != null) {
             r.clickNode(Keys.LOGOUT_CONFIRM, confirm.node);
         }
+        r.log("已退出登录");
     }
 
     /** 眼下这一页是不是「还没登录」的样子（登录入口／账号密码表单／一键登录页）。 */
@@ -264,17 +317,31 @@ public final class AccountSwitcher {
         return r.findAny(Keys.LOGIN_ENTRY, Keys.LOGIN_ACCOUNT_FIELD, Keys.LOGIN_ONE_TAP) != null;
     }
 
-    /** 走到登录页：可能是账号密码表单，也可能是一键登录那一页。 */
+    /**
+     * 走到登录页：正常是那一页一键登录页（阿里云号码认证，属于 com.sfacg 进程）。
+     *
+     * <p>关键的一步是<b>滚回顶部</b>：退登之后直接回到「我的」页，而那个 ScrollView 还停在底部
+     * （{@code top_layout} 高度塌成 2px），「立即登录」根本不在可见树里 —— 不滚回去就永远点不到，
+     * 整条切号链路断在这儿。这是实测踩到的，不是保险。
+     */
     private static void openLoginPage(StepRunner r) throws StepRunner.StepFailure {
         if (r.findAny(Keys.LOGIN_ACCOUNT_FIELD, Keys.LOGIN_ONE_TAP) != null) return;
+
         StepRunner.Outcome entry = r.findAny(Keys.LOGIN_ENTRY);
         if (entry == null) {
-            r.click(Keys.MINE_TAB, NAV_TIMEOUT);
+            r.scrollToTop(SCROLL_TO_TOP_TIMES);
             entry = r.findAny(Keys.LOGIN_ENTRY);
         }
-        if (entry != null) {
-            r.clickNode(Keys.LOGIN_ENTRY, entry.node);
+        if (entry == null) {
+            r.click(Keys.MINE_TAB, NAV_TIMEOUT);
+            r.scrollToTop(SCROLL_TO_TOP_TIMES);
+            entry = r.findAny(Keys.LOGIN_ENTRY);
         }
+        if (entry == null) {
+            throw new StepRunner.StepFailure(StepRunner.Kind.TIMEOUT,
+                    "「我的」页上找不到「立即登录」，进不了登录页");
+        }
+        r.clickNode(Keys.LOGIN_ENTRY, entry.node);
         r.waitForAny(NAV_TIMEOUT, Keys.LOGIN_ACCOUNT_FIELD, Keys.LOGIN_ONE_TAP);
     }
 }

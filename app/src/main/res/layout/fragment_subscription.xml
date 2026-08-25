@@ -1,109 +1,143 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?><!--
+  订阅页：上面一张卡说清「订谁、订到哪了、下一步该点什么」，下面是章节记录列表。
+  那五个次要操作（选书／加书／加章／导入导出）横着滚，不再和主操作抢注意力。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
     android:orientation="vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp">
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp">
 
     <TextView
+        style="@style/Blb.Text.Section"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:text="@string/sub_target_novel"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:layout_marginBottom="8dp"
+        android:text="@string/sub_target_novel" />
 
-    <TextView
-        android:id="@+id/target"
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Blb.Card"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="16sp" />
-
-    <TextView
-        android:id="@+id/suggestion"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#332196F3"
-        android:padding="12dp"
-        android:textSize="14sp" />
-
-    <Button
-        android:id="@+id/run_subscribe"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/sub_run" />
-
-    <HorizontalScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:scrollbars="none">
+        android:layout_height="wrap_content">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
+            android:orientation="vertical">
 
-            <Button
-                android:id="@+id/pick_novel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/sub_pick_novel" />
+            <TextView
+                android:id="@+id/target"
+                style="@style/Blb.Text.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
 
-            <Button
-                android:id="@+id/add_novel"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/stats"
+                style="@style/Blb.Text.Hint"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/sub_add_novel" />
+                android:layout_marginTop="4dp" />
 
-            <Button
-                android:id="@+id/add_chapter"
-                android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/suggestion"
+                style="@style/Blb.Text.Body"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/sub_add_chapter" />
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_notice"
+                android:padding="14dp"
+                android:textColor="?attr/colorOnPrimaryContainer" />
 
-            <Button
-                android:id="@+id/export_csv"
-                android:layout_width="wrap_content"
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/run_subscribe"
+                style="@style/Blb.Button"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/sub_export_csv" />
+                android:layout_marginTop="12dp"
+                android:text="@string/sub_run"
+                app:icon="@drawable/ic_action_run" />
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:scrollbars="none">
 
-            <Button
-                android:id="@+id/import_csv"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="@string/sub_import_csv" />
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/pick_novel"
+                        style="@style/Blb.Button.Tonal"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/sub_pick_novel" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/add_novel"
+                        style="@style/Blb.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/sub_add_novel" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/add_chapter"
+                        style="@style/Blb.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/sub_add_chapter" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/export_csv"
+                        style="@style/Blb.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/sub_export_csv" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/import_csv"
+                        style="@style/Blb.Button.Outlined"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:text="@string/sub_import_csv" />
+                </LinearLayout>
+            </HorizontalScrollView>
         </LinearLayout>
-    </HorizontalScrollView>
-
+    </com.google.android.material.card.MaterialCardView>
     <TextView
-        android:id="@+id/stats"
+        style="@style/Blb.Text.Section"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:textSize="12sp" />
+        android:layout_marginTop="18dp"
+        android:layout_marginBottom="8dp"
+        android:text="@string/sub_records_header" />
 
     <TextView
         android:id="@+id/empty"
+        style="@style/Blb.Text.Body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="16dp"
         android:text="@string/sub_empty"
         android:textAlignment="center"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/list"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="8dp"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="8dp" />
 
 </LinearLayout>

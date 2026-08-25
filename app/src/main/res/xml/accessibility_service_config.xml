@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  packageNames 限定为 com.sfacg：本服务只能读写菠萝包的界面，读不到其他 App 的内容。
+  packageNames 里除了 com.sfacg，还列了微信／QQ／微博三个客户端 —— 只为了一件事：
+  用三方账号登录菠萝包时，授权确认页长在那三个 App 里（实测只有 QQ 有这一步，是
+  com.tencent.mobileqq/com.tencent.open.agent.PublicFragmentActivityForOpenSDK 上那颗
+  Button「同意」），不放行就永远点不到，手按不动的人就换不了号。
+
+  放行不等于放开：代码里有一道硬闸（BlbAccessibilityService.root() / authRoot()）——
+  前台不是 com.sfacg 时，整棵树一律读不到，只有在「正在等一颗授权键」这个状态下才允许
+  用 login_auth_confirm 这一组选择器去找那颗键，其它节点不读、不点、不写日志、不导出。
   靠轮询根节点推进流程，所以 notificationTimeout 给一个较小值就够。
 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
@@ -11,4 +18,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/accessibility_description"
     android:notificationTimeout="200"
-    android:packageNames="com.sfacg" />
+    android:packageNames="com.sfacg,com.tencent.mm,com.tencent.mobileqq,com.sina.weibo" />

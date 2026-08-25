@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      深色下系统栏图标要用亮色。这个值单独放在 bools 里，是为了不用把整个主题
+      在 values-night 里重写一遍 —— 同名 style 会整体覆盖而不是合并，
+      之前 values-night/themes.xml 就是那样把配色全丢了。
+    -->
+    <bool name="blb_light_system_bars">true</bool>
+</resources>

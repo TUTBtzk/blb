@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  描边按钮的字和图标色。之所以要一整个 selector 而不是直接写 ?attr/colorSecondary：
+  写死单色会把 Material 自带的「禁用变灰」一起覆盖掉，于是「停止」在空闲时看着仍然可按。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/blb_idle" android:state_enabled="false" />
+    <item android:color="?attr/colorSecondary" />
+</selector>

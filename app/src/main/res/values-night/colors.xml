@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      暗色：底色压到接近纯黑（OLED 省电，长时间挂着看日志也不刺眼），
+      语义色全部提亮到能在深底上读得清；对比度按 WCAG AA 以上取。
+      名字必须和 values/colors.xml 一一对应，themes.xml 只认这些名字。
+
+      黄主题的暗色版：黑也带一点暖（#16130D 而不是纯灰黑），跟白天那套是同一个调子。
+      白天 primary 是亮蜜黄配深棕字，晚上仍然如此 —— 黄在深底上本来就够亮，
+      只是稍微收一点饱和，免得半夜盯着刺眼。深琥珀（secondary）在深底上读不出来，
+      所以换成浅琥珀。
+    -->
+    <color name="blb_primary">#F2C24A</color>
+    <color name="blb_on_primary">#2B1F00</color>
+    <color name="blb_primary_container">#4A3600</color>
+    <color name="blb_on_primary_container">#FFE7A8</color>
+    <color name="blb_secondary">#F3D48A</color>
+    <color name="blb_on_secondary">#3D2C00</color>
+    <color name="blb_secondary_container">#3A2D12</color>
+    <color name="blb_on_secondary_container">#FCE7BE</color>
+
+    <color name="blb_background">#16130D</color>
+    <color name="blb_surface">#1B1710</color>
+    <color name="blb_surface_container">#241F16</color>
+    <color name="blb_on_surface">#F2E9D8</color>
+    <color name="blb_on_surface_variant">#C9BFA9</color>
+    <color name="blb_outline">#958B74</color>
+    <color name="blb_outline_variant">#3A3428</color>
+
+    <color name="blb_error">#FF9E96</color>
+    <color name="blb_on_error">#5C0F0F</color>
+    <color name="blb_error_container">#4A1717</color>
+    <color name="blb_on_error_container">#FFD9D5</color>
+
+    <color name="blb_ok">#74D89A</color>
+    <color name="blb_ok_container">#123421</color>
+    <color name="blb_warn">#FFB27A</color>
+    <color name="blb_warn_container">#4A2408</color>
+    <color name="blb_fail">#FF9E96</color>
+    <color name="blb_fail_container">#4A1512</color>
+    <color name="blb_skip">#B3AA94</color>
+    <color name="blb_skip_container">#332E23</color>
+    <color name="blb_idle">#9C937D</color>
+    <color name="blb_idle_container">#2A251C</color>
+
+    <color name="blb_log_surface">#0F0C07</color>
+    <color name="blb_log_text">#D9CDB4</color>
+</resources>

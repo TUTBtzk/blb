@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  选中的那一格用深琥珀（不是亮黄 —— 亮黄字在浅底上看不见），没选的用次要文字色。
+  选中格的底是浅蜜黄（见 Blb.BottomNav.Indicator），两者对比 6.2:1。
+-->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="?attr/colorSecondary" android:state_checked="true" />
+    <item android:color="?attr/colorOnSurfaceVariant" />
+</selector>

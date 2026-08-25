@@ -2,6 +2,7 @@ package com.example.blb.ui;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -14,11 +15,12 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -42,12 +44,16 @@ import java.util.List;
  */
 public class CheckInFragment extends Fragment {
 
+    /** 那段辅助点击说明折叠时露几行。点一下标题展开全文。 */
+    private static final int NOTICE_COLLAPSED_LINES = 2;
+
     private TextView status;
     private TextView log;
     private TextView todayHeader;
     private ScrollView logScroll;
     private View pauseBanner;
     private TextView pauseReason;
+    private View runDot;
     private Button run;
     private Button runDaily;
     private Button stop;
@@ -68,6 +74,7 @@ public class CheckInFragment extends Fragment {
         todayHeader = v.findViewById(R.id.today_header);
         pauseBanner = v.findViewById(R.id.pause_banner);
         pauseReason = v.findViewById(R.id.pause_reason);
+        runDot = v.findViewById(R.id.run_dot);
         run = v.findViewById(R.id.run);
         runDaily = v.findViewById(R.id.run_daily);
         stop = v.findViewById(R.id.stop);
@@ -75,8 +82,18 @@ public class CheckInFragment extends Fragment {
         adapter = new SimpleAdapter<>(R.layout.item_two_line, this::bind);
         RecyclerView list = v.findViewById(R.id.list);
         list.setLayoutManager(new LinearLayoutManager(requireContext()));
-        list.addItemDecoration(new DividerItemDecoration(requireContext(), DividerItemDecoration.VERTICAL));
+        // 行本身是卡片、自带间距，再加分割线只会在卡片之间多一道横杠。
         list.setAdapter(adapter);
+
+        // 那段说明很长（把「替我按什么、不按什么」说全了），默认只露两行，
+        // 免得把「现在跑到哪了」和按钮挤到屏幕外面。
+        TextView notice = v.findViewById(R.id.ad_notice);
+        View arrow = v.findViewById(R.id.notice_arrow);
+        v.findViewById(R.id.notice_toggle).setOnClickListener(b -> {
+            boolean collapsed = notice.getMaxLines() <= NOTICE_COLLAPSED_LINES;
+            notice.setMaxLines(collapsed ? Integer.MAX_VALUE : NOTICE_COLLAPSED_LINES);
+            arrow.setRotation(collapsed ? 180f : 0f);
+        });
 
         run.setOnClickListener(b -> start(false));
         runDaily.setOnClickListener(b -> start(true));
@@ -98,6 +115,9 @@ public class CheckInFragment extends Fragment {
             run.setEnabled(!on);
             runDaily.setEnabled(!on);
             stop.setEnabled(on);
+            // 状态卡左上那颗点：跑着＝深琥珀，空闲＝灰。隔着屏幕也能一眼看出动没动。
+            // （不用主色那个亮蜜黄 —— 10dp 的小圆点用亮黄在白卡上几乎看不见。）
+            tint(runDot, on ? R.color.blb_secondary : R.color.blb_idle);
         });
         AutomationBus.pauseReason().observe(getViewLifecycleOwner(), reason -> {
             boolean paused = !Texts.isBlank(reason);
@@ -117,7 +137,18 @@ public class CheckInFragment extends Fragment {
     }
 
     private void bind(View row, CheckInRow r, int position) {
-        row.<TextView>findViewById(R.id.line1).setText(r.accountName() + " · " + r.statusText());
+        // 状态从第一行的文字里拿出来，改成右边一颗徽章＋左边一道色条：
+        // 8 个号排在一起时，「哪个没成」要能扫一眼看出来，而不是逐行读字。
+        StatusPalette tone = StatusPalette.forCheckIn(r.status);
+        row.findViewById(R.id.accent).setBackgroundColor(color(row, tone.foreground));
+
+        TextView badge = row.findViewById(R.id.badge);
+        badge.setVisibility(View.VISIBLE);
+        badge.setText(r.statusText());
+        badge.setTextColor(color(row, tone.foreground));
+        badge.setBackgroundTintList(ColorStateList.valueOf(color(row, tone.container)));
+
+        row.<TextView>findViewById(R.id.line1).setText(r.accountName());
         StringBuilder sb = new StringBuilder();
         String ads = r.adsText();
         if (ads != null) sb.append(ads);
@@ -134,6 +165,15 @@ public class CheckInFragment extends Fragment {
             sb.append(DateFormat.format("HH:mm:ss", r.createdAt));
         }
         row.<TextView>findViewById(R.id.line2).setText(sb);
+    }
+
+    private static int color(View v, @ColorRes int res) {
+        return ContextCompat.getColor(v.getContext(), res);
+    }
+
+    /** 给形状 drawable 上色（那颗小圆点的底是白的，靠 tint 变颜色）。 */
+    private static void tint(View v, @ColorRes int res) {
+        v.setBackgroundTintList(ColorStateList.valueOf(color(v, res)));
     }
 
     /** @param daily true = 签到+广告+订阅 一趟走完；false = 只跑签到 */

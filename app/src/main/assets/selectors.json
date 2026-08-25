@@ -1,5 +1,5 @@
 {
-  "_note": "已对着 com.sfacg 5.2.84（2026-08 实测）校准。签到那一整套（入口／今天那一格／成功页／广告计数）已经用一次真实签到钉死；带 id 的候选都是实测抓到的真实 resource-id。只有 text/textRegex 且注释标了『未验证』的仍是猜测（现在只剩登录/退登那一组，要真的退一次登录才能测）。改这个文件后可导出到 filesDir/selectors.json 热生效，不必重装。每个 key 下是候选列表，按顺序尝试。",
+  "_note": "已对着 com.sfacg 5.2.84（2026-08 实测）校准。签到那一整套（入口／今天那一格／成功页／广告计数）已经用一次真实签到钉死；登录／退登那一整套已在 2026-08-23 用真实的「退登 → 微信登入 → 退登 → 手机号密码登入 → 退登 → 微博登入」跑通并逐页 dump 校准（QQ 授权页只 dump 没确认，那一颗按「取消」退回了）。带 id 的候选都是实测抓到的真实 resource-id。改这个文件后可导出到 filesDir/selectors.json 热生效，不必重装。每个 key 下是候选列表，按顺序尝试。",
 
   "_note_tabs": "底部导航：main_tab_tv1 书架 / tv2 书库 / tv3 菠萝圈 / container5 我的（我的那个只有图标，没有文字）。",
   "home_ready": [
@@ -22,12 +22,21 @@
     { "id": "nickname" }
   ],
 
-  "_note_coupons": "「我的」页上的火券数字没有 id（只有旁边的『火券』标签），读不到；能读的地方是我的钱包（tv_friemoney）和批量购买页的 tvAccount（『账户余额：0火券/0代券』）。",
+  "_note_coupons": "余额有三个地方能读，按可靠性排：①批量购买页 tvAccount（『账户余额：0火券/0代券』，两种券在同一段文字里）；②我的钱包页 tv_friemoney（火券）和 tv_voucher（代券）；③『我的』页『我的帐户』那一行 —— 2026-08-23 实测那一行的数字和标签都没有 resource-id：'0' [63,687][307,745] / '火券' [63,752][307,798]、'152' [307,687][552,745] / '金币' [307,752][552,798]、'10' [552,687][797,745] / '代券' [552,752][797,798]，数字就画在标签正上方、左右边界完全对齐。所以第③条只配标签（balance_fire_label / balance_voucher_label），数字由 NodeMatcher.countAbove 按位置配对读出，给数字写选择器是白费劲。签到面板是独立窗口、上面没有任何余额，所以余额只能到『我的』页去读（StepRunner.readBalanceFromMine）。",
   "coupons_value": [
     { "id": "tvAccount" },
     { "id": "tv_friemoney" },
     { "textRegex": "账户余额" },
     { "textRegex": "火券[：: ]*\\d+" }
+  ],
+  "vouchers_value": [
+    { "id": "tv_voucher" }
+  ],
+  "balance_fire_label": [
+    { "text": "火券", "requireArea": true }
+  ],
+  "balance_voucher_label": [
+    { "text": "代券", "requireArea": true }
   ],
 
   "_note_checkin": "首选书架页右上角的 tvSign（text=签到）；备用路径是我的页『福利君』→ 福利页 tvTaskAction(text=签到)。我的页右上角那个签到胶囊没有 id 也没有 text，用不了。点开 tvSign 出的是签到弹窗（layoutContent + signWeekView + tvSignDay『连签N天』），弹窗里点今天那格才会跳到整页的『每日签到』。",
@@ -55,16 +64,24 @@
     { "id": "tvCoupon" },
     { "textRegex": "^\\+\\d+\\s*(代券|火券)" }
   ],
-  "_note_ad": "已实测：签到弹窗和签到页上都有这一组 —— icon_sign_ad 图标、tvAdTitleTips=「看小视频再领代券」、sign_in_ad_count=「今日还剩3次」、sign_in_ad_goto=「免费领3代券」（这个才是可点的那颗）。辅助点击模式下脚本点开的就是 sign_in_ad_goto；剩余次数只认 sign_in_ad_count，它减了才算奖励到账。",
+  "_note_ad": "已实测：签到弹窗和签到页上都有这一组 —— icon_sign_ad 图标、tvAdTitleTips=「看小视频再领代券」、sign_in_ad_count=「今日还剩3次」、sign_in_ad_goto=「免费领3代券」（这个才是可点的那颗）。辅助点击模式下脚本点开的就是 sign_in_ad_goto；剩余次数只认 sign_in_ad_count，它减了才算奖励到账。2026-08-23 19:19 实测补一条要紧的：次数领完之后 sign_in_ad_goto **整个从树里消失**，这一组就只剩标题 tvAdTitleTips 和那条松正则还能命中 —— 那两条命中的是<b>不可点的标题</b>，点下去（向上借卡片容器）什么都不会发生，脚本却以为入口还在，白等 20 秒 awaitAdStart。标题这两条候选刻意留着（万一哪天 goto 换了 id，点整张卡还是能开），代价由 AdWatchTask 兜：它在点入口之前先查 ad_exhausted，写着「已领完」就直接收工。",
   "ad_reward": [
     { "id": "sign_in_ad_goto" },
     { "id": "tvAdTitleTips" },
     { "textRegex": "看小视频|看视频|看广告|视频翻倍|免费领\\d*代券" }
   ],
+  "_note_ad_exhausted": "2026-08-23 19:19 实测（用户截图，整页「每日签到」上）：那 5 次领完之后，入口 sign_in_ad_goto 不在树里了，原地是一颗灰的 sign_in_ad_finished=「已领完」，同一行的 sign_in_ad_count 则从「今日还剩N次」变成「明日更新次数」。这一组是「今天不用再点了」的硬判据，AdWatchTask 在读次数和点入口之前都先查它。另一件事写在这儿免得忘：那 5 次是**所有账号共用的一天配额**，不是每号 5 次 —— 第一个号看完 5 支，后面 7 个号打开面板就都是这张「已领完」，所以这一组认得准 = 后面每个号都省一次 20 秒白等。刻意不认「明日更新次数」：它只是那格的占位文案，认它当「领完」是拿一句没数字的话下结论，而 sign_in_ad_finished／「已领完」本身就足够硬。",
+  "ad_exhausted": [
+    { "id": "sign_in_ad_finished" },
+    { "textRegex": "^已领完$|^已领取完$|^今日已领完$|^次数已用完$" }
+  ],
+  "_note_ad_remaining": "2026-08-23 14:45 与 19:19 两次实测：三支广告都领到之后，面板上那句「今日还剩 N 次」原地换成了「已领完」（挂在 sign_in_ad_finished 上），而 sign_in_ad_count 这一格变成了「明日更新次数」—— 一个数字都没有。所以两条纯 id 候选必须加文本限定：不加的话 id 候选不看文字，抢先命中「明日更新次数」→ Texts.parseRemaining 返回 -1 → 脚本按配置的每日个数去点那个已经没有了的入口，每个号白等 20 秒（用户 2026-08-23 报的「广告已经看完了，程序却一直尝试观看」就是这条）。「明日更新次数」刻意不当成任何计数，让它落空到后面的候选上去，由「已领完」读出 0。",
   "ad_remaining": [
-    { "id": "sign_in_ad_count" },
-    { "id": "tvAdCount" },
-    { "textRegex": "还剩\\s*\\d+\\s*次" }
+    { "id": "sign_in_ad_count", "textRegex": "还剩\\s*\\d+\\s*次|\\d+\\s*/\\s*\\d+|已领完|已领取完" },
+    { "id": "tvAdCount", "textRegex": "还剩\\s*\\d+\\s*次|\\d+\\s*/\\s*\\d+|已领完|已领取完" },
+    { "id": "sign_in_ad_finished" },
+    { "textRegex": "还剩\\s*\\d+\\s*次" },
+    { "textRegex": "^已领完$|^已领取完$" }
   ],
   "_note_ad_flow": "已实测（2026-08-23，播放器是腾讯优量汇 com.sfacg/com.qq.e.ads.PortraitADActivity）：播放页整棵树没有一个 resource-id，也没有一个节点是 clickable —— 所有键都只能靠文字命中、靠手势点坐标中心。所以这一组全部走 textRegex，不写 id。播放页的关闭键是右上角一个没文字没 id 的 FrameLayout，没法用选择器认，改走全局返回（奖励没到手时返回会弹「确认要离开吗」，那时按 ad_resume 的「抓住奖励机会」接着看）。2026-08-23 14:14 实测补一条：跳转、浏览、返回之后播放页会弹「恭喜获得奖励／已完成浏览10秒，提前获得奖励」，代券确实到账（签到面板上「今日还剩」3 变 2），但这张弹窗上全局返回连按 8 次一动不动，出口只有右上角那颗 X —— 它是个 44×44 的 ImageView，没 text、没 desc、没 id、也不 clickable，选择器语言里没有一条能认到它。所以这一颗不走 selectors.json，走代码里的 NodeMatcher.findCornerClose（按位置和大小认右上角那颗图标）＋ BlbAccessibilityService.pressCloseCorner，并且只在 ad_earned 已经在屏幕上时才允许按：同一个位置在穿山甲播放页上是「跳过」，奖励没到手时点那儿等于把奖励扔掉。菠萝包还接了穿山甲/ptg，别家 SDK 的 id 保留在 ad_close 里当退路。",
   "ad_pending": [
@@ -100,6 +117,11 @@
     { "id": "tvConfirm", "textRegex": "收下|领取|^确定$" },
     { "textRegex": "^领取奖励$|^立即领取$|^领取代券$|^领取$|^知道了$", "clickableAncestor": true }
   ],
+  "_note_reward_grant": "菠萝包自己弹的代券发放卡，2026-08-24 09:28 真机 dump 钉死：容器 welfare_container（FrameLayout，不可点），里面 tvDrawable=「+」、tvValue=「3」、tvConfirm=「开心收下」（clickable=true，bounds=[385,1280][694,1384]）、tvTips=「已发放到\"我的-我的钱包\"中」、imgClose（NAF 的 ImageView，在卡外下方 [498,1581][581,1664]）。这张卡是模态的：盖着它的时候整棵树里只有它这几个节点 —— 底部 tab、签到面板、「今日还剩N次」全都不在树里，而且按返回关不掉。那天就是它把整趟毁了：第 3 支广告领完后它过几秒才弹，脚本查早了一次就走，之后 7 个号的 ensureHome 只会按返回，每个号都「等 mine_tab 超时」，只有第 1 个号签到成功。必须按「开心收下」——不按不算收完（代券不进账号），而且这也是唯一能清掉它的动作，所以 StepRunner.escapeStuckAd 把它排在最前面。刻意只认它自己的节点（id=tvConfirm ＋ 整串「开心收下」），不复用 ad_claim 那几条宽正则（「知道了」「确定」「立即领取」在别处也有，在清障环节乱点会跳到活动页）。imgClose 一律不点：那是「不收下」。",
+  "reward_grant": [
+    { "id": "tvConfirm", "textRegex": "^开心收下$", "clickableAncestor": true },
+    { "textRegex": "^开心收下$|^开心领取$", "clickableAncestor": true, "requireArea": true }
+  ],
   "ad_resume": [
     { "textRegex": "抓住奖励机会|继续观看|继续播放|继续看视频|点击继续", "clickableAncestor": true },
     { "desc": "继续播放", "clickableAncestor": true }
@@ -122,62 +144,82 @@
     { "textRegex": "验证码|拖动滑块|安全验证|人机验证|请完成验证" }
   ],
 
-  "_note_settings": "setting_title 在「我的」页最底部，必须先往下翻才看得见；btnLoginOut 在设置页最底部，同理。",
+  "_note_settings": "已实测（2026-08-23）：我的页要往下 swipe 4 次才看得见 my_setting_layout / setting_icon / setting_title(text=设置)，[134,2021][214,2075]；设置页同样要往下 swipe 4 次才看得见 btnLoginOut。两处都在最底部，不翻根本不在可见树里。设置页的 Activity 是 com.sf.view.activity.SystemSettingActivity。",
   "settings_entry": [
+    { "id": "my_setting_layout", "clickableAncestor": true },
     { "id": "setting_title", "clickableAncestor": true },
     { "text": "设置", "clickableAncestor": true }
   ],
   "logout_button": [
     { "id": "btnLoginOut", "clickableAncestor": true },
-    { "textRegex": "退出登录|退出当前账号|注销登录", "clickableAncestor": true }
+    { "id": "lltLoginOut", "clickableAncestor": true },
+    { "textRegex": "^退出登录$|^退出当前账号$|^注销登录$", "clickableAncestor": true }
   ],
-  "_note_login": "未验证：下面这些都还是猜的。校准要真的退出一次登录，会有验证码风险，所以留到你决定切号时再抓。",
+  "_note_logout_confirm": "已实测：菠萝包退出登录**没有二次确认框** —— 按下 btnLoginOut 直接退掉并回到「我的」页。所以这一组是「有就点、没有也完全正常」，AccountSwitcher 不等它、也不因为它没出现而报错。留着是防它哪天加上。",
   "logout_confirm": [
-    { "textRegex": "^确定$|^确认$|^退出$", "clickableAncestor": true }
+    { "textRegex": "^确定$|^确认$|^退出$|^确认退出$", "clickableAncestor": true }
   ],
+  "_note_login_entry": "已实测：未登录的「我的」页上是 toLoginBtn，text=立即登录，[307,528][773,662]。刻意不认单独的「登录」两个字 —— 密码登录页那颗提交键（btn_login）的 text 正好就是「登录」，认了会在密码页把提交键当成入口反复点。另有一条实测坑：在设置页按下退出登录之后直接回到「我的」页，而那个 ScrollView **还停在底部**（顶部 top_layout 高度塌成 2px），toLoginBtn 根本不在可见树里 —— 必须先把页面滚回顶部才点得到，见 StepRunner.scrollToTop。",
   "login_entry": [
-    { "textRegex": "^登录$|登录/注册|立即登录|点击登录", "clickableAncestor": true }
+    { "id": "toLoginBtn", "clickableAncestor": true },
+    { "textRegex": "^立即登录$|^登录/注册$|^点击登录$|^登录或注册$", "clickableAncestor": true }
   ],
+  "_note_login_switch_to_password": "实测流程里**没有这一步**：在一键登录页按「切换手机号或邮箱登录」出来的直接就是账号密码表单，不用再切一次「密码登录」。这一组现在没有任何代码在用，留着是防菠萝包哪天改回两段式。",
   "login_switch_to_password": [
-    { "textRegex": "密码登录|账号密码登录|使用密码登录", "clickableAncestor": true }
+    { "textRegex": "^密码登录$|^账号密码登录$|^使用密码登录$", "clickableAncestor": true }
   ],
+  "_note_login_agree": "两条路的协议勾选完全不同，实测：（1）一键登录页（com.mobile.auth.gatewayauth.LoginAuthActivity，阿里云号码认证，属于 com.sfacg 进程）底部是 authsdk_checkbox_view（FrameLayout，CLICK，[77,2207][173,2276]），里面套一个真正的 CheckBox（checked=false，[90,2207][159,2276]）—— 走一键登录和微信/QQ/微博都**必须**先勾上；（2）密码登录页（com.sf.login.LoginActivity）是 check_confirm_protocol，实测 **checked=true**，即按下「切换手机号或邮箱登录」的那一刻协议就自动同意了，不用勾。所以候选顺序刻意把「能读出 checked 的那个节点」排在前面：AccountSwitcher.agree() 只在 checked=false 时才点，要是先命中外层那个 FrameLayout（它的 checked 恒为 false），就会在已经勾上的情况下再点一次、把勾**取消掉**。点击本身不需要 clickableAncestor：BlbAccessibilityService.press() 自己会在节点点不动时向上找最近的可点击祖先。",
   "login_agree_checkbox": [
-    { "id": "cb_agree" },
-    { "className": "CheckBox" }
+    { "id": "check_confirm_protocol" },
+    { "className": "CheckBox" },
+    { "id": "authsdk_checkbox_view" }
   ],
   "login_account_field": [
+    { "id": "etAccount" },
     { "className": "EditText", "index": 0 }
   ],
   "login_password_field": [
+    { "id": "etPassword" },
     { "className": "EditText", "index": 1 }
   ],
+  "_note_login_submit": "密码登录页那颗提交键，实测 btn_login（Button，text=登录，[95,1004][984,1141]）。刻意不认「立即登录」—— 那是未登录「我的」页上的入口（toLoginBtn）。",
   "login_submit": [
-    { "textRegex": "^登录$|^登 录$|立即登录", "clickableAncestor": true }
+    { "id": "btn_login", "clickableAncestor": true },
+    { "text": "登录", "className": "Button", "clickableAncestor": true }
   ],
   "login_error": [
-    { "textRegex": "密码错误|账号或密码|登录失败|账号不存在" }
+    { "textRegex": "密码错误|账号或密码|登录失败|账号不存在|请输入正确" }
   ],
-  "_note_login_kinds": "未验证：一键登录页是 com.sfacg 里的 LoginAuthActivity（阿里云号码认证），本机号码那颗按钮、以及底部微信/QQ/微博三个图标都还没抓到 id —— 图标只有图形没有文字，desc 是猜的。三方授权页属于 com.tencent.mm / com.tencent.mobileqq / 微博客户端，本 App 的无障碍范围只有 com.sfacg，看不见也点不了，所以这三种账号一律停下来等你手点。",
+  "_note_login_kinds": "已实测（2026-08-23，逐页 dump）：一键登录页是 com.mobile.auth.gatewayauth.LoginAuthActivity —— 阿里云号码认证的界面，但它**属于 com.sfacg 进程**，所以本来的无障碍范围就读得到、点得动。页面上：authsdk_number_view 显示本机号码（195****3032）、authsdk_login_view 是那颗大按钮（内含 TextView「一键登录/注册」，[112,757][967,886]）、authsdk_switch_view 是「切换手机号或邮箱登录」（[350,963][730,1015]）、底部三个图标 wxBtnLayout[164,2023][396,2140] / qqBtnLayout[424,2023][656,2140] / sinaBtnLayout[684,2023][916,2140]（都只有图形，没有 text 也没有 contentDescription —— 所以旧那套按 desc=「微信」匹配的写法在真机上一个都命中不了，必须按 id）。三方登录里**只有 QQ 需要跨 App 确认**：微信和微博点完图标就直接回到 MainActivity 且已登录（实测分别登成「皓平」和「五杯半雪碧的微博」），QQ 会跳到 com.tencent.mobileqq/com.tencent.open.agent.PublicFragmentActivityForOpenSDK，要按底部那颗 Button「同意」，见 login_auth_confirm。密码登录页上也有这三个图标（wxLoginBtn 那颗的父 LinearLayout 没有 id；QQ、微博在 (539,1631)、(800,1631)），但正常流程走不到那儿，所以那两个 id 是按命名推的、没实测。",
   "login_one_tap": [
-    { "textRegex": "本机号码一键登录|一键登录|本机号码登录", "clickableAncestor": true }
+    { "id": "authsdk_login_view", "clickableAncestor": true },
+    { "textRegex": "^一键登录/注册$|^本机号码一键登录$|^一键登录$|^本机号码登录$", "clickableAncestor": true }
   ],
   "login_switch_phone": [
-    { "textRegex": "切换手机号或邮箱登录|切换手机号|其他手机号|邮箱登录", "clickableAncestor": true }
+    { "id": "authsdk_switch_view", "clickableAncestor": true },
+    { "textRegex": "^切换手机号或邮箱登录$|^切换手机号$|^其他手机号$|^邮箱登录$", "clickableAncestor": true }
   ],
   "login_wechat": [
-    { "desc": "微信", "clickableAncestor": true },
-    { "text": "微信", "clickableAncestor": true }
+    { "id": "wxBtnLayout", "clickableAncestor": true },
+    { "id": "wxLoginBtn", "clickableAncestor": true }
   ],
   "login_qq": [
-    { "desc": "QQ", "clickableAncestor": true },
-    { "text": "QQ", "clickableAncestor": true }
+    { "id": "qqBtnLayout", "clickableAncestor": true },
+    { "id": "qqLoginBtn", "clickableAncestor": true }
   ],
   "login_weibo": [
-    { "desc": "微博", "clickableAncestor": true },
-    { "text": "微博", "clickableAncestor": true }
+    { "id": "sinaBtnLayout", "clickableAncestor": true },
+    { "id": "sinaLoginBtn", "clickableAncestor": true }
+  ],
+  "_note_login_auth_confirm": "**这是唯一一组允许在 com.sfacg 之外匹配的选择器。** 只在「点完 QQ／微信／微博图标、正在等那颗授权键」这一小段时间里用得到，且必须经 BlbAccessibilityService.authRoot()（它自己再验一次包名，硬闸没开就返回 null）。实测 QQ 那一页（com.tencent.mobileqq/com.tencent.open.agent.PublicFragmentActivityForOpenSDK）：标题「SF互动传媒网 申请使用」（id=vu），底部一颗蓝色 Button text=同意 desc=同意 id=fds [313,1960][767,2082]；右上角 ivTitleBtnRightText 是取消、asz 是「切换账号」。QQ 的 id 是混淆过的（每次发版都可能变），所以以 text/desc 为主、id 只作最后备选。desc 这一条刻意用**完全相等**而不是包含：包含的话「不同意」也会命中，而在别人的 App 里按错一颗键是这一整块最不能犯的错。正则锚得很死、只认明确的授权键：绝不许出现「切换」「取消」「注册」「下载」「安装」这类词。",
+  "login_auth_confirm": [
+    { "className": "Button", "text": "同意" },
+    { "textRegex": "^同意$|^同意并登录$|^允许$|^确认登录$|^授权并登录$", "clickableAncestor": true },
+    { "desc": "同意", "className": "Button", "clickableAncestor": true },
+    { "id": "fds", "clickableAncestor": true }
   ],
 
-  "_note_search": "搜索入口在书库页（search_layout）；搜索页输入框 inputSearch，没有可见的「搜索」按钮（search_cancel 是取消），输入后结果自己出来。结果行书名是 tvbBookTitle。",
+  "_note_search": "搜索入口在书库页（search_layout）；搜索页输入框 inputSearch，没有可见的「搜索」按钮（search_cancel 是取消），输入后建议列表 list_view_think 自己出来。2026-08-24 15:03 真机校准（《发小竟然是后悔文男主》）：建议列表第一行是 tv_think_text「以“书名”为关键字进行搜索」（点它＝提交搜索），第二行是 tv_think_text 书名本身，点它<b>直接进书籍详情页</b>（bookdetail_bookname，底部 catalog_entry 命中 [0,2220-157,2400]）—— 不必再经过结果页。绝不能只按文本找书名：输入框 inputSearch 的文本也正好等于刚输进去的书名，会先命中它，点下去什么都不会发生（这就是之前「点了书名但没进详情页」的根因）；建议列表底下还压着「历史搜索」里同名的那颗标签（GridView list_view，被下拉盖住）。所以书名行一律走 novel_title_row（限定 id + 运行时拼上书名 + visibleOnly）。",
   "search_entry": [
     { "id": "search_layout" },
     { "id": "search_img", "clickableAncestor": true },
@@ -190,23 +232,46 @@
   "search_submit": [
     { "text": "搜索", "clickableAncestor": true }
   ],
+  "novel_title_row": [
+    { "id": "tv_think_text", "visibleOnly": true, "clickableAncestor": true },
+    { "id": "tvbBookTitle", "visibleOnly": true, "clickableAncestor": true },
+    { "id": "novel_name", "visibleOnly": true, "clickableAncestor": true },
+    { "id": "hot_novel_name", "visibleOnly": true, "clickableAncestor": true }
+  ],
+  "search_keyword_row": [
+    { "id": "tv_think_text", "textContains": "为关键字", "clickableAncestor": true }
+  ],
   "catalog_entry": [
     { "id": "mulu_list", "clickableAncestor": true },
     { "id": "iv_mulu", "clickableAncestor": true },
     { "text": "目录", "clickableAncestor": true }
   ],
 
-  "_note_buy": "购买走的是「目录 → 下载 → 选择章节」这条批量页，不是阅读器里的付费墙：阅读器是 FLAG_SECURE 且只暴露容器节点，读不到也点不了。选择章节页：点行本身才会勾选（点 item_cb 没反应），tvSelect=已选 N 章，需 N 火券，tvAccount=账户余额，tv_download=立即下载；余额不够时底部换成 tvChargeTips/tvCharge。",
+  "_note_buy": "购买走的是「目录 → 下载 → 选择章节」这条批量页，不是阅读器里的付费墙：2026-08-24 复核确认阅读器（ReaderActivity / CurlView）连 screencap 都是全黑、dump 只有 15 个空容器节点，用户截图那个「订阅本章」页读不到也点不了。选择章节页（ReaderDownloadActivity，2026-08-24 12:58–13:05 用《发小竟然是后悔文男主》校准）：每行是一个 clickable 的 RelativeLayout，里面 title=「67   周日工作」（标号是阿拉伯数字，空格数不固定，实测有「71留宿之夜」这种一个空格都没有的）、title_lock=没买、title_check=已下载、item_cb=勾选框（点它没反应，要点整行）。卷标题行（「世界线的变动，学生会长的恋爱」）同样带 item_cb，勾下去等于勾整卷 —— 靠「行首没有阿拉伯标号」认出来并跳过。底部：tvSelect=已选 N 章、无 id 的「需 12 火券」、tvAccount=账户余额：0火券/15代券、tvTips=实付0火券+12代券（只在勾了要花钱的章之后才出现）、tv_download=立即下载（真正可点的是它的父节点 img_down）。券不够时底部整块换成 tvChargeTips「余额不足，快去充值吧」+ tvCharge「去充值」，而且「立即下载」直接消失 —— 物理上买不成。右上角 selected_all=「全选」一律不碰。",
   "download_entry": [
+    { "id": "cache_download", "clickableAncestor": true },
+    { "id": "iv_download", "clickableAncestor": true },
     { "id": "download_layout", "clickableAncestor": true },
     { "text": "下载", "clickableAncestor": true }
   ],
+  "chapter_row_title": [
+    { "id": "title", "requireArea": true }
+  ],
+  "chapter_list_top": [
+    { "id": "goto_top" }
+  ],
+  "_note_chapter_locked": "title_lock 只说明「这是付费章」，不说明买没买。2026-08-24 21:21 真买之后（用户 21:57 截图 + PROBE_CHAPTER 探针）：买到的第48／49行锁变成了「打开的锁」（红边白底），没买的第50行是「锁上的锁」（红色实心），而这两种锁在无障碍树里是同一个 title_lock 节点、文本都是空的 —— 分不出来。所以「锁在不在」绝不能当「买没买」的判据；那正是那一趟券扣了却判成失败、账本一条没记的原因。判据见 chapter_owned / chapter_selectable。",
   "chapter_locked": [
     { "id": "title_lock" }
   ],
+  "_note_chapter_owned": "「已下载」(title_check)＝这个号已经能看这一章了：免费章下载完是它，付费章买完也是它（「立即下载」是买+下载一起做的）。这是「买到了」唯一的正面硬证据。",
   "chapter_owned": [
     { "id": "title_check" },
     { "text": "已下载" }
+  ],
+  "_note_chapter_selectable": "行右边那个圆圈 item_cb ＝这一行还能勾选，也就是这个号还没有它。已下载的行右边写的是「已下载」三个字、没有这个圆圈 —— 所以「圆圈还在不在」是「已下载」的反面佐证，也解释了为什么买过的行点下去「已选」是 0 章（没有圆圈可勾）。",
+  "chapter_selectable": [
+    { "id": "item_cb" }
   ],
   "selected_count": [
     { "id": "tvSelect" },
@@ -215,11 +280,16 @@
   "price_hint": [
     { "textRegex": "需\\s*\\d+\\s*(火券|代券|券)" }
   ],
+  "_note_pay_detail": "「只花代券」这条硬约束唯一的判据（2026-08-24 13:02 实测）：勾中第 67 章后 tvTips 写「实付0火券+12代券」，说明代券抵完了、一张火券都不动。用户不充值火券，所以只有实付火券==0 才允许按下「立即下载」；这句话读不出来一律当成不够，换下一个号。刻意不认「账户余额：0火券/15代券」—— 那是余额不是实付，认错了会把余额当成花费。",
+  "pay_detail": [
+    { "id": "tvTips" },
+    { "textRegex": "实付\\s*\\d+\\s*(火券|代券)" }
+  ],
   "subscribe_button": [
     { "id": "tv_download", "clickableAncestor": true },
     { "text": "立即下载", "clickableAncestor": true }
   ],
-  "_note_subscribe_confirm": "未验证：点「立即下载」之后有没有二次确认、成功文案是什么，都要等你放开真实购买那一次才知道。所以真买成功与否不靠这两个 key 判断，靠章节行的锁有没有消失。注意「已下载」不能放进 subscribe_done：它是每一行的 title_check 标记，买之前就有别的章带着它。",
+  "_note_subscribe_confirm": "未验证：点「立即下载」之后有没有二次确认，2026-08-24 那次真买的日志里没见到，留着兜底。成功与否<b>不</b>靠文案判断，靠 chapter_owned（「已下载」出现）＋页面上代券余额下降 —— 见 SubscribeTask.buy。注意「已下载」不能放进 subscribe_done：它是每一行的 title_check 标记，买之前就有别的章带着它。",
   "subscribe_confirm": [
     { "textRegex": "确认购买|确认订阅|确认下载|^确定$|^确认$", "clickableAncestor": true }
   ],
@@ -230,5 +300,43 @@
     { "id": "tvChargeTips" },
     { "id": "tvCharge" },
     { "textRegex": "余额不足|火券不足|去充值" }
+  ],
+
+  "_note_subscribed_list": "「我的 → 代券 → 订阅清单 → 订阅明细」这四屏（2026-08-25 用 debug 广播 PROBE_VOUCHER_LEDGER／PROBE_SUBSCRIBED_DETAIL 在真机上逐屏 dump 校准）。它是<b>服务器端</b>的订阅事实，也是「这一章归谁」唯一独立于我们自己推断的第二来源 —— 2026-08-25 第49章被误挂两个号那件事，App 自己看不出来，发现它的是用户、靠的正是这份清单。①我的页那一格「代券」的数字和标签都没有 id（见 _note_coupons），只能按标签文本 + clickableAncestor 上到那一列的 LinearLayout [552,687][797,798]；②代券（钱包）页里 tv_payed（text=订阅清单）的可点祖先是 llt_payed_list，同屏还有 llt_recharge_record／llt_reward_list／llt_red_packet_record_list／llt_month_card／tvGotoPay（「去充值」，永远只读不点）；③清单页 title_tv=「订阅清单」，三个 ActionBar$Tab（轻小说／漫画／有声，默认停在轻小说），每本书一行（约 354px 高的可点 LinearLayout）：tvbBookTitle 书名、tvbBookAutor「2章节 - 0火券」、tvbBookDesc 日期、tvToMuLu「查看目录」。清单这一层是<b>按书聚合</b>的，只答「这个号在这本书上订了几章、花了多少火券」。",
+  "voucher_entry": [
+    { "text": "代券", "requireArea": true, "clickableAncestor": true }
+  ],
+  "subscribed_list_entry": [
+    { "id": "llt_payed_list" },
+    { "id": "tv_payed", "clickableAncestor": true },
+    { "text": "订阅清单", "clickableAncestor": true }
+  ],
+  "_note_subscribed_book_title": "书名节点本身不可点（可点的是整行那个 LinearLayout），所以这一条<b>刻意不写</b> clickableAncestor —— 对账要从书名往上走到「这一行」，再在行内读 tvbBookAutor，不能拿整行去读。同屏别的书也有同名 id，只能在行内查（见 VoucherLedger.rowOf）。",
+  "subscribed_book_title": [
+    { "id": "tvbBookTitle" }
+  ],
+  "subscribed_book_summary": [
+    { "id": "tvbBookAutor" },
+    { "textRegex": "\\d+\\s*章节" }
+  ],
+  "subscribed_book_date": [
+    { "id": "tvbBookDesc" }
+  ],
+
+  "_note_subscribed_detail": "「订阅明细」页 —— 逐章明细，这一层才答得出「这个号买的是哪几章」（2026-08-25 用 PROBE_SUBSCRIBED_DETAIL 在真机上 dump 校准）。<b>入口是清单里那一整行</b>：用户 2026-08-25 指出要点的是行右上角那个「>」，而实测那个「>」是 TextView text=\"\" [997,428][1052,470]，没有 id、不可点，纯装饰 —— 行内可点的只有整行 LinearLayout [0,354][1080,708] 和 tvToMuLu。所以点整行（VoucherLedger.locate 拿到的就是它），<b>绝不</b>点「查看目录」（那进去是整本书的目录列表 edit_title=「目录列表」，不是买过哪几章）。页上：back_img 返回、title_tv=「订阅明细」、RecyclerView id=baseListView，每条一个可点 LinearLayout（约 392px 高）含 tvTime 日期、tvDesc「世界线的变动，学生会长的恋爱 50 订婚事宜，梦玲失踪」（卷名+章号+章标题）、以及右侧两个<b>没有 id</b> 的 TextView「20」「代券」（金额在上、币种在下，都在 x≈803-917）。页脚「清单约5分钟更新一次，可下拉刷新」—— 所以刚买完的那一章可能还没出现在这里，SubscribedDetail 对此只报警不停机。金额和币种没有 id，只能在<b>行内</b>查（整屏上每条都有一个「20」和一个「代券」）。<b>认这一页只能靠 title_tv=「订阅明细」</b>：baseListView 清单页也有（订阅清单页那个 RecyclerView 同名），拿它当判据会把「没点开」误判成「点开了」。",
+  "subscribed_detail_ready": [
+    { "id": "title_tv", "text": "订阅明细" }
+  ],
+  "subscribed_detail_desc": [
+    { "id": "tvDesc" }
+  ],
+  "subscribed_detail_time": [
+    { "id": "tvTime" }
+  ],
+  "subscribed_detail_amount": [
+    { "textRegex": "^\\d[\\d,，]*$", "requireArea": true }
+  ],
+  "subscribed_detail_currency": [
+    { "textRegex": "^(代券|火券)$", "requireArea": true }
   ]
 }

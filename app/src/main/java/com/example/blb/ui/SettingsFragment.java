@@ -18,6 +18,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.example.blb.R;
@@ -126,6 +127,9 @@ public class SettingsFragment extends Fragment {
     private void refreshStatus() {
         boolean ready = BlbAccessibilityService.isReady();
         a11yStatus.setText(ready ? R.string.settings_a11y_on : R.string.settings_a11y_off);
+        // 这一行是「整个 app 能不能干活」的总闸，所以给它上语义色：开＝绿，没开＝红。
+        a11yStatus.setTextColor(ContextCompat.getColor(requireContext(),
+                ready ? R.color.blb_ok : R.color.blb_fail));
         SelectorSet set = SelectorSet.load(requireContext());
         selectorInfo.setText("选择器来源：" + set.source() + "，共 " + set.keys().size() + " 个 key");
     }

@@ -6,6 +6,8 @@ public class PurchaseRow {
     public long accountId;
     public long chapterId;
     public int costCoupons;
+    /** 实付代券。v4 之前的旧记录一律是 0。 */
+    public int costVouchers;
     public long purchasedAt;
     public String source;
     public int chapterNo;

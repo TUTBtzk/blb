@@ -13,15 +13,15 @@ import androidx.room.PrimaryKey;
 @Entity(tableName = "account", indices = {@Index(value = "login_name", unique = true)})
 public class Account {
 
-    /** 账号密码登录：唯一能全自动切号的方式。 */
+    /** 账号密码登录：全自动，登录页 com.sf.login.LoginActivity。 */
     public static final String KIND_PASSWORD = "PASSWORD";
     /** 本机号码一键登录：登录页在 com.sfacg 里，勾同意后点一下就行。 */
     public static final String KIND_PHONE_ONE_TAP = "PHONE_ONE_TAP";
-    /** 微信授权：授权页属于 com.tencent.mm，本 App 看不到，只能停下来等你点。 */
+    /** 微信授权：实测点完图标就直接登回菠萝包了，没有中间的授权页。 */
     public static final String KIND_WECHAT = "WECHAT";
-    /** QQ 授权：授权页属于 com.tencent.mobileqq，同上。 */
+    /** QQ 授权：实测要在 com.tencent.mobileqq 里按一颗「同意」，见 Keys#LOGIN_AUTH_CONFIRM。 */
     public static final String KIND_QQ = "QQ";
-    /** 微博授权：授权页属于微博客户端，同上。 */
+    /** 微博授权：实测同微信，点完图标一步登入。 */
     public static final String KIND_WEIBO = "WEIBO";
 
     @PrimaryKey(autoGenerate = true)
@@ -36,8 +36,10 @@ public class Account {
     public String loginName = "";
 
     /**
-     * 登录方式。只有 {@link #KIND_PASSWORD} 能全自动；一键登录要先勾「已阅读并同意」，
-     * 三方授权的页面在别的 App 里，本 App 的无障碍范围只有 com.sfacg，看不见也点不了。
+     * 登录方式。2026-08-23 起五种方式全部能不用人插手就切过去：账号密码走
+     * com.sf.login.LoginActivity 的表单；一键登录和三方图标都在 com.sfacg 自己的
+     * 一键登录页（com.mobile.auth.gatewayauth.LoginAuthActivity）上；QQ 那颗跨 App 的
+     * 「同意」由无障碍的界外硬闸放行一小段时间去按。
      */
     @NonNull
     @ColumnInfo(name = "login_kind")
@@ -55,9 +57,14 @@ public class Account {
     @ColumnInfo(name = "last_check_in_at")
     public long lastCheckInAt;
 
-    /** 火券余额。自动化跑完会回填，也可手填。 */
+    /**
+     * 火券余额。自动化跑完会回填，也可手填。-1 表示还没读到过。
+     *
+     * <p>以前默认是 0，界面于是给「从来没读到过余额」的号也画出一个「火券 0」——
+     * 那是编出来的数字，和真的读到 0 分不开。现在和代券统一：-1＝不知道，界面显示「?」。
+     */
     @ColumnInfo(name = "last_known_coupons")
-    public int lastKnownCoupons;
+    public int lastKnownCoupons = -1;
 
     /** 代券余额（签到和看广告发的就是这个）。-1 表示还没读到过。 */
     @ColumnInfo(name = "last_known_vouchers")
@@ -81,14 +88,16 @@ public class Account {
         return encPassword != null && encPassword.length > 0 && encIv != null && encIv.length > 0;
     }
 
-    /** 只有密码登录需要存密码；其余方式存了也用不上。 */
+    /**
+     * 只有密码登录需要存密码；其余方式存了也用不上。
+     *
+     * <p>2026-08-23 起五种方式都能不用人插手切过去，所以「这种方式能不能自动」已经不再是个
+     * 问题（原来的 {@code canAutoLogin()} 恒为 true，已删）。唯一还会让切号失败的前置条件就是
+     * 这一条：密码登录却没存密码 —— 那种情况 {@link com.example.blb.auto.AccountSwitcher}
+     * 会在<b>退登之前</b>就报错，不会把人退出来又登不回去。
+     */
     public boolean needsPassword() {
         return KIND_PASSWORD.equals(loginKind);
-    }
-
-    /** 这种登录方式能不能不用人插手就切过去。 */
-    public boolean canAutoLogin() {
-        return KIND_PASSWORD.equals(loginKind) || KIND_PHONE_ONE_TAP.equals(loginKind);
     }
 
     public String loginKindLabel() {
@@ -109,10 +118,10 @@ public class Account {
         }
     }
 
-    /** 余额一览，界面和日志共用。 */
+    /** 余额一览，界面和日志共用。没读到过的那种券显示「?」，不编 0 出来。 */
     public String balanceText() {
-        return "火券 " + lastKnownCoupons
-                + (lastKnownVouchers >= 0 ? " / 代券 " + lastKnownVouchers : " / 代券 ?");
+        return "火券 " + (lastKnownCoupons >= 0 ? String.valueOf(lastKnownCoupons) : "?")
+                + " / 代券 " + (lastKnownVouchers >= 0 ? String.valueOf(lastKnownVouchers) : "?");
     }
 
     /** 估算能付章节费的券总量：两种券都能付，代券先扣。 */

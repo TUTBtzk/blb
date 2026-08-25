@@ -34,6 +34,15 @@ public final class CheckInTask {
         // 签到入口在书架页右上角。上一轮任务可能把菠萝包留在别的页面，先回书架。
         if (r.findAny(Keys.CHECKIN_ENTRY, Keys.CHECKIN_DONE) == null) {
             StepRunner.Outcome shelf = r.findAny(Keys.SHELF_TAB);
+            if (shelf == null) {
+                // 连底部的「书架」都不在树里，说明现在压根不在菠萝包的首页上：可能刚登录回来
+                // 还盖着一层弹窗，也可能前台整个换成了别的 App。以前这里什么都不做，接着就是
+                // 一句「等 checkin_entry/checkin_done 超时 12000ms」，根本看不出发生了什么 ——
+                // 2026-08-23 那趟 iierr89 和 好好上课是 就是这样报的失败，其实两个号都登录成功了。
+                // ensureHome 会把弹窗按掉、必要时把菠萝包重新拉回前台，再回来找「书架」。
+                r.ensureHome(3);
+                shelf = r.findAny(Keys.SHELF_TAB);
+            }
             if (shelf != null) r.clickNode(Keys.SHELF_TAB, shelf.node);
         }
 
@@ -60,7 +69,10 @@ public final class CheckInTask {
         }
 
         result.adAvailable = r.findAny(Keys.AD_REWARD) != null;
-        Texts.Balance balance = r.readBalance(2_500);
+        // 签到面板上没有任何余额数字（面板是独立窗口，实测 78 个节点里一个都没有），所以这里
+        // 只是顺手看一眼当前屏——真正的余额由调用方去「我的」页读（readBalanceFromMine）。
+        // 别在这儿等：白等 2.5 秒 × 8 个号。
+        Texts.Balance balance = r.readBalance(0);
         result.coupons = balance.fire;
         result.vouchers = balance.voucher;
         return result;

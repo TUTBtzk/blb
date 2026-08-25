@@ -9,6 +9,9 @@
          实测第三方落地页占着前台时，系统会把我们冻住甚至杀掉（MIUI: stop … due to SwipeUpClean），
          那时候只有闹钟能把进程解冻／重新拉起来。见 ReturnWatchdog。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- 整趟任务期间把屏幕点着（AutomationService.acquireScreenLock）：无障碍的点击只对亮着的
+         屏幕有效，2026-08-23 那趟就是跑到第 5 个号时屏幕自己睡了，后面全报「拉不起菠萝包」。 -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Android 11+ 的包可见性：没有这段就拿不到菠萝包的启动 Intent。 -->
     <queries>
