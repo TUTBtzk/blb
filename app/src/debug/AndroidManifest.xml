@@ -120,6 +120,34 @@
                 <action android:name="com.example.blb.debug.RECONCILE" />
             </intent-filter>
         </receiver>
+        <!--
+          第八个 debug 组件：不用碰屏幕的总控（ControlReceiver）。
+          上面七个都是「验一件事」的探针，这一个是这个 App 平时真正被开动的方式。
+          「每日自动签到」是设置页上一颗开关、「允许真实购买」是另一颗开关加一次确认对话框、
+          「跑今天的流程」是首页一颗按钮 —— 用户手指动不了，这三样他一个都按不了，
+          所以在有它之前这个 App 只能靠旁人替他按才跑得起来。
+
+          STATUS 只读，一条命令念出「准备好了吗、今天做了什么、下一步买哪章」；
+          SCHEDULE 开关每日定时并改时间，走的是设置页那同一份状态和 DailyScheduler.apply；
+          AUTHORIZE_BUY 给常驻真买授权（BuyMandate：到期自动失效 + 每天限额，比设置页那颗永久
+          布尔严），REVOKE_BUY 当场收回并拨回干跑；
+          DAILY_NOW／CHECKIN_NOW 不等定时立刻跑一趟，跟首页那颗按钮完全同一条路。
+
+          它一条购买记录都不写，最坏结果是「多跑一趟队列」或「多开一次定时」，
+          而真买仍然被 BuyMandate 的两条边界和「只花代券」那套护栏卡着；release 构建里没有它。
+        -->
+        <receiver
+            android:name="com.example.blb.debug.ControlReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.blb.debug.STATUS" />
+                <action android:name="com.example.blb.debug.SCHEDULE" />
+                <action android:name="com.example.blb.debug.AUTHORIZE_BUY" />
+                <action android:name="com.example.blb.debug.REVOKE_BUY" />
+                <action android:name="com.example.blb.debug.DAILY_NOW" />
+                <action android:name="com.example.blb.debug.CHECKIN_NOW" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

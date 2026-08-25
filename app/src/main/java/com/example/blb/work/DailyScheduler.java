@@ -47,8 +47,13 @@ public final class DailyScheduler {
         WorkManager.getInstance(context.getApplicationContext()).cancelUniqueWork(WORK_NAME);
     }
 
-    /** 距离下一个「今天/明天 hour:05」还有多少分钟。整点错开 5 分钟，避开整点的系统任务高峰。 */
-    static long delayToNextRunMinutes(int hour) {
+    /**
+     * 距离下一个「今天/明天 hour:05」还有多少分钟。整点错开 5 分钟，避开整点的系统任务高峰。
+     *
+     * <p>公开是为了让 debug 的总控（{@code ControlReceiver} 的 STATUS）能念出「下一趟大约多久后」——
+     * 用户按不动屏幕，看不到设置页，「定时到底还跑不跑」只能靠这一句回答。
+     */
+    public static long delayToNextRunMinutes(int hour) {
         Calendar now = Calendar.getInstance();
         Calendar next = Calendar.getInstance();
         next.set(Calendar.HOUR_OF_DAY, hour);

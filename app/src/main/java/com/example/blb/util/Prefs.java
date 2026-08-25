@@ -21,6 +21,11 @@ public final class Prefs {
     /** 「被系统杀掉之后自动接着跑」的当天计数，见 AutomationService。 */
     private static final String KEY_RESUME_YMD = "auto_resume_ymd";
     private static final String KEY_RESUME_COUNT = "auto_resume_count";
+    /** 常驻真买授权（有额度、有到期），见 {@code auto.BuyMandate}。 */
+    private static final String KEY_MANDATE_UNTIL = "standing_buy_until";
+    private static final String KEY_MANDATE_PER_DAY = "standing_buy_per_day";
+    private static final String KEY_MANDATE_YMD = "standing_buy_ymd";
+    private static final String KEY_MANDATE_DONE = "standing_buy_done";
 
     private Prefs() {
     }
@@ -166,6 +171,46 @@ public final class Prefs {
     /** 用户自己按了「跑今天的流程」就把计数清零：这是一趟新的、有人看着的运行。 */
     public static void clearAutoResumes(Context c, String ymd) {
         sp(c).edit().putString(KEY_RESUME_YMD, ymd).putInt(KEY_RESUME_COUNT, 0).apply();
+    }
+
+    // ---------- 常驻真买授权 ----------
+
+    /**
+     * 常驻真买授权的到期时刻（epoch ms，0＝没有授权）与每天准买几章。
+     *
+     * <p>为什么要有这一对，而不是只靠 {@link #isRealBuyConfirmed} 那颗布尔：
+     * 那颗布尔是永久的、而且只能在设置页按出来 —— 这个 App 的使用者手指动不了，
+     * 他既按不开也关不掉。每日定时那趟又是无人值守的，所以「能不能花钱」必须自己带上
+     * <b>额度</b>和<b>到期</b>：授权一到期自动回到干跑，当天的额度用完就停，
+     * 谁也不用去按一颗开关。判定逻辑（含跨天重置）在 {@code auto.BuyMandate} 里，可单测。
+     */
+    public static long buyMandateUntil(Context c) {
+        return Math.max(0L, sp(c).getLong(KEY_MANDATE_UNTIL, 0L));
+    }
+
+    public static int buyMandatePerDay(Context c) {
+        return Math.max(0, sp(c).getInt(KEY_MANDATE_PER_DAY, 0));
+    }
+
+    public static void setBuyMandate(Context c, long until, int perDay) {
+        sp(c).edit()
+                .putLong(KEY_MANDATE_UNTIL, Math.max(0L, until))
+                .putInt(KEY_MANDATE_PER_DAY, Math.max(0, perDay))
+                .apply();
+    }
+
+    /** 当日已真买章数的记账那天（yyyy-MM-dd），换一天就该从 0 重新数。 */
+    public static String buyMandateYmd(Context c) {
+        return sp(c).getString(KEY_MANDATE_YMD, "");
+    }
+
+    public static int buyMandateDone(Context c) {
+        return Math.max(0, sp(c).getInt(KEY_MANDATE_DONE, 0));
+    }
+
+    public static void setBuyMandateDone(Context c, String ymd, int done) {
+        sp(c).edit().putString(KEY_MANDATE_YMD, ymd).putInt(KEY_MANDATE_DONE, Math.max(0, done))
+                .apply();
     }
 
     private static int clamp(int v, int min, int max) {

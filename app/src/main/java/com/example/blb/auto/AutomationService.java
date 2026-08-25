@@ -202,6 +202,10 @@ public class AutomationService extends Service implements StepRunner.Host {
                     text = SubscribeQueue.describe(SubscribeQueue.run(this, this));
                     break;
                 case DAILY:
+                    // 每日整套流程是「签到 → 广告 → 订阅」一条龙，也是唯一一条无人值守会走的路：
+                    // 他给过常驻真买授权的话，就按当日额度把这一趟武装成真买（没授权＝照旧干跑）。
+                    // 订阅队列那条路故意不武装 —— RUN_SUBSCRIBE 探针是强制干跑用的。
+                    BuyMandate.arm(this, this);
                     text = DailyQueue.describe(DailyQueue.run(this, this));
                     break;
                 default:

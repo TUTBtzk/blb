@@ -42,9 +42,20 @@ public final class SubscribeRun {
         public final long since;
         /** 保险丝：这一整趟最多真买几章，0＝不限。见 {@link Prefs#realBuyLimit}。 */
         public final int buyLimit;
+        /**
+         * 只用来在真买成一章的<b>当场</b>扣掉常驻授权的当日额度（{@link BuyMandate#noteBought}）。
+         * 单测里是 null —— 判定逻辑本身不需要它。
+         */
+        private final Context app;
 
         public Plan(Novel novel, boolean dryRun, int maxChapters, int cap, long since,
                     int buyLimit) {
+            this(null, novel, dryRun, maxChapters, cap, since, buyLimit);
+        }
+
+        private Plan(Context app, Novel novel, boolean dryRun, int maxChapters, int cap, long since,
+                     int buyLimit) {
+            this.app = app;
             this.novel = novel;
             this.dryRun = dryRun;
             this.maxChapters = maxChapters;
@@ -54,8 +65,9 @@ public final class SubscribeRun {
         }
 
         public static Plan from(Context context, Novel novel) {
-            return new Plan(novel, Prefs.isDryRun(context), Prefs.maxChaptersPerRun(context),
-                    Prefs.dailySpendCap(context), startOfToday(), Prefs.realBuyLimit(context));
+            return new Plan(context.getApplicationContext(), novel, Prefs.isDryRun(context),
+                    Prefs.maxChaptersPerRun(context), Prefs.dailySpendCap(context),
+                    startOfToday(), Prefs.realBuyLimit(context));
         }
 
         /**
@@ -254,7 +266,7 @@ public final class SubscribeRun {
                 if (!plan.dryRun && result.vouchers >= 0) budget = result.vouchers;
             }
 
-            if (!apply(subs, host, tally, account, chapter, result)) {
+            if (!apply(subs, host, tally, account, chapter, result, plan)) {
                 // 券不够只是这个号买不起，别把这一章从整轮里划掉 —— 后面的号可能买得起。
                 if (result.status == SubscribeTask.Status.INSUFFICIENT) touched.remove(chapter.id);
                 return;
@@ -427,7 +439,8 @@ public final class SubscribeRun {
      *                                保险丝的额度，于是三个号各点了一次，两个真扣了券。
      */
     private static boolean apply(SubscriptionDao subs, StepRunner.Host host, Tally tally,
-                                 Account account, Chapter chapter, SubscribeTask.Result result)
+                                 Account account, Chapter chapter, SubscribeTask.Result result,
+                                 Plan plan)
             throws StepRunner.StepFailure {
         String name = account.displayName();
         String label = "第" + chapter.chapterNo + "章";
@@ -437,6 +450,9 @@ public final class SubscribeRun {
                         result.cost, result.costVouchers, Purchase.SRC_AUTO));
                 tally.bought++;
                 tally.spent += result.costVouchers;
+                // 常驻授权的当日额度当场扣掉 —— 进程随时会被 MIUI 杀掉（SwipeUpClean），
+                // 等跑完再结算的话，系统重发的那一趟会拿着满额度把同样的章再买一遍。
+                if (plan != null && plan.app != null) BuyMandate.noteBought(plan.app, 1);
                 host.log("  " + name + " 订到" + label + "，花 " + result.costVouchers + " 代券"
                         + (result.cost > 0 ? "＋" + result.cost + " 火券（不该发生，请核对）" : ""));
                 return true;
