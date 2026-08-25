@@ -305,10 +305,23 @@ public interface SubscriptionDao {
             + "ORDER BY last_known_vouchers DESC, sort_order ASC, id ASC LIMIT 1")
     Account suggestBuyer(long chapterId);
 
+    /**
+     * 每个号的累计。
+     *
+     * <p>{@code chapterCount} <b>不数</b> {@code source='OWNED'} 的记录：那是照界面上的
+     * 「已下载」回填的，而「已下载」是本机状态、8 个号共用（见 {@link Purchase#SRC_OWNED}）。
+     * 把它数进「这个号买了多少章」，8 个号就会各自声称拥有同一批章 —— 界面上会出现
+     * 「8 个号共 380 章」这种比全书章数还多的数，而真花过钱的只有 4 章。
+     * 本机能看的那些单独放在 {@code deviceCount} 里，界面分开说。
+     */
     @Query("SELECT a.id AS accountId, a.label AS label, a.nickname AS nickname, "
             + "a.login_name AS loginName, a.last_known_coupons AS coupons, "
             + "a.last_known_vouchers AS vouchers, "
-            + "COUNT(p.id) AS chapterCount, "
+            + "CAST(IFNULL(SUM(CASE WHEN p.id IS NOT NULL "
+            + "AND IFNULL(p.source, '') <> 'OWNED' THEN 1 ELSE 0 END), 0) AS INTEGER) "
+            + "AS chapterCount, "
+            + "CAST(IFNULL(SUM(CASE WHEN IFNULL(p.source, '') = 'OWNED' THEN 1 ELSE 0 END), 0) "
+            + "AS INTEGER) AS deviceCount, "
             + "CAST(IFNULL(SUM(p.cost_coupons), 0) AS INTEGER) AS totalCost, "
             + "CAST(IFNULL(SUM(p.cost_vouchers), 0) AS INTEGER) AS totalVouchers "
             + "FROM account a LEFT JOIN purchase p ON p.account_id = a.id "

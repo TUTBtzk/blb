@@ -1,143 +1,146 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  订阅页：上面一张卡说清「订谁、订到哪了、下一步该点什么」，下面是章节记录列表。
+  订阅页：上面一张卡说清「订谁、订到哪了、下一步该点什么」，下面两行是「点进去看全部」。
   那五个次要操作（选书／加书／加章／导入导出）横着滚，不再和主操作抢注意力。
+
+  为什么章节列表和各账号累计都变成一行：它们原来是「信息很多、窗口很小」的典型 ——
+  六百多章挤在下半屏的内嵌滚动区里，8 个号的累计被拼成一条 13sp 小字横向截断，
+  第三个号往后根本看不见。完整内容现在各占 DetailActivity 一整屏。
+
+  两行都必须带一句摘要：使用者手指不能动，只有点开才看得到的信息对他等于不存在。
 -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="?android:attr/colorBackground"
-    android:orientation="vertical"
+    android:clipToPadding="false"
     android:paddingStart="14dp"
-    android:paddingEnd="14dp">
+    android:paddingEnd="14dp"
+    android:scrollbars="none">
 
-    <TextView
-        style="@style/Blb.Text.Section"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:layout_marginBottom="8dp"
-        android:text="@string/sub_target_novel" />
+        android:orientation="vertical"
+        android:paddingBottom="14dp">
 
-    <com.google.android.material.card.MaterialCardView
-        style="@style/Blb.Card"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content">
-
-        <LinearLayout
+        <TextView
+            style="@style/Blb.Text.Section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/sub_target_novel" />
 
-            <TextView
-                android:id="@+id/target"
-                style="@style/Blb.Text.Title"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Blb.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
 
-            <TextView
-                android:id="@+id/stats"
-                style="@style/Blb.Text.Hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp" />
-
-            <TextView
-                android:id="@+id/suggestion"
-                style="@style/Blb.Text.Body"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_notice"
-                android:padding="14dp"
-                android:textColor="?attr/colorOnPrimaryContainer" />
+                android:orientation="vertical">
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/run_subscribe"
-                style="@style/Blb.Button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:text="@string/sub_run"
-                app:icon="@drawable/ic_action_run" />
-            <HorizontalScrollView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:scrollbars="none">
+                <TextView
+                    android:id="@+id/target"
+                    style="@style/Blb.Text.Title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content" />
 
-                <LinearLayout
-                    android:layout_width="wrap_content"
+                <TextView
+                    android:id="@+id/suggestion"
+                    style="@style/Blb.Text.Body"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/bg_notice"
+                    android:padding="14dp"
+                    android:textColor="?attr/colorOnPrimaryContainer" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/pick_novel"
-                        style="@style/Blb.Button.Tonal"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/run_subscribe"
+                    style="@style/Blb.Button"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="@string/sub_run"
+                    app:icon="@drawable/ic_action_run" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/sub_pick_novel" />
+                        android:orientation="horizontal">
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/add_novel"
-                        style="@style/Blb.Button.Outlined"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/sub_add_novel" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/pick_novel"
+                            style="@style/Blb.Button.Tonal"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/sub_pick_novel" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/add_chapter"
-                        style="@style/Blb.Button.Outlined"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/sub_add_chapter" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/add_novel"
+                            style="@style/Blb.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/sub_add_novel" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/export_csv"
-                        style="@style/Blb.Button.Outlined"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/sub_export_csv" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/add_chapter"
+                            style="@style/Blb.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/sub_add_chapter" />
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/import_csv"
-                        style="@style/Blb.Button.Outlined"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/sub_import_csv" />
-                </LinearLayout>
-            </HorizontalScrollView>
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-    <TextView
-        style="@style/Blb.Text.Section"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="18dp"
-        android:layout_marginBottom="8dp"
-        android:text="@string/sub_records_header" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/export_csv"
+                            style="@style/Blb.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/sub_export_csv" />
 
-    <TextView
-        android:id="@+id/empty"
-        style="@style/Blb.Text.Body"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="@string/sub_empty"
-        android:textAlignment="center"
-        android:textColor="?attr/colorOnSurfaceVariant"
-        android:visibility="gone" />
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/import_csv"
+                            style="@style/Blb.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/sub_import_csv" />
+                    </LinearLayout>
+                </HorizontalScrollView>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/list"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:paddingBottom="8dp" />
+        <TextView
+            style="@style/Blb.Text.Section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/sub_ledger_section" />
 
-</LinearLayout>
+        <!-- 两行入口。标题和摘要都在 SubscriptionFragment 里灌，摘要随数据变。 -->
+        <com.example.blb.ui.EntryRowView
+            android:id="@+id/entry_chapters"
+            style="@style/Blb.Card.Row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <com.example.blb.ui.EntryRowView
+            android:id="@+id/entry_stats"
+            style="@style/Blb.Card.Row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+</ScrollView>

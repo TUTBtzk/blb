@@ -97,6 +97,22 @@
     <string name="sub_records_header">已登记的章节与订阅情况</string>
     <string name="checkin_notice_header">这一趟里我会替你按什么</string>
 
+    <!--
+      二级页面。签到页和订阅页上五处「信息很多、窗口很小」的东西各搬进一整屏，
+      原位置只留一行：标题 + 一句摘要 + 箭头。摘要那一句是硬要求 ——
+      使用者手指不能动，只有点开才看得到的信息对他等于不存在。
+    -->
+    <string name="detail_back">返回</string>
+    <string name="detail_notice_sub">广告照真实时长播完：不快进、不跳过、播不满不按关闭。</string>
+    <string name="detail_notice_summary">广告由你看，按键交给我：不快进、不跳过、播不满不许关。点开看全文。</string>
+    <string name="detail_log_empty">（还没有日志）</string>
+    <string name="detail_log_summary_idle">还没有日志。跑起来之后这里会显示最新那一行。</string>
+    <string name="detail_today_summary_empty">还没有账号，先去「账号」页添加。</string>
+    <string name="detail_stats_title">各账号累计</string>
+    <string name="detail_stats_empty">账本里还没有订阅记录。跑一趟自动订阅，或在章节页手动补录。</string>
+    <string name="detail_stats_summary_empty">账本里还没有订阅记录。</string>
+    <string name="sub_ledger_section">这本书的账本</string>
+
     <string name="inspector_dump">抓取当前菠萝包界面</string>
     <string name="inspector_save">保存到文件</string>
     <string name="inspector_open_target">打开菠萝包</string>

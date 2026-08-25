@@ -19,11 +19,8 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.LiveData;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.blb.R;
 import com.example.blb.auto.AutomationBus;
@@ -56,21 +53,23 @@ import java.util.List;
  *
  * <p>账本是「这一章归谁」的唯一权威：自动订阅按它挑下一章，也只有它答得出
  * 「这一章我用哪个号买过了没有」。界面上那个「已下载」是本机状态、8 个号共用，答不出买家。
+ *
+ * <p>逐章明细和 8 个号的累计原来都挤在这一页上（六百多章塞在下半屏的内嵌滚动区、累计被拼成
+ * 一条 13sp 小字横向截断）。现在各是一行 {@link EntryRowView}，完整内容在
+ * {@link DetailActivity} 里占一整屏；这一页只留一句摘要，好让不能动手的人不点也看得到。
  */
 public class SubscriptionFragment extends Fragment {
 
     private SubscriptionDao dao;
     private AccountDao accountDao;
-    private SimpleAdapter<Chapter> adapter;
 
     private TextView target;
     private TextView suggestion;
-    private TextView stats;
-    private TextView empty;
+    private EntryRowView entryChapters;
+    private EntryRowView entryStats;
     private Button runSubscribe;
 
     private List<Novel> novels = new ArrayList<>();
-    private List<Account> accounts = new ArrayList<>();
     private List<Chapter> chapters = new ArrayList<>();
     private List<Purchase> purchases = new ArrayList<>();
     private Novel current;
@@ -95,17 +94,17 @@ public class SubscriptionFragment extends Fragment {
 
         target = v.findViewById(R.id.target);
         suggestion = v.findViewById(R.id.suggestion);
-        stats = v.findViewById(R.id.stats);
-        empty = v.findViewById(R.id.empty);
         runSubscribe = v.findViewById(R.id.run_subscribe);
 
-        adapter = new SimpleAdapter<Chapter>(R.layout.item_two_line, this::bindChapter)
-                .onClick((item, pos) -> openChapterSheet(item))
-                .onLongClick((item, pos) -> confirmDeleteChapter(item));
-        RecyclerView list = v.findViewById(R.id.list);
-        list.setLayoutManager(new LinearLayoutManager(requireContext()));
-        // 行是卡片，卡片之间已经有间距，不再画分割线。
-        list.setAdapter(adapter);
+        entryChapters = v.findViewById(R.id.entry_chapters);
+        entryChapters.setTitle(getString(R.string.sub_records_header));
+        entryChapters.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_CHAPTERS));
+        entryStats = v.findViewById(R.id.entry_stats);
+        entryStats.setTitle(getString(R.string.detail_stats_title));
+        entryStats.setSummary(getString(R.string.detail_stats_summary_empty));
+        entryStats.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_STATS));
 
         exportLauncher = registerForActivityResult(
                 new ActivityResultContracts.CreateDocument("text/csv"), this::writeCsv);
@@ -127,10 +126,6 @@ public class SubscriptionFragment extends Fragment {
                 runSubscribe.setEnabled(!Boolean.TRUE.equals(running)));
 
         dao.observeNovels().observe(getViewLifecycleOwner(), this::onNovels);
-        accountDao.observeAll().observe(getViewLifecycleOwner(), list2 -> {
-            accounts = list2 == null ? new ArrayList<>() : list2;
-            render();
-        });
         dao.observeAccountStats().observe(getViewLifecycleOwner(), this::renderStats);
     }
 
@@ -191,18 +186,15 @@ public class SubscriptionFragment extends Fragment {
             sb.append("\n从第").append(current.startFrom()).append("章开始订阅（点这里改）");
             target.setText(sb);
         }
-        // 空态要分两种：一本小说都没有，和有小说但这本还没登记章节。
-        // 原来只管前一种，于是「已登记的章节与订阅情况」下面会是一片什么都不说的空白。
+        // 摘要要分三种：一本小说都没有、有小说但这本还没登记章节、有章节。
+        // 原来这里只管前一种，于是列表下面会是一片什么都不说的空白。
         if (novels.isEmpty()) {
-            empty.setText(R.string.sub_empty);
-            empty.setVisibility(View.VISIBLE);
+            entryChapters.setSummary(getString(R.string.sub_empty));
         } else if (chapters.isEmpty()) {
-            empty.setText(R.string.sub_no_chapters);
-            empty.setVisibility(View.VISIBLE);
+            entryChapters.setSummary(getString(R.string.sub_no_chapters));
         } else {
-            empty.setVisibility(View.GONE);
+            entryChapters.setSummary(ChapterLedgerText.summary(chapters, purchases));
         }
-        adapter.submit(chapters);
         refreshSuggestion();
     }
 
@@ -234,19 +226,11 @@ public class SubscriptionFragment extends Fragment {
                 .show();
     }
 
+    /** 8 个号的累计压成一句总账；一行一个号的完整那份在 {@link DetailActivity} 里。 */
     private void renderStats(List<AccountStat> list) {
-        if (list == null || list.isEmpty()) {
-            stats.setText("");
-            return;
-        }
-        List<String> parts = new ArrayList<>();
-        for (AccountStat s : list) {
-            // 花费和余额都以代券为主：新流程只买「实付 0 火券」的章，火券只会是历史遗留。
-            parts.add(s.displayName() + " " + s.chapterCount + " 章／" + s.totalVouchers
-                    + " 代券" + (s.totalCost > 0 ? "+" + s.totalCost + " 火券" : "")
-                    + "（余代券 " + (s.vouchers >= 0 ? String.valueOf(s.vouchers) : "?") + "）");
-        }
-        stats.setText("累计：" + TextUtils.join("　", parts));
+        String summary = AccountStatText.summary(list);
+        entryStats.setSummary(Texts.isBlank(summary)
+                ? getString(R.string.detail_stats_summary_empty) : summary);
     }
 
     /** 「下一章该用哪个号买」。走 DAO 而不是在内存里另算一遍，保证跟自动订阅的判断一致。 */
@@ -276,126 +260,8 @@ public class SubscriptionFragment extends Fragment {
         });
     }
 
-    // ---------- 章节行 ----------
-
-    private void bindChapter(View row, Chapter c, int position) {
-        StringBuilder line1 = new StringBuilder("第").append(c.chapterNo).append('章');
-        if (!Texts.isBlank(c.title)) line1.append(' ').append(c.title);
-        if (c.priceCoupons > 0) line1.append("　").append(c.priceCoupons).append(" 券");
-        row.<TextView>findViewById(R.id.line1).setText(line1);
-
-        List<String> owners = new ArrayList<>();
-        for (Purchase p : purchases) {
-            if (p.chapterId != c.id) continue;
-            owners.add(accountName(p.accountId));
-        }
-        StringBuilder line2 = new StringBuilder();
-        line2.append(owners.isEmpty() ? "还没人订阅" : "已订阅：" + TextUtils.join("、", owners));
-        row.<TextView>findViewById(R.id.line2).setText(line2);
-
-        // 色条＝这一章有没有归属：绿＝有号拥有它，灰＝还没有。
-        StatusPalette tone = owners.isEmpty() ? StatusPalette.SKIP : StatusPalette.OK;
-        row.findViewById(R.id.accent).setBackgroundColor(
-                ContextCompat.getColor(row.getContext(), tone.foreground));
-        row.findViewById(R.id.badge).setVisibility(View.GONE);
-    }
-
-    private String accountName(long accountId) {
-        for (Account a : accounts) {
-            if (a.id == accountId) return a.displayName();
-        }
-        return "账号#" + accountId;
-    }
-
-    /** 一条记录花了多少：现在花的是代券，火券只有历史记录里才有。 */
-    private static String describeCost(Purchase p) {
-        if (p.costVouchers > 0 && p.costCoupons > 0) {
-            return p.costVouchers + " 代券+" + p.costCoupons + " 火券";
-        }
-        if (p.costVouchers > 0) return p.costVouchers + " 代券";
-        if (p.costCoupons > 0) return p.costCoupons + " 火券";
-        return "花费未记";
-    }
-
-    /** 点一章：列出所有账号，选谁就补录／撤销谁的订阅。 */
-    private void openChapterSheet(Chapter chapter) {
-        if (accounts.isEmpty()) {
-            toast("先去账号页添加账号");
-            return;
-        }
-        String[] labels = new String[accounts.size()];
-        for (int i = 0; i < accounts.size(); i++) {
-            Account a = accounts.get(i);
-            Purchase owned = purchaseOf(a.id, chapter.id);
-            String mark = owned == null ? "未订阅"
-                    : Purchase.SRC_OWNED.equals(owned.source) ? "界面显示已拥有"
-                    : "已订阅 " + describeCost(owned);
-            labels[i] = a.displayName() + " — " + mark;
-        }
-        new AlertDialog.Builder(requireContext())
-                .setTitle("第" + chapter.chapterNo + "章")
-                .setItems(labels, (d, which) -> {
-                    Account a = accounts.get(which);
-                    Purchase owned = purchaseOf(a.id, chapter.id);
-                    if (owned == null) {
-                        askCostThenRecord(a, chapter);
-                    } else {
-                        confirmDeletePurchase(a, owned);
-                    }
-                })
-                .setNegativeButton(R.string.cancel, null)
-                .show();
-    }
-
-    private Purchase purchaseOf(long accountId, long chapterId) {
-        for (Purchase p : purchases) {
-            if (p.accountId == accountId && p.chapterId == chapterId) return p;
-        }
-        return null;
-    }
-
-    private void askCostThenRecord(Account account, Chapter chapter) {
-        View form = LayoutInflater.from(requireContext())
-                .inflate(R.layout.dialog_single_input, null, false);
-        TextView label = form.findViewById(R.id.label);
-        EditText input = form.findViewById(R.id.input);
-        label.setText(getString(R.string.sub_cost_prompt));
-        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setText(chapter.priceCoupons > 0 ? String.valueOf(chapter.priceCoupons) : "");
-
-        new AlertDialog.Builder(requireContext())
-                .setTitle(account.displayName() + " 订阅第" + chapter.chapterNo + "章")
-                .setView(form)
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.save, (d, w) -> {
-                    // 手动补录填的是代券：现在能买下来的章一律「实付 0 火券」。
-                    int cost = Math.max(0, Texts.parseCount(input.getText().toString()));
-                    Db.io(() -> dao.upsertPurchase(Purchase.of(
-                            account.id, chapter.id, 0, cost, Purchase.SRC_MANUAL)));
-                })
-                .show();
-    }
-
-    private void confirmDeletePurchase(Account account, Purchase purchase) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle(R.string.sub_unmark)
-                .setMessage(account.displayName() + " 这一章的记录会被删掉。"
-                        + "这只改本地账本，不会退代券。")
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.delete, (d, w) ->
-                        Db.io(() -> dao.deletePurchase(purchase)))
-                .show();
-    }
-
-    private void confirmDeleteChapter(Chapter chapter) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle("删除第" + chapter.chapterNo + "章？")
-                .setMessage("这一章下面所有账号的订阅记录会一起删掉。")
-                .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.delete, (d, w) ->
-                        Db.io(() -> dao.deleteChapter(chapter)))
-                .show();
-    }
+    // 章节行的绑定和「点一章补录／撤销、长按删章」整套搬去了 DetailActivity：
+    // 那一页才有完整列表，留在这里只会是第二份实现，两边迟早对不上。
 
     // ---------- 小说与章节的增删 ----------
 

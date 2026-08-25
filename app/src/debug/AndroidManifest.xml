@@ -126,7 +126,10 @@
 
           STATUS 只读，一条命令念出「准备好了吗、今天做了什么、下一步买哪章」；
           SCHEDULE 开关每日定时并改时间，走的是设置页那同一份状态和 DailyScheduler.apply；
-          DAILY_NOW／CHECKIN_NOW 不等定时立刻跑一趟，跟首页那颗按钮完全同一条路。
+          DAILY_NOW／CHECKIN_NOW 不等定时立刻跑一趟，跟首页那颗按钮完全同一条路；
+          SHOW_PAGE 把某一个二级页面（日志／今日状态／各账号累计／已登记章节／会替你按什么）
+          拉到前台 —— 那五页原来是一级页面上五处「信息多、窗口小」的地方，现在各占一整屏，
+          可它们都要点一下才进得去，而用户点不了。他看得见、只是按不动，所以这一条最实用。
 
           它一条购买记录都不写，最坏结果是「多跑一趟队列」或「多开一次定时」，
           而花钱仍然被「只花代券、代券不够就换号、结果不明整趟停下」那套护栏卡着；
@@ -140,6 +143,7 @@
                 <action android:name="com.example.blb.debug.SCHEDULE" />
                 <action android:name="com.example.blb.debug.DAILY_NOW" />
                 <action android:name="com.example.blb.debug.CHECKIN_NOW" />
+                <action android:name="com.example.blb.debug.SHOW_PAGE" />
             </intent-filter>
         </receiver>
     </application>

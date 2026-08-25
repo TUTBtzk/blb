@@ -18,6 +18,7 @@ import com.example.blb.data.CheckInLog;
 import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
 import com.example.blb.data.SubscriptionDao;
+import com.example.blb.ui.DetailActivity;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 import com.example.blb.work.DailyScheduler;
@@ -47,6 +48,10 @@ import java.util.List;
  * adb shell am broadcast -a com.example.blb.debug.DAILY_NOW -p com.example.blb
  * adb shell am broadcast -a com.example.blb.debug.CHECKIN_NOW -p com.example.blb
  * adb logcat -s BlbControl:* BlbAuto:*
+ *
+ * # 把某一个二级页面拉到前台看（他看得见、只是按不动）
+ * adb shell am broadcast -a com.example.blb.debug.SHOW_PAGE -p com.example.blb --es page log
+ * #   page = notice｜today｜log｜stats｜chapters，不带就默认 log
  * </pre>
  */
 public class ControlReceiver extends BroadcastReceiver {
@@ -57,6 +62,7 @@ public class ControlReceiver extends BroadcastReceiver {
     private static final String ACTION_SCHEDULE = "com.example.blb.debug.SCHEDULE";
     private static final String ACTION_DAILY_NOW = "com.example.blb.debug.DAILY_NOW";
     private static final String ACTION_CHECKIN_NOW = "com.example.blb.debug.CHECKIN_NOW";
+    private static final String ACTION_SHOW_PAGE = "com.example.blb.debug.SHOW_PAGE";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -70,6 +76,7 @@ public class ControlReceiver extends BroadcastReceiver {
                 else if (ACTION_SCHEDULE.equals(action)) schedule(app, intent);
                 else if (ACTION_DAILY_NOW.equals(action)) runNow(app, true);
                 else if (ACTION_CHECKIN_NOW.equals(action)) runNow(app, false);
+                else if (ACTION_SHOW_PAGE.equals(action)) showPage(app, intent);
                 else Log.w(TAG, "不认识的动作：" + action);
             } catch (Throwable t) {
                 Log.e(TAG, "总控失败", t);
@@ -77,6 +84,29 @@ public class ControlReceiver extends BroadcastReceiver {
                 pending.finish();
             }
         }, "blb-control").start();
+    }
+
+    // ---------- 把某一页拉到前台 ----------
+
+    /**
+     * 打开一个二级页面。
+     *
+     * <p>为什么这条命令是必需的：今日状态、运行日志、各账号累计、已登记章节、辅助点击说明
+     * 这五样各占一整屏（原来它们在一级页面上被挤成两行／半屏／120dp），可要看得点一下 ——
+     * 用户手指动不了，点不了。他看得见屏幕，所以「替他把某一页打开」正好补上这一环。
+     */
+    private void showPage(Context app, Intent intent) {
+        String page = intent.getStringExtra("page");
+        if (Texts.isBlank(page)) page = DetailActivity.PAGE_LOG;
+        if (!DetailActivity.isKnownPage(page)) {
+            Log.w(TAG, "不认识的页面名「" + page + "」。认得的是：" + DetailActivity.pageNames());
+            return;
+        }
+        app.startActivity(DetailActivity.intent(app, page)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP));
+        Log.i(TAG, "已经请系统把「" + page + "」这一页拉到前台。"
+                + "小米／红米要允许本 App「后台弹出界面」，否则这一下会静静地不生效"
+                + "（设置页那段电池提示里要求过）。");
     }
 
     // ---------- 每日定时 ----------

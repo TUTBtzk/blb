@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  二级页面的外壳：返回 + 标题 + 一行副标题 + 一整屏内容。
+
+  内容区里三样东西只显示一样（DetailActivity 按页面种类选）：
+  · detail_scroll   —— 长说明文字（辅助点击说明）
+  · detail_log_scroll —— 运行日志，等宽深底，跟正文彻底分开
+  · detail_list     —— 列表（今日状态 / 各账号累计 / 已登记章节）
+
+  内容占满整屏正是这一页存在的理由：原来它们分别只有两行、半屏、120dp。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/detail_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?android:attr/colorBackground"
+    android:orientation="vertical"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/detail_back"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/detail_back"
+            android:padding="12dp"
+            android:src="@drawable/ic_back"
+            app:tint="?attr/colorSecondary" />
+
+        <TextView
+            android:id="@+id/detail_title"
+            style="@style/Blb.Text.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/detail_subtitle"
+        style="@style/Blb.Text.Hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="10dp"
+        android:visibility="gone" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginBottom="10dp"
+        android:layout_weight="1">
+
+        <ScrollView
+            android:id="@+id/detail_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/detail_text"
+                style="@style/Blb.Text.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingBottom="16dp" />
+        </ScrollView>
+
+        <ScrollView
+            android:id="@+id/detail_log_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_log"
+            android:clipToPadding="false"
+            android:padding="12dp"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/detail_log"
+                style="@style/Blb.Text.Log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </ScrollView>
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/detail_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="8dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/detail_empty"
+            style="@style/Blb.Text.Body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="24dp"
+            android:textAlignment="center"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:visibility="gone" />
+    </FrameLayout>
+
+</LinearLayout>

@@ -42,6 +42,13 @@
             android:exported="false"
             android:label="@string/settings_inspector" />
 
+        <!-- 二级页面：签到页和订阅页上五处「信息多、窗口小」的东西各占一整屏。
+             一个 Activity 靠 intent extra "page" 分派五种内容，见 DetailActivity。 -->
+        <activity
+            android:name=".ui.DetailActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <!-- 唯一能读写菠萝包界面的组件，只在你手动开启无障碍后生效。 -->
         <service
             android:name=".auto.BlbAccessibilityService"

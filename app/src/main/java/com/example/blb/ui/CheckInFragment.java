@@ -6,12 +6,10 @@ import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
-import android.text.format.DateFormat;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -21,8 +19,6 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.blb.R;
 import com.example.blb.auto.AutomationBus;
@@ -38,26 +34,28 @@ import com.example.blb.util.Texts;
 import java.util.List;
 
 /**
- * 签到页：跑队列、看今日各账号状态、看实时日志、以及队列卡住时替它做决定。
+ * 签到页：跑队列、以及队列卡住时替它做决定。
  *
- * <p>广告一律不自动播放：这里只把「哪个号还有广告奖励可领」标出来，让你自己去看。
+ * <p>今日各账号状态、运行日志、辅助点击说明这三样原来都挤在这一页上（列表半屏、日志
+ * 锁死 120dp、说明折成两行），现在各是一行 {@link EntryRowView}，完整内容在
+ * {@link DetailActivity} 里占一整屏。
+ *
+ * <p>每一行都带一句摘要，不点也答得出最要紧的那句 —— 使用者手指不能动，
+ * 只有点开才看得到的信息对他等于不存在。
+ *
+ * <p>广告一律不自动播放：这里只把「哪个号还有广告奖励可领」数进摘要，让你自己去看。
  */
 public class CheckInFragment extends Fragment {
 
-    /** 那段辅助点击说明折叠时露几行。点一下标题展开全文。 */
-    private static final int NOTICE_COLLAPSED_LINES = 2;
-
     private TextView status;
-    private TextView log;
-    private TextView todayHeader;
-    private ScrollView logScroll;
     private View pauseBanner;
     private TextView pauseReason;
     private View runDot;
     private Button run;
     private Button runDaily;
     private Button stop;
-    private SimpleAdapter<CheckInRow> adapter;
+    private EntryRowView entryToday;
+    private EntryRowView entryLog;
 
     @Nullable
     @Override
@@ -69,9 +67,6 @@ public class CheckInFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         status = v.findViewById(R.id.status);
-        log = v.findViewById(R.id.log);
-        logScroll = v.findViewById(R.id.log_scroll);
-        todayHeader = v.findViewById(R.id.today_header);
         pauseBanner = v.findViewById(R.id.pause_banner);
         pauseReason = v.findViewById(R.id.pause_reason);
         runDot = v.findViewById(R.id.run_dot);
@@ -79,21 +74,25 @@ public class CheckInFragment extends Fragment {
         runDaily = v.findViewById(R.id.run_daily);
         stop = v.findViewById(R.id.stop);
 
-        adapter = new SimpleAdapter<>(R.layout.item_two_line, this::bind);
-        RecyclerView list = v.findViewById(R.id.list);
-        list.setLayoutManager(new LinearLayoutManager(requireContext()));
-        // 行本身是卡片、自带间距，再加分割线只会在卡片之间多一道横杠。
-        list.setAdapter(adapter);
+        entryToday = v.findViewById(R.id.entry_today);
+        entryLog = v.findViewById(R.id.entry_log);
+        EntryRowView entryNotice = v.findViewById(R.id.entry_notice);
 
-        // 那段说明很长（把「替我按什么、不按什么」说全了），默认只露两行，
-        // 免得把「现在跑到哪了」和按钮挤到屏幕外面。
-        TextView notice = v.findViewById(R.id.ad_notice);
-        View arrow = v.findViewById(R.id.notice_arrow);
-        v.findViewById(R.id.notice_toggle).setOnClickListener(b -> {
-            boolean collapsed = notice.getMaxLines() <= NOTICE_COLLAPSED_LINES;
-            notice.setMaxLines(collapsed ? Integer.MAX_VALUE : NOTICE_COLLAPSED_LINES);
-            arrow.setRotation(collapsed ? 180f : 0f);
-        });
+        String ymd = Texts.todayYmd();
+        entryToday.setTitle(getString(R.string.checkin_today_header) + "（" + ymd + "）");
+        entryToday.setSummary(getString(R.string.detail_today_summary_empty));
+        entryToday.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_TODAY));
+
+        entryLog.setTitle(getString(R.string.checkin_log_header));
+        entryLog.setSummary(getString(R.string.detail_log_summary_idle));
+        entryLog.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_LOG));
+
+        entryNotice.setTitle(getString(R.string.checkin_notice_header));
+        entryNotice.setSummary(getString(R.string.detail_notice_summary));
+        entryNotice.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_NOTICE));
 
         run.setOnClickListener(b -> start(false));
         runDaily.setOnClickListener(b -> start(true));
@@ -103,8 +102,6 @@ public class CheckInFragment extends Fragment {
         v.<Button>findViewById(R.id.skip).setOnClickListener(
                 b -> AutomationBus.submitDecision(StepRunner.Decision.SKIP));
 
-        String ymd = Texts.todayYmd();
-        todayHeader.setText(getString(R.string.checkin_today_header) + "（" + ymd + "）");
         Db.get(requireContext()).checkInDao().observeTodayStatus(ymd)
                 .observe(getViewLifecycleOwner(), this::renderToday);
 
@@ -127,44 +124,20 @@ public class CheckInFragment extends Fragment {
         AutomationBus.log().observe(getViewLifecycleOwner(), this::renderLog);
     }
 
+    /** 今日状态那一行的摘要：成了几个、哪个号没成、广告还有没有没看完的。 */
     private void renderToday(List<CheckInRow> rows) {
-        adapter.submit(rows);
+        String summary = CheckInRows.summary(rows);
+        entryToday.setSummary(Texts.isBlank(summary)
+                ? getString(R.string.detail_today_summary_empty) : summary);
     }
 
+    /** 日志那一行的摘要＝最新那一行。要看全部得点进去。 */
     private void renderLog(List<String> lines) {
-        log.setText(lines == null || lines.isEmpty() ? "（还没有日志）" : TextUtils.join("\n", lines));
-        logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
-    }
-
-    private void bind(View row, CheckInRow r, int position) {
-        // 状态从第一行的文字里拿出来，改成右边一颗徽章＋左边一道色条：
-        // 8 个号排在一起时，「哪个没成」要能扫一眼看出来，而不是逐行读字。
-        StatusPalette tone = StatusPalette.forCheckIn(r.status);
-        row.findViewById(R.id.accent).setBackgroundColor(color(row, tone.foreground));
-
-        TextView badge = row.findViewById(R.id.badge);
-        badge.setVisibility(View.VISIBLE);
-        badge.setText(r.statusText());
-        badge.setTextColor(color(row, tone.foreground));
-        badge.setBackgroundTintList(ColorStateList.valueOf(color(row, tone.container)));
-
-        row.<TextView>findViewById(R.id.line1).setText(r.accountName());
-        StringBuilder sb = new StringBuilder();
-        String ads = r.adsText();
-        if (ads != null) sb.append(ads);
-        if (r.adAvailable) {
-            if (sb.length() > 0) sb.append(" · ");
-            sb.append("还有广告没看完");
+        if (lines == null || lines.isEmpty()) {
+            entryLog.setSummary(getString(R.string.detail_log_summary_idle));
+            return;
         }
-        if (!Texts.isBlank(r.message)) {
-            if (sb.length() > 0) sb.append(" · ");
-            sb.append(r.message);
-        }
-        if (r.createdAt > 0) {
-            if (sb.length() > 0) sb.append(" · ");
-            sb.append(DateFormat.format("HH:mm:ss", r.createdAt));
-        }
-        row.<TextView>findViewById(R.id.line2).setText(sb);
+        entryLog.setSummary(lines.get(lines.size() - 1));
     }
 
     private static int color(View v, @ColorRes int res) {

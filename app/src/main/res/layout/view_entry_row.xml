@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  EntryRowView 的内容：标题 + 一行摘要 + 右端箭头。
+
+  为什么摘要非留不可：这个 App 的使用者手不能动。把信息挪进二级页面解决了「窗口太小」，
+  但如果原位置只剩一个光秃秃的按钮，那些信息对他就等于没了 —— 他没法自己点开看。
+  所以每一行都要在不点的情况下把最要紧的一句话说出来（已签到几个、最新一行日志、
+  登记多少章），点进去才是完整的那一份。
+-->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:baselineAligned="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="14dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/entry_title"
+                style="@style/Blb.Text.Line1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/entry_summary"
+                style="@style/Blb.Text.Line2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="10dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_chevron_right"
+            app:tint="?attr/colorSecondary" />
+    </LinearLayout>
+</merge>

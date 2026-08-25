@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 向右的小箭头：一行的右端有它就表示「点进去还有更多」。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M9.4,6 L8,7.4l4.6,4.6 -4.6,4.6 1.4,1.4 6,-6z" />
+</vector>
