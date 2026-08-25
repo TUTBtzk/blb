@@ -39,6 +39,19 @@ public class SettingsFragment extends Fragment {
 
     private TextView a11yStatus;
     private TextView selectorInfo;
+    /** 干跑那颗开关：{@link #refreshStatus} 每次回到这一页都要按真实状态重新对一次。 */
+    private com.google.android.material.materialswitch.MaterialSwitch dryRunSwitch;
+    /**
+     * 程序自己改开关状态的那一下，别让它把 listener 再触发一遍。
+     *
+     * <p>「点了『我确认，关闭干跑』却没用」就是这么来的：{@code setChecked} 会<b>同步</b>回调
+     * {@code OnCheckedChangeListener}，而干跑那颗开关的 listener 里本来就有 {@code setChecked}
+     * （先拨回去、等确认对话框）。于是确认那一下变成
+     * {@code setDryRun(false)} → {@code setChecked(false)} → 回调 → {@code setChecked(true)}
+     * → {@code setDryRun(true)}：刚写进去的 false 当场被自己覆盖回 true，而且又弹一次对话框。
+     * 干跑因此永远关不掉，只有 {@code realBuyConfirmed} 被真的打开了 —— 两个状态还对不上。
+     */
+    private boolean mutingSwitch;
 
     @Nullable
     @Override
@@ -63,14 +76,16 @@ public class SettingsFragment extends Fragment {
         v.<Button>findViewById(R.id.app_details).setOnClickListener(b -> openAppDetails());
 
         com.google.android.material.materialswitch.MaterialSwitch dryRun = v.findViewById(R.id.dry_run);
+        dryRunSwitch = dryRun;
         dryRun.setChecked(Prefs.isDryRun(ctx));
         dryRun.setOnCheckedChangeListener((btn, checked) -> {
+            if (mutingSwitch) return;
             if (checked) {
                 Prefs.setDryRun(ctx, true);
                 return;
             }
-            // 关掉干跑就是允许花真火券，必须显式确认一次。
-            btn.setChecked(true);
+            // 关掉干跑就是允许真的点下确认，必须显式确认一次。先把开关拨回去等确认结果。
+            setCheckedQuietly(dryRun, true);
             confirmRealBuy(dryRun);
         });
 
@@ -132,6 +147,11 @@ public class SettingsFragment extends Fragment {
                 ready ? R.color.blb_ok : R.color.blb_fail));
         SelectorSet set = SelectorSet.load(requireContext());
         selectorInfo.setText("选择器来源：" + set.source() + "，共 " + set.keys().size() + " 个 key");
+        // 干跑会被别处拨回来（每趟真买跑完自动回档、REVOKE_BUY 当场回档），
+        // 所以每次回到这一页都按真实状态重对一次 —— 否则开关看着是关的、其实还在干跑。
+        if (dryRunSwitch != null) {
+            setCheckedQuietly(dryRunSwitch, Prefs.isDryRun(requireContext()));
+        }
     }
 
     /** 焦点离开时保存，避免每敲一个字符就写一次。 */
@@ -220,16 +240,31 @@ public class SettingsFragment extends Fragment {
     private void confirmRealBuy(com.google.android.material.materialswitch.MaterialSwitch sw) {
         new AlertDialog.Builder(requireContext())
                 .setTitle("关闭干跑？")
-                .setMessage("关掉之后自动订阅会真的点下确认、花掉账号里的火券。"
-                        + "选择器一旦错位就可能买错书或买错章。\n\n"
-                        + "建议先干跑一轮，核对订阅页矩阵无误再关。")
+                .setMessage("关掉之后自动订阅会真的点下「订阅本章」，花掉账号里的代券"
+                        + "（实付里出现火券一律当买不起、换下一个号）。"
+                        + "选择器一旦错位就可能买错章。\n\n"
+                        + "注意这颗开关只管一趟：跑完会自动回到干跑。"
+                        + "要让每天定时那趟也能买，用常驻授权（adb 的 AUTHORIZE_BUY，会自己到期、每天有额度）。")
                 .setNegativeButton(R.string.cancel, null)
                 .setPositiveButton("我确认，关闭干跑", (d, w) -> {
                     Prefs.setDryRun(requireContext(), false);
                     Prefs.setRealBuyConfirmed(requireContext(), true);
-                    sw.setChecked(false);
+                    setCheckedQuietly(sw, false);
+                    toast("干跑已关：这一趟最多真买 " + Prefs.realBuyLimit(requireContext())
+                            + " 章，跑完自动回到干跑");
                 })
                 .show();
+    }
+
+    /** 改开关状态但不触发 listener，见 {@link #mutingSwitch}。 */
+    private void setCheckedQuietly(
+            com.google.android.material.materialswitch.MaterialSwitch sw, boolean checked) {
+        mutingSwitch = true;
+        try {
+            sw.setChecked(checked);
+        } finally {
+            mutingSwitch = false;
+        }
     }
 
     /** 小米的电池优化页各版本入口不一，走系统标准 Intent，失败就退回应用详情页。 */
