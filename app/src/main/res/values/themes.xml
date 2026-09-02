@@ -54,4 +54,27 @@
     </style>
 
     <style name="Theme.Blb自动签到" parent="Base.Theme.Blb自动签到" />
+
+    <!--
+      跑完那个弹窗（ui/DoneDialogActivity）用的主题。
+
+      它是一个 Activity 而不是 Notification，因为使用者手指动不了：通知栏他拉不开，
+      IMPORTANT_LOW 的通知连横幅都不弹，等于这条结论对他不存在。做成浮动窗口的 Activity，
+      跑完就自己盖在屏幕正中，不需要他做任何动作。
+
+      parent 仍然是本 App 的主主题，这样那一整套颜色不用抄第二遍；
+      下面几项只是把它从「整屏」改成「浮在中间的一块」。窗口背景透明是有意的：
+      圆角和描边由布局里那张 Blb.Card 画，跟别处的卡片是同一个模样。
+    -->
+    <style name="Theme.Blb.Done" parent="Base.Theme.Blb自动签到">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <!-- 点弹窗外面也能关掉：万一旁边有人帮他，别只留按钮这一条路 -->
+        <item name="android:windowCloseOnTouchOutside">true</item>
+        <item name="android:windowMinWidthMajor">85%</item>
+        <item name="android:windowMinWidthMinor">92%</item>
+    </style>
 </resources>

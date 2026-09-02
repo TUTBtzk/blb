@@ -49,6 +49,18 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
+        <!-- 一趟跑完盖在屏幕正中的结论。使用者手指动不了、拉不开通知栏，所以这条结论
+             必须自己弹出来（见 DoneDialogActivity）。singleTop：连着跑两趟只换内容，
+             不叠第二个弹窗；excludeFromRecents：它不是一页界面，别留在多任务里。 -->
+        <activity
+            android:name=".ui.DoneDialogActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Blb.Done" />
+
+
         <!-- 唯一能读写菠萝包界面的组件，只在你手动开启无障碍后生效。 -->
         <service
             android:name=".auto.BlbAccessibilityService"

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  一趟跑完盖在屏幕上的那个弹窗（见 ui/DoneDialogActivity）。
+
+  为什么这一屏要单独存在：使用者手指不能动 —— 他拉不开通知栏，也点不进「运行日志」，
+  所以「跑完了没有、成了几个」必须自己弹到屏幕正中来。字号比正文再大一号，
+  因为这几行往往是隔着一段距离看的。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="16dp">
+
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        style="@style/Blb.Card"
+        app:contentPadding="22dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/done_title"
+                style="@style/Blb.Text.Title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="22sp"
+                tools:text="签到完成" />
+
+            <TextView
+                android:id="@+id/done_time"
+                style="@style/Blb.Text.Hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/done_body"
+                style="@style/Blb.Text.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:lineSpacingExtra="6dp"
+                android:textSize="17sp" />
+
+            <Button
+                android:id="@+id/done_ok"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/done_ok" />
+
+            <Button
+                android:id="@+id/done_log"
+                style="@style/Blb.Button.Outlined"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/done_open_log" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+</FrameLayout>

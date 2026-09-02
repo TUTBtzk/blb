@@ -53,6 +53,11 @@ public final class DailyQueue {
         public String subscribeNote;
         public String abortReason;
         public final List<String> notes = new ArrayList<>();
+        /**
+         * 没签成的账号名（不含「已跳过」）。跑完那个弹窗要靠它点名 ——
+         * 使用者手指动不了，打不开「今日状态」去看是哪个号，「失败 2」对他等于什么都没说。
+         */
+        public final List<String> failedNames = new ArrayList<>();
 
         public boolean aborted() {
             return abortReason != null;
@@ -190,7 +195,10 @@ public final class DailyQueue {
             CheckInQueue.record(dao, account.id, ymd, status, false, 0, -1, message);
         }
         if (CheckInLog.SKIPPED.equals(status)) summary.skipped++;
-        else summary.checkInFailed++;
+        else {
+            summary.checkInFailed++;
+            summary.failedNames.add(account.displayName());
+        }
     }
 
     /** 决定第 3 步跑不跑。任何一个前提不满足就只跑签到和广告，不是整队失败。 */
@@ -245,6 +253,7 @@ public final class DailyQueue {
             host.log("  今天已经是已签到状态");
         } else {
             summary.checkInFailed++;
+            summary.failedNames.add(account.displayName());
             host.log("  签到没走通：" + checkIn.message);
         }
 

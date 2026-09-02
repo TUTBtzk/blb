@@ -20,6 +20,7 @@ import androidx.core.app.ServiceCompat;
 
 import com.example.blb.MainActivity;
 import com.example.blb.R;
+import com.example.blb.ui.DoneDialogActivity;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
@@ -184,6 +185,9 @@ public class AutomationService extends Service implements StepRunner.Host {
         else if (!allowAutoResume(ymd)) return;
 
         mode = next;
+        // 上一趟那个结论弹窗还开着的话先收掉：它不会自己消失（他可能过一会儿才看），
+        // 但绝不能挡着这一趟要操作的界面。
+        DoneDialogActivity.dismissOpen();
         startForegroundSafely(buildNotification(next.label + "队列启动中…", false));
         // 系统重发的那趟不清日志：上一趟被杀之前那几行是唯一的现场记录。
         if (fromUi) AutomationBus.clearLog();
@@ -218,36 +222,55 @@ public class AutomationService extends Service implements StepRunner.Host {
 
     private void runQueue(Mode current) {
         String text = current.label + "任务异常终止";
+        // 弹窗要的是「结论」，通知和状态栏要的是「全文」，所以两份并行攒着：
+        // text 那一串包含对账细节（22 章已下载但无归属…），一屏放不下，不能拿去弹。
+        RunReport report = null;
         acquireScreenLock(current);
         try {
             if (!awaitAccessibility()) {
                 text = "无障碍服务没连上，先去系统设置里打开「blb自动签到」";
+                report = RunReport.failed(current.label, text);
                 return;
             }
             switch (current) {
-                case SUBSCRIBE:
-                    text = SubscribeQueue.describe(SubscribeQueue.run(this, this));
+                case SUBSCRIBE: {
+                    SubscribeQueue.Summary s = SubscribeQueue.run(this, this);
+                    text = SubscribeQueue.describe(s);
+                    report = RunReport.ofSubscribe(s);
                     break;
-                case DAILY:
+                }
+                case DAILY: {
                     // 每日整套流程是「签到 → 广告 → 订阅」一条龙：签到和广告挣回来的代券
                     // 当场就拿去订阅，一个号买到代券不够再换下一个号。
-                    text = DailyQueue.describe(DailyQueue.run(this, this));
+                    DailyQueue.Summary s = DailyQueue.run(this, this);
+                    text = DailyQueue.describe(s);
+                    report = RunReport.ofDaily(s);
                     break;
+                }
                 case SWITCH:
                     text = SwitchAccountQueue.run(this, this, switchAccountId);
+                    report = RunReport.ofSwitch(text);
                     break;
-                default:
-                    text = describe(CheckInQueue.run(this, this));
+                default: {
+                    CheckInQueue.Summary s = CheckInQueue.run(this, this);
+                    text = describe(s);
+                    report = RunReport.ofCheckIn(s);
                     break;
+                }
             }
         } catch (Throwable t) {
             Log.e(TAG, current.label + "队列崩了", t);
             AutomationBus.append("队列异常终止：" + t);
+            report = RunReport.failed(current.label, "队列异常终止：" + t);
         } finally {
             releaseScreenLock();
             AutomationBus.setRunning(false);
             AutomationBus.setStatus(text);
             notifyFinished(current, text);
+            // 结论盖到屏幕上。使用者手指动不了：通知栏他拉不开，这个频道又是 IMPORTANCE_LOW
+            // （进度每几秒刷一行，不能每次都弹横幅），只发通知等于这条结论他永远读不到。
+            DoneDialogActivity.show(this,
+                    report != null ? report : RunReport.failed(current.label, text));
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
             stopSelf();
         }

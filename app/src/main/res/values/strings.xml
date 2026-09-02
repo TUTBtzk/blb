@@ -118,4 +118,12 @@
     <string name="inspector_open_target">打开菠萝包</string>
     <string name="inspector_probe">用现有选择器试匹配</string>
     <string name="inspector_hint">先把菠萝包切到要抓的页面，再回到这里点抓取。抓到的 id／text 就是填进 selectors.json 的值。</string>
+
+    <!--
+      跑完那个弹窗（ui/DoneDialogActivity）。它会自己盖在屏幕正中 ——
+      使用者手指动不了，通知栏他拉不开，所以结论必须自己送到眼前来。
+    -->
+    <string name="done_ok">知道了</string>
+    <string name="done_open_log">看这一趟的运行日志</string>
+    <string name="done_at">%1$s 跑完</string>
 </resources>

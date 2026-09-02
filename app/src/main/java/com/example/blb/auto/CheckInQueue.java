@@ -27,6 +27,13 @@ public final class CheckInQueue {
         public int skipped;
         /** 签到页有广告奖励待手动领取的账号名。 */
         public final List<String> adPending = new ArrayList<>();
+        /**
+         * 没签成的账号名（不含「已跳过」——那是我们自己决定不跑的，不该点名）。
+         *
+         * <p>为什么要名单而不只是个数：跑完那个弹窗是使用者唯一读得到的结果，而他手指动不了、
+         * 打不开「今日状态」那一屏去看是哪个号。「失败 2」对他等于什么都没说。
+         */
+        public final List<String> failedNames = new ArrayList<>();
         public String abortReason;
 
         public boolean aborted() {
@@ -106,6 +113,7 @@ public final class CheckInQueue {
                     host.log("  已是已签到状态");
                 } else {
                     summary.failed++;
+                    summary.failedNames.add(name);
                     host.log("  " + result.message);
                 }
                 if (result.adAvailable) {
@@ -116,7 +124,10 @@ public final class CheckInQueue {
                 String status = statusFor(e.kind);
                 record(checkInDao, account.id, ymd, status, false, 0, -1, e.getMessage());
                 if (CheckInLog.SKIPPED.equals(status)) summary.skipped++;
-                else summary.failed++;
+                else {
+                    summary.failed++;
+                    summary.failedNames.add(name);
+                }
                 host.log("  " + e.getMessage());
 
                 if (isGlobal(e.kind)) {
@@ -125,6 +136,7 @@ public final class CheckInQueue {
                 }
             } catch (Exception e) {
                 summary.failed++;
+                summary.failedNames.add(name);
                 record(checkInDao, account.id, ymd, CheckInLog.FAILED, false, 0, -1,
                         String.valueOf(e));
                 host.log("  意外错误：" + e);
