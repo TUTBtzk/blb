@@ -46,6 +46,16 @@ public final class SubscribedDetail {
 
     /** 整段都是数字才算金额 —— 明细行里日期也含数字，但它有 id、也不是纯数字。 */
     private static final Pattern PURE_NUMBER = Pattern.compile("^\\d[\\d,，]*$");
+    /**
+     * 章号和章标题<b>粘在一起</b>那种节：「71留宿之夜，夏优来访」。
+     *
+     * <p>2026-08-31 实测：菠萝包并不保证章号后面有空格。第71章那一条原文是
+     * 「世界线的变动，学生会长的恋爱  71留宿之夜，夏优来访」—— 一节都不是纯数字，
+     * 于是章号被判成「认不出」，逐章对账就认为「明细里没有第71章」，
+     * 而账本里 wefeef 名下确实有第71章（20 代券，真买的）→ 误报「漏订」→ 整趟订阅中止。
+     * 数字后面必须紧跟<b>非数字</b>，这样它跟 {@link #PURE_NUMBER} 不会互相抢。
+     */
+    private static final Pattern NO_GLUED_TO_TITLE = Pattern.compile("^(\\d{1,5})(\\D.*)$");
     /** 行首那个标号：账本里的标题是目录行的原文（「50   订婚事宜」），比名字时要先去掉它。 */
     private static final Pattern LEADING_NO = Pattern.compile("^\\d{1,5}\\s*");
 
@@ -111,8 +121,14 @@ public final class SubscribedDetail {
      *
      * <p>{@code tvDesc} 实测原文：「世界线的变动，学生会长的恋爱 50 订婚事宜，梦玲失踪」
      * ＝ 卷名 + 空格 + 章号 + 空格 + 章标题。所以按空白切开，取<b>第一个整段都是数字</b>的那一节
-     * 当章号，它前面是卷名、后面是章标题。切不出来就 {@code chapterNo=-1} —— 认不出就说认不出，
-     * 绝不猜一个章号出来（猜错会把「漏记」和「误挂」判反）。
+     * 当章号，它前面是卷名、后面是章标题。
+     *
+     * <p>2026-08-31 补的一条：章号后面那个空格<b>不保证有</b>。第71章那一条是
+     * 「世界线的变动，学生会长的恋爱  71留宿之夜，夏优来访」—— 没有一节是纯数字。
+     * 所以切不出纯数字节时再退一步，找第一个「数字紧跟着非数字」的节
+     * （{@link #NO_GLUED_TO_TITLE}），数字是章号、后面是章标题。
+     * 两条都不中就 {@code chapterNo=-1} —— 认不出就说认不出，绝不猜一个章号出来
+     * （猜错会把「漏记」和「误挂」判反）。
      */
     public static Entry parseRow(String desc, String amountText, String currency, String date) {
         String raw = desc == null ? null : desc.trim();
@@ -128,13 +144,22 @@ public final class SubscribedDetail {
                 break;
             }
         }
-        if (at < 0) {
-            return new Entry(-1, null, raw, parseAmount(amountText), trimToNull(currency),
-                    date, raw);
+        if (at >= 0) {
+            int no = Texts.parseCount(parts[at]);
+            return new Entry(no, join(parts, 0, at), join(parts, at + 1, parts.length),
+                    parseAmount(amountText), trimToNull(currency), date, raw);
         }
-        int no = Texts.parseCount(parts[at]);
-        return new Entry(no, join(parts, 0, at), join(parts, at + 1, parts.length),
-                parseAmount(amountText), trimToNull(currency), date, raw);
+        for (int i = 0; i < parts.length; i++) {
+            java.util.regex.Matcher m = NO_GLUED_TO_TITLE.matcher(parts[i]);
+            if (!m.matches()) continue;
+            String tail = m.group(2).trim();
+            String rest = join(parts, i + 1, parts.length);
+            return new Entry(Texts.parseCount(m.group(1)), join(parts, 0, i),
+                    rest.isEmpty() ? tail : tail + " " + rest,
+                    parseAmount(amountText), trimToNull(currency), date, raw);
+        }
+        return new Entry(-1, null, raw, parseAmount(amountText), trimToNull(currency),
+                date, raw);
     }
 
     private static String join(String[] parts, int from, int to) {
@@ -308,7 +333,13 @@ public final class SubscribedDetail {
         }
 
         if (!problems.isEmpty()) {
-            return new VoucherLedger.Audit(false, true, head + brief(problems));
+            // 读不出章号的那几条没参与比对，所以「账本有、明细没有」有可能就是它没被认出来
+            // （2026-08-31 第71章「71留宿之夜」就是这样把整趟订阅停掉的）。中止那句话必须
+            // 自带这个线索，否则看日志的人会照着「漏订」去查一个根本不存在的问题。
+            return new VoucherLedger.Audit(false, true, head + brief(problems)
+                    + (unknown > 0 ? "（另有 " + unknown + " 条读不出章号，原文「"
+                    + text(firstUnknown) + "」—— 那几条没参与比对，"
+                    + "上面说的「漏订」有可能就是它）" : ""));
         }
         if (!warnings.isEmpty()) {
             return new VoucherLedger.Audit(true, false, head + byNo.size() + " 章比对完了，但"

@@ -40,6 +40,8 @@ public class SubscribedDetailTest {
     /** 2026-08-25 实测原文：卷名 + 空格 + 章号 + 空格 + 章标题。 */
     private static final String ROW_50 = "世界线的变动，学生会长的恋爱 50 订婚事宜，梦玲失踪";
     private static final String ROW_48 = "世界线的变动，学生会长的恋爱 48 滤镜破碎，总裁秘书";
+    /** 2026-08-31 实测原文：章号和章标题<b>之间没有空格</b>（就是这条停了整趟订阅）。 */
+    private static final String ROW_71 = "世界线的变动，学生会长的恋爱  71留宿之夜，夏优来访";
 
     private static Map<String, List<Selector>> bundled() throws Exception {
         File f = new File("src/main/assets/selectors.json");
@@ -77,6 +79,41 @@ public class SubscribedDetailTest {
         assertEquals(12, e.chapterNo);
         assertEquals("", e.volume);
         assertEquals("周日工作", e.title);
+    }
+
+    /**
+     * 章号后面那个空格<b>不保证有</b>：2026-08-31 实测第71章那一条粘在一起。
+     *
+     * <p>这一条不是「解析得更漂亮一点」，它把整趟订阅停掉过：章号认不出 → 逐章对账认为
+     * 明细里没有第71章 → 账本里 wefeef 名下那条（20 代券，真买的）被判成「误挂、其实没人买」
+     * → 中止，从那以后一章都买不了。
+     */
+    @Test
+    public void aChapterNumberGluedToItsTitleIsStillRecognised() {
+        SubscribedDetail.Entry e = SubscribedDetail.parseRow(ROW_71, "20", "代券", "2026-08-30");
+        assertTrue(e.describe(), e.known());
+        assertEquals(71, e.chapterNo);
+        assertEquals("世界线的变动，学生会长的恋爱", e.volume);
+        assertEquals("留宿之夜，夏优来访", e.title);
+        assertEquals(20, e.amount);
+    }
+
+    @Test
+    public void gluedNumbersWorkWithoutAVolumeToo() {
+        SubscribedDetail.Entry e = SubscribedDetail.parseRow("71留宿之夜，夏优来访", "20", "代券", null);
+        assertEquals(71, e.chapterNo);
+        assertEquals("", e.volume);
+        assertEquals("留宿之夜，夏优来访", e.title);
+    }
+
+    /** 有空格的那种照旧走原来那条路 —— 卷名里万一带数字也不该抢在纯数字节前面。 */
+    @Test
+    public void aSpacedNumberStillWinsOverAGluedOne() {
+        SubscribedDetail.Entry e = SubscribedDetail.parseRow(
+                "2023年的番外 50 订婚事宜", "20", "代券", null);
+        assertEquals(50, e.chapterNo);
+        assertEquals("2023年的番外", e.volume);
+        assertEquals("订婚事宜", e.title);
     }
 
     /**
@@ -190,6 +227,37 @@ public class SubscribedDetailTest {
         assertFalse(a.message, a.ok);
         assertTrue(a.message, a.message.contains("第49章"));
         assertTrue(a.message, a.message.contains("漏订"));
+    }
+
+    /**
+     * 2026-08-31 真机上的那一停：账本里 wefeef 名下第71章是真买的（20 代券），明细里也有，
+     * 只是那一条的章号粘着标题（「71留宿之夜」）没被认出来，于是被判成「漏订」中止整趟。
+     * 认出来之后这一趟必须是干净的。
+     */
+    @Test
+    public void theGluedChapterNumberNoLongerLooksLikeAMissedChapter() {
+        VoucherLedger.Audit a = audit(Arrays.asList(ui(ROW_71, "20")),
+                Arrays.asList(mine(71, "71   留宿之夜，夏优来访")));
+        assertTrue(a.message, a.ok);
+        assertTrue("这是一次真的核对", a.checked);
+        assertTrue(a.message, a.message.contains("第71章"));
+    }
+
+    /**
+     * 真要中止的时候，那句话得自带「有几条读不出章号」这个线索 ——
+     * 「漏订」和「有一条没认出来」看日志时长得一模一样，而处置完全不同
+     * （一个要改账本，一个要改解析）。2026-08-31 就是照着「漏订」查了半天。
+     */
+    @Test
+    public void anAbortAlsoMentionsTheRowsItCouldNotRead() {
+        VoucherLedger.Audit a = audit(
+                Arrays.asList(ui(ROW_50, "20"), ui("作品相关", "20")),
+                Arrays.asList(mine(50, "50   订婚事宜，梦玲失踪"),
+                        mine(49, "49   夜色，海边")));
+        assertFalse(a.message, a.ok);
+        assertTrue(a.message, a.message.contains("漏订"));
+        assertTrue(a.message, a.message.contains("读不出章号"));
+        assertTrue(a.message, a.message.contains("作品相关"));
     }
 
     /**
