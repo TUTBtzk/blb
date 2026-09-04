@@ -12,6 +12,7 @@ import com.example.blb.data.SubscriptionDao;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -84,16 +85,64 @@ public final class SubscribeRun {
         return only;
     }
 
-    /** 计数。备注直接写进调用方的列表，省一次搬运。 */    public static final class Tally {
+    /** 计数。备注直接写进调用方的列表，省一次搬运。 */
+    public static final class Tally {
         public int bought;
         public int ownedAlready;
         public int failed;
         /** 实付代券累计。 */
         public int spent;
         public final List<String> notes;
+        /**
+         * 这一趟<b>卡住</b>的那一章（章号），0＝没卡住。
+         *
+         * <p>用户 2026-09-03 的原话：「对比要订阅的章节能不能订阅，能就订阅，不能就判断
+         * 下一个账号，永远也不会出现跳过某一章的情况」。所以队列绝不越过一章去买它后面的章，
+         * 一趟里最多只会卡在一章上 —— 就是「所有号合起来还没买过的最小章」。这里记的不是
+         * 「跳过了哪几章」，而是「整本停在第几章」：停下来让人看，比留一个洞接着往后买
+         * 更符合「8 个号拼出完整一本」。
+         */
+        public int stuckChapterNo;
+        /** 有几个号在这一章上没订下来（券不够也算 —— 那同样是「这个号订不了它」）。 */
+        public int stuckTries;
+        /** 最后一个号没订下来的原因，跑完要写进弹窗给人看。 */
+        public String stuckReason;
+        /** 这一趟真正买到的最大章号 —— 收尾自检靠它看出中间有没有空章。 */
+        public int maxBoughtNo;
 
         public Tally(List<String> notes) {
             this.notes = notes;
+        }
+    }
+
+    /**
+     * 这一轮<b>已经有定论、不必再有号碰</b>的章。
+     *
+     * <p>它管的是唯一一件事：什么时候允许把一章从这一趟里划掉。答案只有三种 ——
+     * 买到了、是免费章、本机已有所以谁都买不了。<b>「没走通」永远不在其中</b>。
+     *
+     * <p>原来这里是一个裸的 {@code Set<Long>}：进页面前就 add，除了「券不够」全都不撤。
+     * 于是 2026-09-03 那趟第83章在前面某个号身上没走通一次，后面 6 个号全部跳过它 ——
+     * 84、85、86、87 章都买到了，83 章空着，「8 个号拼出完整一本」当场破掉。中间一版
+     * 放宽成「最多让 2 个号试」，也还是会跳；用户随后把规则说死了：「不能就判断下一个账号，
+     * 永远也不会出现跳过某一章的情况」。所以现在失败一次都不许划掉，8 个号全试一遍，
+     * 全都不行就<b>整本停在那一章</b>（{@link Tally#stuckChapterNo}），绝不往后买。
+     *
+     * <p>之所以还留着这层包装而不直接用 Set：「什么时候能 add」这条规则得有地方写下来 ——
+     * 那正是上面那个 bug 的来源。
+     */
+    public static final class Settled {
+
+        private final Set<Long> ids = new HashSet<>();
+
+        /** 这一章有定论了吗＝这一轮还该不该有号试它。 */
+        public boolean has(long chapterId) {
+            return ids.contains(chapterId);
+        }
+
+        /** 只在「买到／免费章／本机已有买不了」时调 —— 失败绝不许调这个。 */
+        void mark(long chapterId) {
+            ids.add(chapterId);
         }
     }
 
@@ -113,12 +162,17 @@ public final class SubscribeRun {
     /**
      * 让当前登着的这个号买章，买不动了就返回（由调用方换号）。
      *
+     * <p><b>永远从「所有号合起来还没买过的最小章」开始，一章都不越过</b>：这一章订不下来
+     * （券不够、找不到那一行、点了没选上）就<b>立刻返回换下一个号试同一章</b>，绝不改去买
+     * 它后面的章。用户的原话：「对比要订阅的章节能不能订阅，能就订阅，不能就判断下一个账号，
+     * 永远也不会出现跳过某一章的情况」。订下来了才往后走下一章，直到这个号的代券花光。
+     *
      * @param balance 这一趟刚读到的余额；不知道就传 {@link Texts.Balance} 的未知值，
      *                会退回账号库里记的代券数。
      */
     public static void oneAccount(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
                                   AccountDao accountDao, Plan plan, Account account,
-                                  Texts.Balance balance, Set<Long> touched, Tally tally)
+                                  Texts.Balance balance, Settled settled, Tally tally)
             throws StepRunner.StepFailure {
         String name = account.displayName();
         // 预算只看代券：章节费两种券都能付，但菠萝包先扣代券，而用户不充值火券。
@@ -143,7 +197,8 @@ public final class SubscribeRun {
             if (host.isCancelled()) {
                 throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消");
             }
-            if (touched.contains(chapter.id)) continue;
+            // 有定论的才允许往后走（买到了／免费章／本机已有谁都买不了）。「没走通」不在其中。
+            if (settled.has(chapter.id)) continue;
 
             // 进页之前先算一次「还买得起吗」。章节表里的单价是历史遗留（旧版按火券登记，
             // 扫目录不会写它），所以优先用上一章的实付代券当估价。
@@ -152,10 +207,11 @@ public final class SubscribeRun {
                     spentToday, plan.cap, chapter.chapterNo);
             if (stop != null) {
                 host.log("  " + stop);
+                // 买不起也是「这个号订不了这一章」：记一次，交给下一个号试同一章。
+                noteBlocked(host, tally, chapter, stop);
                 return;
             }
 
-            touched.add(chapter.id);
             host.log("  " + name + " 试第" + chapter.chapterNo + "章「" + chapter.title + "」");
             SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter);
             host.log("    " + result.message);
@@ -168,10 +224,14 @@ public final class SubscribeRun {
             }
 
             if (!apply(subs, host, tally, account, chapter, result)) {
-                // 券不够只是这个号买不起，别把这一章从整轮里划掉 —— 后面的号可能买得起。
-                if (result.status == SubscribeTask.Status.INSUFFICIENT) touched.remove(chapter.id);
+                // 没订下来：这一章一个字都不划掉，换下一个号来试它。绝不改去买后面的章。
+                noteBlocked(host, tally, chapter,
+                        result.status == SubscribeTask.Status.INSUFFICIENT
+                                ? name + " 代券不够（页面上说余额不足）" : brief(result.message));
                 return;
             }
+            // 买到了／免费章／本机已有买不了：这一章有定论，这一轮别再有号重复试它。
+            settled.mark(chapter.id);
             doneHere++;
             if (result.costVouchers > 0) lastPaid = result.costVouchers;
             if (result.status == SubscribeTask.Status.BOUGHT) spentToday += result.costVouchers;
@@ -179,6 +239,89 @@ public final class SubscribeRun {
         if (doneHere > 0) {
             host.log("  " + name + " 这一轮走了 " + doneHere + " 章，整条队列已经走到底了");
         }
+    }
+
+    /**
+     * 记一次「这个号没把这一章订下来」：券不够、找不到那一行、点了「已选」还是 0，一律算。
+     *
+     * <p>整趟共用一个 {@link Tally}，所以同一章被一个个号试过去就在这里累加。队列绝不越过
+     * 一章，因此章号一变就说明前一章已经订下来了 —— 计数从头开始。跑完由
+     * {@link #stuckNote(SubscriptionDao, Plan, Tally)} 判断它是不是真的没订下来
+     * （它还是不是全局最小未买章），是就把「整本停在第几章、几个号试过、最后一个号为什么不行」
+     * 写进弹窗 —— 2026-09-03 那趟弹窗上只有一句「没走通 1」，既没有章号也没有后果。
+     */
+    private static void noteBlocked(StepRunner.Host host, Tally tally, Chapter chapter,
+                                    String reason) {
+        if (tally.stuckChapterNo != chapter.chapterNo) {
+            tally.stuckChapterNo = chapter.chapterNo;
+            tally.stuckTries = 0;
+        }
+        tally.stuckTries++;
+        tally.stuckReason = brief(reason);
+        host.log("    第" + chapter.chapterNo + "章还是没订下来（第 " + tally.stuckTries
+                + " 个号），下一个号继续试它 —— 绝不跳过它去买后面的章");
+    }
+
+    /** 失败原因截短了给小结用；完整那句上一行日志里就有。 */
+    private static String brief(String message) {
+        if (Texts.isBlank(message)) return "不明";
+        String s = message.trim();
+        return s.length() <= 60 ? s : s.substring(0, 60) + "…";
+    }
+
+    /**
+     * 跑完之后那句「整本现在停在第几章」。返回 null＝没卡住（或者后来有号把它订下来了）。
+     *
+     * <p>这是「不跳过任何一章」这条规则在弹窗上唯一看得见的地方：队列绝不越过一章，所以
+     * 一趟里最多只会停在一章上。它<b>不算失败</b> —— 8 个号都只是代券不够（今天最常见的
+     * 收工方式）也会走到这里，那时候流程本身是跑完的，只是没钱往下买。真出错由
+     * 「订阅没走通 N 个号」那一行说，真漏章由 {@link #gapNote} 说。
+     */
+    public static String stuckNote(SubscriptionDao subs, Plan plan, Tally tally) {
+        if (subs == null || plan == null || tally == null) return null;
+        return stuckNote(tally.stuckChapterNo, tally.stuckTries, tally.stuckReason,
+                nextUnownedNo(subs, plan));
+    }
+
+    /**
+     * 判据本身（拆出来是为了能单测：真机上要跑一整趟 8 个号才看得到一次）。
+     *
+     * <p>只有当这一章<b>确实还是</b>全局最小未买章时才报 —— 前面某个号没订下它、
+     * 后面某个号订下了，那不叫卡住，一个字都不该说。
+     *
+     * @param nextUnownedNo 现在所有号合起来还没买过的最小章号，0＝没有了（整本都有主了）
+     */
+    static String stuckNote(int stuckNo, int tries, String reason, int nextUnownedNo) {
+        if (stuckNo <= 0 || stuckNo != nextUnownedNo) return null;
+        return "第" + stuckNo + "章没订下来（" + tries + " 个号都试过了），"
+                + "整本停在这里 —— 后面的章一章都没往后买"
+                + (Texts.isBlank(reason) ? "" : "。最后一个号：" + reason);
+    }
+
+    /**
+     * 收尾自检：这一趟买到的章里有没有<b>越过</b>一章。返回 null＝没漏。
+     *
+     * <p>队列绝不越过一章，所以这句话正常永远不该出现 —— 留着它当不变量断言。还有两条路
+     * 能让缺口悄悄出现：本机已下载但谁都买不了的那种章（会被放过去，见
+     * {@link #apply} 的 DEVICE_HAS_IT 分支），以及 MIUI 半路杀掉进程之后系统重发的那一趟。
+     * 用户就是这么发现 2026-09-03 那次漏订的（STATUS 说「下一章＝第83章」，那趟却买到了第87章）。
+     */
+    public static String gapNote(SubscriptionDao subs, Plan plan, Tally tally) {
+        if (subs == null || plan == null || tally == null) return null;
+        return gapNote(tally.maxBoughtNo, nextUnownedNo(subs, plan));
+    }
+
+    /** 判据本身。 */
+    static String gapNote(int maxBoughtNo, int nextUnownedNo) {
+        if (maxBoughtNo <= 0 || nextUnownedNo <= 0 || nextUnownedNo > maxBoughtNo) return null;
+        return "这趟买到了第" + maxBoughtNo + "章，可第" + nextUnownedNo
+                + "章还是空的 —— 中间漏了一章，这本书现在拼不完整";
+    }
+
+    /** 所有号合起来还没买过的最小章号；0＝没有了。 */
+    private static int nextUnownedNo(SubscriptionDao subs, Plan plan) {
+        Chapter next = subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom());
+        return next == null ? 0 : next.chapterNo;
     }
 
     /**
@@ -292,10 +435,12 @@ public final class SubscribeRun {
             host.log("    跳过的无标号行（卷标题一类）：" + TextUtils.join("｜", catalog.skipped));
         }
         if (!catalog.foreign.isEmpty()) {
-            // 付费章 + 本机已下载 + 这个号账本里没记：买家很可能是另一个号（「已下载」是本机
-            // 状态、8 个号共用）。绝不回填成这个号拥有 —— 2026-08-25 第49章就是那样多出
-            // 一个订阅者的。报出来让人对着「我的 → 代券 → 订阅清单」核对是谁买的。
-            String note = catalog.foreign.size() + " 章在这台手机上已下载、但账本里没有归属（"
+            // 付费章 + 本机已下载 + 8 个号的账本里都查不到：买家真的说不清。这里判「有没有
+            // 归属」是跨号问的（见 CatalogSync.Report#foreign）—— 只问当前号的那个版本，
+            // 会把皓平买的章在另外 7 个号身上各报一次「没有归属」，2026-09-03 那趟刷出的
+            // 8 条备注全是这样来的误报，而同一趟的逐章对账明明说「都对上了」。
+            String note = catalog.foreign.size() + " 章在这台手机上已下载、但 8 个号的账本里"
+                    + "都查不到归属（"
                     + TextUtils.join("、",
                     catalog.foreign.subList(0, Math.min(5, catalog.foreign.size())))
                     + (catalog.foreign.size() > 5 ? "…" : "")
@@ -339,6 +484,7 @@ public final class SubscribeRun {
                         result.cost, result.costVouchers, Purchase.SRC_AUTO));
                 tally.bought++;
                 tally.spent += result.costVouchers;
+                if (chapter.chapterNo > tally.maxBoughtNo) tally.maxBoughtNo = chapter.chapterNo;
                 host.log("  " + name + " 订到" + label + "，花 " + result.costVouchers + " 代券"
                         + (result.cost > 0 ? "＋" + result.cost + " 火券（不该发生，请核对）" : ""));
                 return true;

@@ -104,6 +104,8 @@ public class DetailActivity extends AppCompatActivity {
     private ScrollView textScroll;
     private ScrollView logScroll;
     private RecyclerView list;
+    private FastScrollBar scrollBar;
+    private TextView scrollBubble;
 
     // ---- 只有「已登记的章节」那一页用得上 ----
     private SubscriptionDao dao;
@@ -137,6 +139,8 @@ public class DetailActivity extends AppCompatActivity {
         textScroll = findViewById(R.id.detail_scroll);
         logScroll = findViewById(R.id.detail_log_scroll);
         list = findViewById(R.id.detail_list);
+        scrollBar = findViewById(R.id.detail_scrollbar);
+        scrollBubble = findViewById(R.id.detail_scroll_bubble);
         findViewById(R.id.detail_back).setOnClickListener(v -> finish());
         ((ImageView) findViewById(R.id.detail_back)).setContentDescription(
                 getString(R.string.detail_back));
@@ -167,6 +171,8 @@ public class DetailActivity extends AppCompatActivity {
         list.setLayoutManager(new LinearLayoutManager(this));
         // 行本身是卡片、自带间距，再画分割线只会在卡片之间多一道横杠。
         list.setAdapter(adapter);
+        // 常驻滚动条：内容不到一屏它自己收起来，所以三个列表页都能无脑挂上。
+        scrollBar.attach(list, scrollBubble);
     }
 
     // ---------- 这一趟里我会替你按什么 ----------
@@ -256,6 +262,11 @@ public class DetailActivity extends AppCompatActivity {
                 .onClick((item, pos) -> onChapterClick(item))
                 .onLongClick((item, pos) -> openChapterSheet(item));
         useList(chapterAdapter);
+        // 拖滚动条时气泡上写「第几章」：一屏 8 行、九十来章，光看滑块位置猜不出拖到哪儿了。
+        scrollBar.setLabeler(pos -> {
+            Chapter c = chapterAdapter.itemAt(pos);
+            return c == null ? null : "第" + c.chapterNo + "章";
+        });
 
         dao.observeNovels().observe(this, this::onNovels);
         accountDao.observeAll().observe(this, l -> {

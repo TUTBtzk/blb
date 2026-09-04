@@ -8,7 +8,7 @@ import java.util.List;
  *
  * <p>为什么要单独有它，而不直接把日志最后一行拿去弹：日志那一行是给排查用的
  * （「签到 0，已签 6，失败 0；广告 0 个；订阅 1 章（花 10 代券）；22 章在这台手机上已下载、
- * 但账本里没有归属（第49章、第53章…），一个字都没写，请对着订阅清单核对是哪个号买的」），
+ * 但 8 个号的账本里都查不到归属（第49章、第53章…），一个字都没写，请对着订阅清单核对是谁买的」），
  * 一屏都放不下，而且要紧的结论被对账细节埋在中间。使用者手指动不了 —— 他既拉不开通知栏、
  * 也点不进「运行日志」，弹窗上这几行就是他能读到的全部，所以只留他关心的那几件事：
  * 签到成了几个、哪个号没成、订了几章花了多少券、为什么停下。
@@ -70,10 +70,15 @@ public final class RunReport {
         if (s.subscribing) {
             lines.add(boughtLine(s.bought, s.spent));
             if (s.subscribeFailed > 0) lines.add("订阅没走通 " + s.subscribeFailed + " 个号");
+            // 这两句是弹窗里唯一点名到章的地方：整本停在第几章（代券不够也算，不是失败），
+            // 以及万一真越过了一章 —— 缺口自己不会浮出来，2026-09-03 那趟就是这么漏掉第83章的。
+            if (s.stuckNote != null) lines.add(s.stuckNote);
+            if (s.gapNote != null) lines.add(s.gapNote);
         } else if (s.subscribeNote != null) {
             lines.add("这一趟没订阅：" + s.subscribeNote);
         }
-        boolean good = s.checkInFailed == 0 && s.subscribeFailed == 0 && !s.aborted();
+        boolean good = s.checkInFailed == 0 && s.subscribeFailed == 0
+                && s.gapNote == null && !s.aborted();
         if (s.aborted()) lines.add("整趟停在这里：" + s.abortReason);
         return new RunReport(good ? "今天的流程跑完了" : "今天的流程没跑完", lines, good);
     }
@@ -86,7 +91,9 @@ public final class RunReport {
         lines.add(boughtLine(s.bought, s.spent));
         if (s.total > 0) lines.add(s.total + " 个号都试过了");
         if (s.failed > 0) lines.add("没走通 " + s.failed + " 个号");
-        boolean good = s.failed == 0 && !s.aborted();
+        if (s.stuckNote != null) lines.add(s.stuckNote);
+        if (s.gapNote != null) lines.add(s.gapNote);
+        boolean good = s.failed == 0 && s.gapNote == null && !s.aborted();
         if (s.aborted()) lines.add("整趟停在这里：" + s.abortReason);
         return new RunReport(good ? "订阅完成" : "订阅没做完", lines, good);
     }

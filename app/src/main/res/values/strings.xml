@@ -112,6 +112,7 @@
     <string name="detail_stats_empty">账本里还没有订阅记录。跑一趟自动订阅，或在章节页手动补录。</string>
     <string name="detail_stats_summary_empty">账本里还没有订阅记录。</string>
     <string name="sub_ledger_section">这本书的账本</string>
+    <string name="detail_scrollbar_hint">滚动条：在上面点一下就跳到那一处，也可以按住上下拖</string>
 
     <string name="inspector_dump">抓取当前菠萝包界面</string>
     <string name="inspector_save">保存到文件</string>

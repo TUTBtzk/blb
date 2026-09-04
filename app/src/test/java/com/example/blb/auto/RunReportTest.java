@@ -137,6 +137,49 @@ public class RunReportTest {
     }
 
     /**
+     * 「整本停在第83章」要弹出来，但它<b>不算失败</b>：8 个号都只是代券不够的时候，
+     * 那是护栏在正常工作（用户的原话：「如果余额不够就放弃，切换下一个账号尝试」），
+     * 流程本身是跑完的。真出错由「订阅没走通 N 个号」那一行说。
+     */
+    @Test
+    public void beingStuckOnMoneyIsReportedButIsNotAFailure() {
+        DailyQueue.Summary s = new DailyQueue.Summary();
+        s.total = 8;
+        s.checkedIn = 8;
+        s.subscribing = true;
+        s.stuckNote = "第83章没订下来（8 个号都试过了），整本停在这里 —— 后面的章一章都没往后买"
+                + "。最后一个号：好好上课是 只剩 2 代券，不够买第83章（约 20 代券），换下一个号";
+        RunReport r = RunReport.ofDaily(s);
+        assertEquals("今天的流程跑完了", r.title);
+        assertTrue("代券不够不是出错", r.allGood);
+        assertTrue(r.body(), r.body().contains("第83章"));
+        assertTrue("必须说清后面的章没有被跳过去买", r.body().contains("没往后买"));
+    }
+
+    /**
+     * 万一真越过了一章，那句话必须弹出来、还要<b>点名到章</b>，并且算没跑完。
+     *
+     * <p>2026-09-03 那趟 6 章全买成了，弹窗于是写着「今天的流程跑完了」，可第83章是空的：
+     * 84、85、86、87 章照样往下买，缺口自己不会浮出来。使用者是自己对着 STATUS 广播
+     * 才发现的 —— 而「不漏订、8 个号拼出完整一本」是他两条硬约束之一，缺一章就不算跑完。
+     */
+    @Test
+    public void aMissingChapterIsNamedAndBreaksTheGoodMood() {
+        DailyQueue.Summary s = new DailyQueue.Summary();
+        s.total = 8;
+        s.checkedIn = 8;
+        s.subscribing = true;
+        s.bought = 6;
+        s.spent = 110;
+        s.gapNote = "这趟买到了第87章，可第83章还是空的 —— 中间漏了一章，这本书现在拼不完整";
+        RunReport r = RunReport.ofDaily(s);
+        assertEquals("今天的流程没跑完", r.title);
+        assertFalse("缺一章就不算跑完", r.allGood);
+        assertTrue(r.body(), r.body().contains("第83章"));
+        assertTrue("订到几章还是要照说", r.body().contains("订到 6 章"));
+    }
+
+    /**
      * 对账细节（{@code notes}）<b>不许</b>进弹窗。
      *
      * <p>「22 章在这台手机上已下载、但账本里没有归属（第49章、第53章…）」这类话一条就能
@@ -193,6 +236,20 @@ public class RunReportTest {
         assertEquals("订阅没做完", r.title);
         assertFalse(r.allGood);
         assertTrue(r.body(), r.body().contains("整趟停在这里：点了立即下载"));
+    }
+
+    /** 只订阅那一趟同样：买到 3 章不等于没漏，越过一章那句话得跟着弹出来。 */
+    @Test
+    public void aSubscribeRunWithAHoleIsNotGoodEither() {
+        SubscribeQueue.Summary s = new SubscribeQueue.Summary();
+        s.total = 8;
+        s.bought = 3;
+        s.spent = 60;
+        s.gapNote = "这趟买到了第87章，可第83章还是空的 —— 中间漏了一章，这本书现在拼不完整";
+        RunReport r = RunReport.ofSubscribe(s);
+        assertEquals("订阅没做完", r.title);
+        assertFalse(r.allGood);
+        assertTrue(r.body(), r.body().contains("第83章"));
     }
 
     // ---------- 切号、跑都没跑起来 ----------

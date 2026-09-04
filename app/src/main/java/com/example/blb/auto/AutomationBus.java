@@ -20,7 +20,17 @@ import java.util.concurrent.TimeUnit;
  */
 public final class AutomationBus {
 
-    private static final int MAX_LOG_LINES = 300;
+    /**
+     * 日志页最多留多少行。
+     *
+     * <p>原来是 300 —— 装不下一整趟：8 个号每号约 50 行（登号、余额、两层对账逐章打印、
+     * 目录扫描、逐章尝试），2026-09-03 那趟跑完，前两个号的日志已经被挤掉了，而第83章
+     * 恰恰是在那两个号身上没走通的，于是「为什么跳过了83章」在机器上查不到答案。
+     *
+     * <p>没有开得更大是因为日志页是一个 TextView 装全文（{@code TextUtils.join("\n", …)}），
+     * 行数直接换成 measure 的开销。800 行装得下一整趟还有一倍余量。
+     */
+    private static final int MAX_LOG_LINES = 800;
 
     private static final MutableLiveData<Boolean> RUNNING = new MutableLiveData<>(false);
     private static final MutableLiveData<String> STATUS = new MutableLiveData<>("空闲");

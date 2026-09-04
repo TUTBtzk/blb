@@ -12,9 +12,7 @@ import com.example.blb.data.SubscriptionDao;
 import com.example.blb.util.Texts;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 订阅页那颗「开始自动订阅」：只做订阅，不签到、不看广告。
@@ -40,6 +38,13 @@ public final class SubscribeQueue {
         /** 实付代券累计。 */
         public int spent;
         public String abortReason;
+        /**
+         * 整本现在<b>停在第几章</b>（{@link SubscribeRun#stuckNote}）；没卡住就是 null。
+         * 队列绝不越过一章，所以一趟里最多只会停在一章上。代券不够也算，那不是失败。
+         */
+        public String stuckNote;
+        /** 这一趟有没有<b>越过</b>一章（{@link SubscribeRun#gapNote}）；正常永远是 null。 */
+        public String gapNote;
         public final List<String> notes = new ArrayList<>();
 
         public boolean aborted() {
@@ -86,7 +91,7 @@ public final class SubscribeQueue {
 
         SubscribeRun.Tally tally = new SubscribeRun.Tally(summary.notes);
         StepRunner runner = new StepRunner(context, selectors, host);
-        Set<Long> touched = new HashSet<>();
+        SubscribeRun.Settled settled = new SubscribeRun.Settled();
 
         for (int i = 0; i < accounts.size(); i++) {
             if (host.isCancelled()) {
@@ -107,7 +112,7 @@ public final class SubscribeQueue {
                     accountDao.setBalance(account.id, balance.fire, balance.voucher);
                 }
                 SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                        balance, touched, tally);
+                        balance, settled, tally);
             } catch (StepRunner.StepFailure e) {
                 host.log("  " + e.getMessage());
                 if (isGlobal(e.kind)) {
@@ -125,6 +130,8 @@ public final class SubscribeQueue {
         summary.already = tally.ownedAlready;
         summary.failed = tally.failed;
         summary.spent = tally.spent;
+        summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
+        summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
         return summary;
     }
 

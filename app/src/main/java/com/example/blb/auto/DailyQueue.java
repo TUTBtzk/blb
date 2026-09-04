@@ -15,9 +15,7 @@ import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 每天的整套流程。按账号顺序（sort_order）把一个号的三件事全做完，再换下一个号：
@@ -52,6 +50,23 @@ public final class DailyQueue {
         public boolean subscribing;
         public String subscribeNote;
         public String abortReason;
+        /**
+         * 整本现在<b>停在第几章</b>（{@link SubscribeRun#stuckNote}）；没卡住就是 null。
+         *
+         * <p>队列绝不越过一章：一章订不下来就换下一个号试同一章，8 个号都不行就停在那里。
+         * 所以这句话是「不漏订、8 个号拼出完整一本」在弹窗上唯一看得见的地方 ——
+         * 使用者手指动不了、点不进运行日志，「没走通 1」对他等于什么都没说。
+         *
+         * <p>它<b>不算失败</b>：8 个号都只是代券不够也会有这一句。真出错由
+         * 「订阅没走通 N 个号」那一行说。
+         */
+        public String stuckNote;
+        /**
+         * 这一趟有没有<b>越过</b>一章（{@link SubscribeRun#gapNote}）；没有缺口就是 null。
+         *
+         * <p>正常永远是 null —— 留着当不变量断言，一旦有值就说明「不跳过任何一章」被破坏了。
+         */
+        public String gapNote;
         public final List<String> notes = new ArrayList<>();
         /**
          * 没签成的账号名（不含「已跳过」）。跑完那个弹窗要靠它点名 ——
@@ -111,7 +126,7 @@ public final class DailyQueue {
         // 跳转键只在「你人在屏幕前 + 你自己开过这个开关」时才按，定时任务里恒为 false。
         AdWatchTask.Mode adMode = new AdWatchTask.Mode(
                 attended && Prefs.isAdAssist(context), attended && Prefs.isAdJump(context));
-        Set<Long> touched = new HashSet<>();
+        SubscribeRun.Settled settled = new SubscribeRun.Settled();
         CheckInQueue.LoggedIn loggedIn = new CheckInQueue.LoggedIn();
 
         for (int i = 0; i < accounts.size(); i++) {
@@ -136,7 +151,7 @@ public final class DailyQueue {
                         account, ymd, quota, adMode, summary);
                 if (plan != null) {
                     SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                            balance, touched, tally);
+                            balance, settled, tally);
                 }
             } catch (StepRunner.StepFailure e) {
                 if (e.kind == StepRunner.Kind.MONEY_UNCLEAR) {
@@ -162,6 +177,10 @@ public final class DailyQueue {
         summary.ownedAlready = tally.ownedAlready;
         summary.subscribeFailed = tally.failed;
         summary.spent = tally.spent;
+        if (plan != null) {
+            summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
+            summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
+        }
         return summary;
     }
 

@@ -9,6 +9,7 @@ import com.example.blb.util.Texts;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -55,11 +56,16 @@ public final class CatalogSync {
         /** 账本说这个号买过、界面上却还能勾选要花券的章 —— 对不上，必须让人知道。 */
         public final List<String> contradictions = new ArrayList<>();
         /**
-         * 付费、本机已下载、当前这个号账本里却没有记录的章 —— <b>买家很可能是另一个号</b>。
+         * 付费、本机已下载、<b>8 个号的账本里都没有归属</b>的章 —— 真的说不清是谁买的。
          *
-         * <p>「已下载」是本机状态、8 个号共用，所以这种行既不能回填成当前号拥有
-         * （2026-08-25 第49章就是这样多出一个订阅者的），也买不了（没有勾选圈）。
-         * 只能报出来让人对着「我的 → 代券 → 订阅清单」核对是谁买的。
+         * <p>「已下载」是本机状态、8 个号共用，所以<b>这一条必须跨号问</b>：皓平买的章在
+         * 另外 7 个号登录时照样写着「已下载」。2026-09-03 那趟只问了当前号，于是同一批章
+         * （第48、49、50…）在每个号身上各被报一次「没有归属」—— 8 条备注全是误报，
+         * 而同一趟的逐章对账（{@link SubscribedDetail}）明明每个号都说「都对上了」。
+         *
+         * <p>真落到这个名单里的章既不能回填成当前号拥有（2026-08-25 第49章就是那样多出
+         * 一个订阅者的），也买不了（没有勾选圈）。只能报出来让人对着
+         * 「我的 → 代券 → 订阅清单」核对是谁买的。
          */
         public final List<String> foreign = new ArrayList<>();
         /** 跳过的无标号行（卷标题这类），原样带出来写日志。 */
@@ -177,9 +183,15 @@ public final class CatalogSync {
      * 「第49章实际上只有皓平购买了，却显示已订阅：皓平、五杯半雪碧」—— 就是这里按「已下载」
      * 回填出来的第二个订阅者。它直接违反「每一章只能有一个账号订阅」，还会让这一章
      * 永远算成「有人有了」而漏订。所以付费章的归属只认真实购买记录，界面上读不出来。
+     *
+     * <p><b>「有没有归属」跨号问，「是不是我的」才问当前号</b>：同一个「已下载」标记，
+     * 8 个号看到的是同一份文件。2026-09-03 那趟把这两件事混成了一个 {@code recorded}，
+     * 于是别的号买过的章被当成「没有归属」报了 8 遍（见 {@link Report#foreign}）。
      */
     private static void write(SubscriptionDao subs, Novel novel, long accountId,
                               CatalogScanner.Result scan, Report out) {
+        // 全书跨号的归属集合，一次取完：8 个号里任何一个买过，这一章就是有主的。
+        Set<Long> ownedByAnyone = new HashSet<>(subs.realPurchasedChapterIds(novel.id));
         for (int i = 0; i < scan.chapters.size(); i++) {
             CatalogScanner.Row row = scan.chapters.get(i);
             int no = i + 1; // 章号＝界面上的位置，不是行首那个标号（分卷会各自从 1 重排）
@@ -195,19 +207,51 @@ public final class CatalogSync {
                 subs.updateChapter(chapter);
             }
             if (accountId <= 0) continue;
-            boolean recorded = subs.countRealPurchase(accountId, chapter.id) > 0;
-            if (row.state.free()) {
-                if (!recorded) {
+            boolean mine = subs.countRealPurchase(accountId, chapter.id) > 0;
+            switch (verdict(row.state, mine, ownedByAnyone.contains(chapter.id))) {
+                case BACKFILL_FREE:
                     subs.upsertPurchase(Purchase.of(accountId, chapter.id, 0, Purchase.SRC_OWNED));
                     out.backfilled++;
-                }
-            } else if (row.state.deviceHasIt()) {
-                // 付费章 + 本机已下载：买家可能是别的号，一个字都不写。
-                if (!recorded) out.foreign.add("第" + no + "章");
-            } else if (row.state.buyable() && recorded) {
-                out.contradictions.add("第" + no + "章");
+                    break;
+                case FOREIGN:
+                    out.foreign.add("第" + no + "章");
+                    break;
+                case CONTRADICTION:
+                    out.contradictions.add("第" + no + "章");
+                    break;
+                default:
+                    break;
             }
         }
+    }
+
+    /** 一行扫完之后该怎么记账。 */
+    enum Verdict {
+        /** 免费章、当前这个号还没记过 → 补一条 OWNED（一章 8 条，8 个号各一条）。 */
+        BACKFILL_FREE,
+        /** 什么都不做：已经记过了，或者是等着被买的付费章。 */
+        NOTHING,
+        /** 本机已下载、可 8 个号都查不到归属 → 报出来让人核对，账本一个字都不写。 */
+        FOREIGN,
+        /** 账本说这个号买过、界面上却还要花券才看得到 → 报出来让人核对。 */
+        CONTRADICTION
+    }
+
+    /**
+     * 「这一行该怎么记账」。<b>拆成纯函数是为了钉住那个误报</b>：「有没有归属」必须跨号问
+     * （{@code ownedByAnyone}），「是不是我买的」才问当前号（{@code mine}）—— 同一个「已下载」
+     * 标记 8 个号看到的是同一份文件。2026-09-03 那趟把两者混成一个变量，于是皓平买的那批章
+     * 在另外 7 个号身上各被报了一次「没有归属」，8 条备注全是假的，而同一趟的逐章对账
+     * 明明每个号都说「都对上了」。
+     *
+     * @param mine           当前这个号的账本里有这一章的记录（含免费章那条 OWNED）
+     * @param ownedByAnyone  8 个号里任何一个的账本里有这一章的记录
+     */
+    static Verdict verdict(ChapterRowState state, boolean mine, boolean ownedByAnyone) {
+        if (state.free()) return mine ? Verdict.NOTHING : Verdict.BACKFILL_FREE;
+        if (state.deviceHasIt()) return ownedByAnyone ? Verdict.NOTHING : Verdict.FOREIGN;
+        if (state.buyable() && mine) return Verdict.CONTRADICTION;
+        return Verdict.NOTHING;
     }
 
     /**
