@@ -474,17 +474,17 @@ public class BlbAccessibilityService extends AccessibilityService {
      * 在目录可见区域内慢速短滑，供自动化工作线程调用；实际完成后才返回成功。
      * 目录扫描会用滑动结果判断页尾，系统只接受了手势、随后取消或没有回调都不能算完成。
      * 传入容器无效或可见区域太小时返回失败，只有未提供容器时才使用屏幕范围。
+     *
+     * <p>2026-09-15 现场：向下的目录手势在列表顶部会被菠萝包当成下拉刷新，页面每次跳回已读章节，
+     * 回顶循环跑了 122 次仍没确认顶部（{@code blb-log目录}）。所以这里只保留向前的短滑，
+     * 反向的 {@code swipeCatalogDown} 已删除；回顶走应用自己的按钮和容器原生反向动作。
      */
     public boolean swipeCatalogUp(NodeView viewport) {
-        return swipeCatalog(viewport, true);
+        return swipeCatalog(viewport);
     }
 
-    /** 2026-09-14 两页目录对照必须先证实回到顶部；反向也复用同一容器及完成回调。 */
-    public boolean swipeCatalogDown(NodeView viewport) {
-        return swipeCatalog(viewport, false);
-    }
-
-    private boolean swipeCatalog(NodeView viewport, boolean forward) {
+    /** 只往列表后面滑（手指从下往上），没有任何反向手势入口：反方向会触发下拉刷新。 */
+    private boolean swipeCatalog(NodeView viewport) {
         if (Thread.currentThread().isInterrupted()) return false;
         try {
             DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -505,9 +505,9 @@ public class BlbAccessibilityService extends AccessibilityService {
             float x = Math.max(0f, Math.min(dm.widthPixels - 1f,
                     visible.left + visible.width() / 2f));
             float fromY = Math.max(0f, Math.min(dm.heightPixels - 1f,
-                    visible.top + visible.height() * (forward ? 0.72f : 0.32f)));
+                    visible.top + visible.height() * 0.72f));
             float toY = Math.max(0f, Math.min(dm.heightPixels - 1f,
-                    visible.top + visible.height() * (forward ? 0.32f : 0.72f)));
+                    visible.top + visible.height() * 0.32f));
             if (fromY == toY) return false;
             Path path = new Path();
             path.moveTo(x, fromY);

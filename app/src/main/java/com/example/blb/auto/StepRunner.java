@@ -646,33 +646,26 @@ public class StepRunner {
         return completed;
     }
 
-    /** 2026-09-14 普通目录上方还有横向标签；回顶也只能滑动已识别的纵向章节容器。 */
-    public boolean scrollCatalogBackward() throws StepFailure {
-        checkCancelled();
-        BlbAccessibilityService svc = service();
-        NodeView viewport = catalogViewport(svc.root());
-        if (viewport == null) return false;
-        boolean completed = svc.swipeCatalogDown(viewport);
-        checkCancelled();
-        if (Thread.currentThread().isInterrupted()) {
-            throw new StepFailure(Kind.CANCELLED, "目录回顶已中止");
-        }
-        return completed;
-    }
-
+    /**
+     * 目录页在回顶与翻页之间只走这两条路：应用自己的「回到顶部」按钮，和容器原生滚动动作。
+     *
+     * <p>2026-09-15 现场：向下的手势在列表顶部会被菠萝包当成下拉刷新，页面每次跳回已读章节，
+     * 回顶循环跑了 122 次仍没确认顶部。原来那个 {@code scrollCatalogBackward} 手势入口已删除 ——
+     * 「任何情况下都不派发向下手势」这条保证写在类型上，而不只是写在注释里。
+     */
     public enum CatalogScroll { UNAVAILABLE, ACCEPTED, BLOCKED }
 
     /** 明细与目录复用带完成回调的短滑，保留重叠；不再把全屏手势提交当作翻页完成。 */
     public boolean scrollDetailForward() throws StepFailure { return scrollDetail(true); }
 
-    public boolean scrollDetailBackward() throws StepFailure { return scrollDetail(false); }
-
+    /** 明细页同样只往下读；向后的手势入口已删除（明细页也支持下拉刷新）。 */
     private boolean scrollDetail(boolean forward) throws StepFailure {
         checkCancelled();
         BlbAccessibilityService svc = service();
         NodeView viewport = detailViewport(svc.root(), selectors);
         if (viewport == null) return false;
-        boolean completed = forward ? svc.swipeCatalogUp(viewport) : svc.swipeCatalogDown(viewport);
+        if (!forward) return false;
+        boolean completed = svc.swipeCatalogUp(viewport);
         checkCancelled();
         if (Thread.currentThread().isInterrupted()) {
             throw new StepFailure(Kind.CANCELLED, "订阅明细滑动已中止");
@@ -727,6 +720,13 @@ public class StepRunner {
         return probeCatalogContainer(true);
     }
 
+    /**
+     * 目录回顶已改成只用两样东西：应用自己的「回到顶部」按钮，和这里的容器原生反向动作。
+     *
+     * <p>2026-09-15 现场：向下拖动的手势在顶部会被菠萝包当成下拉刷新，页面每次跳回已读章节，
+     * 回顶循环跑了 122 次都没确认顶部。手势入口 {@code scrollCatalogBackward} 已删除 ——
+     * 目录页在任何情况下都不派发向下手势，这条保证写在类型上，而不只是写在注释里。
+     */
     public CatalogScroll probeCatalogContainerBackward() throws StepFailure {
         return probeCatalogContainer(false);
     }

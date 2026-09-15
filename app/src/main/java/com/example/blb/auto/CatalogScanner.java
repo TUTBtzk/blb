@@ -306,13 +306,13 @@ public final class CatalogScanner {
                         out.gapNote = "目录内容虽然不变，但没有读到可核实的列表容器，不能确认到底";
                         break;
                     }
-                    if (!same && !joinScreen(catalog, current, checked, out)) break;
+                    if (!same && !joinScreen(r, catalog, current, checked, out)) break;
                     current = checked;
                     unchanged = 0;
                 }
             } else {
                 unchanged = 0;
-                if (!joinScreen(catalog, previous, current, out)) break;
+                if (!joinScreen(r, catalog, previous, current, out)) break;
             }
             previous = current;
         }
@@ -328,7 +328,7 @@ public final class CatalogScanner {
                 && probe == StepRunner.CatalogScroll.BLOCKED;
     }
 
-    private static boolean joinScreen(List<Occurrence> catalog, Screen previous,
+    private static boolean joinScreen(StepRunner r, List<Occurrence> catalog, Screen previous,
                                       Screen current, Result out) {
         if (previous.rows.isEmpty() || current.rows.isEmpty()) {
             out.gapNote = "目录翻页前后缺少可读的行，不能拼接或确认到底";
@@ -674,6 +674,12 @@ public final class CatalogScanner {
         if (!directoryMode && !requirePickerList) {
             captured.sort(Comparator.comparingInt(row -> row.titleBounds[1]));
         }
+        // 2026-09-15 第五次现场：选择章节页是 RecyclerView，翻页后贴着视口上下边的残行连 title
+        // 节点都不在可见树里（只剩居中的锁和勾选圈，childCount=2）。这种行没有任何身份或状态证据，
+        // 留着它却有两处害处：上一屏后缀↔本屏前缀的**逐位置**对齐会整体错位（第五次现场就是
+        // 第二屏首行、第三屏末行各一行残行，整趟停在「没有可靠的重叠行」），它还会以空标题混进目录。
+        // 滚过几屏之后同一行一定会在屏幕中间完整出现，所以这里直接丢掉它最安全。
+        dropUnreadableEdgeFragments(r, captured);
         int shortestFullRow = Integer.MAX_VALUE;
         for (CapturedRow row : captured) {
             // 2026-09-14 番外可以独占整屏；无编号完整行也必须参与裁剪检查，不能失去高度参照。
@@ -694,6 +700,34 @@ public final class CatalogScanner {
                     && row.bounds[3] - row.bounds[1] < shortestFullRow));
         }
         return new Screen(captured);
+    }
+
+    /**
+     * 丢掉贴着视口上下边、读不到标题、而且比同屏读全的行都矮的残行。
+     *
+     * <p>判据刻意收得很紧：必须是「贴着视口边」（说明它是被视口裁出来的）**而且**
+     * 比同屏任何一行完整行都矮（说明它是被裁短的尾巴）。高度正常、只是读不出来的整行
+     * 不在这条豁免里 —— 那种行仍然按原来的方式报「存在不能确认身份的目录行」。
+     */
+    private static void dropUnreadableEdgeFragments(StepRunner r, List<CapturedRow> rows) {
+        int shortest = Integer.MAX_VALUE;
+        for (CapturedRow row : rows) {
+            if (!row.complete() || !hasArea(row.viewport)) continue;
+            if (row.bounds[1] < row.viewport[1] || row.bounds[3] > row.viewport[3]) continue;
+            shortest = Math.min(shortest, row.bounds[3] - row.bounds[1]);
+        }
+        if (shortest == Integer.MAX_VALUE) return;
+        for (int i = rows.size() - 1; i >= 0; i--) {
+            CapturedRow row = rows.get(i);
+            if (row.structureReadable() || !hasArea(row.bounds) || !hasArea(row.viewport)) continue;
+            boolean atEdge = row.bounds[1] <= row.viewport[1] || row.bounds[3] >= row.viewport[3];
+            if (!atEdge || row.bounds[3] - row.bounds[1] >= shortest) continue;
+            r.log("  屏边残行（读不到标题、只有 "
+                    + Math.max(0, row.bounds[3] - row.bounds[1]) + "px）不算目录行，已跳过："
+                    + row.nodeDescription + "；rowBounds=" + Arrays.toString(row.bounds)
+                    + "；屏幕坐标=" + Arrays.toString(row.viewport));
+            rows.remove(i);
+        }
     }
 
     private static CapturedRow capturePickerRow(StepRunner r, NodeView row, NodeView title,
@@ -1148,28 +1182,28 @@ public final class CatalogScanner {
         }
         if (!previous.navigationReady()) throw topFailure(r, progress, previous.problem());
         int unchanged = 0;
-        int failedGestures = 0;
         int stalledProbes = 0;
+        boolean everMoved = false;
+        // 按钮按下去之后页面确实换了一屏：这是「该按钮真的能把列表带到顶部」的现场证据。
+        boolean clickedMoved = !entered.signature.equals(previous.signature);
         int limit = Math.max(4, Math.min(DEFAULT_MAX_SCROLLS, Math.max(0, scrolls)) + 2);
         for (int i = 0; i < limit; i++) {
             r.checkCancelled();
             progress.scrolls++;
-            if (!r.scrollCatalogBackward()) {
-                // 手势失败不是顶部；先重读当前页，恢复次数耗尽才报告失败。
-                previous = recoveredScreen(r, null, directoryMode, true, false, "反向滑动未完成后");
-                progress.last = previous;
-                if (++failedGestures > READ_RECOVERIES || !previous.navigationReady()) {
-                    throw topFailure(r, progress, "目录反向滑动没有执行成功，不能据此确认顶部");
-                }
-                unchanged = 0;
-                continue;
+            // 2026-09-15 现场：这里原来派发向下手势，到顶后每次都被菠萝包当成下拉刷新，页面跳回
+            // 已读章节，同一个循环跑了 122 次仍没确认顶部。回顶只许用两样东西：应用自己的
+            // 「回到顶部」按钮，和列表容器的原生反向滚动动作 —— 后者不产生触摸事件，
+            // 不会触发下拉刷新，到顶时容器自己会拒绝它（BLOCKED），边界证据和原来一样强。
+            StepRunner.CatalogScroll step = r.probeCatalogContainerBackward();
+            progress.probes++;
+            if (step == StepRunner.CatalogScroll.UNAVAILABLE) {
+                throw topFailure(r, progress, "读不到可核实的纵向目录容器，不能确认顶部");
             }
-            failedGestures = 0;
             r.sleepHuman();
             Screen current = recoveredScreen(r, previous.signature, directoryMode, true, false, "回顶途中");
             progress.last = current;
             if (!current.complete || !current.signature.equals(previous.signature)) {
-                logScreen(r, "回顶反向短滑第 " + progress.scrolls + " 次后", current);
+                logScreen(r, "回顶反向动作第 " + progress.scrolls + " 次后", current);
             }
             if (!current.navigationReady()) {
                 if (clickTop(r, page, progress)) {
@@ -1182,41 +1216,35 @@ public final class CatalogScanner {
                 continue;
             }
             unchanged = current.signature.equals(previous.signature) ? unchanged + 1 : 0;
+            everMoved |= unchanged == 0;
             if (unchanged >= END_CONFIRMATIONS) {
-                StepRunner.CatalogScroll probe = r.probeCatalogContainerBackward();
-                progress.probes++;
-                r.sleepHuman();
-                Screen checked = recoveredScreen(r, current.signature, directoryMode, true, false, "顶部边界核实");
-                progress.last = checked;
-                if (!checked.navigationReady()) throw topFailure(r, progress, checked.problem());
-                if (confirmedEnd(unchanged, checked.signature.equals(current.signature), probe)) {
+                // 强证据：容器自己拒绝反向滚动。弱证据只在容器动作从未推动过这个列表、
+                // 「回到顶部」按钮确实按下去过、而且按下去之后页面真的换了位置时才启用 ——
+                // 这时唯一可用的证据就是那条已被证实的按钮路径＋连续几次内容不变。
+                if (confirmedEnd(unchanged, true, step)
+                        || (!everMoved && progress.pressed > 0 && clickedMoved)) {
                     // 第一次扫描不知道全书首章标题；用物理边界建立首行证据，不猜“第1章”。
                     // 复扫必须仍是首行，不能仅在首屏任意位置找到旧标题就算通过。
-                    if (firstRowTitle == null || Objects.equals(firstRowTitle, checked.rows.get(0).title)) {
-                        r.log("目录回顶已确认：同一纵向列表反向拒绝滚动，连续内容不变=" + unchanged
-                                + "；" + progress.summary());
+                    if (firstRowTitle == null || Objects.equals(firstRowTitle, current.rows.get(0).title)) {
+                        r.log("目录回顶已确认：" + (step == StepRunner.CatalogScroll.BLOCKED
+                                ? "同一纵向列表反向拒绝滚动"
+                                : "该列表的原生反向动作不返回拒绝证据（" + step
+                                + "），以已证实能换屏的「回到顶部」按钮＋内容连续不变为准")
+                                + "，连续内容不变=" + unchanged
+                                + "，全程未派发向下手势；" + progress.summary());
                         r.recordDiagnostic("目录回顶已确认");
                         return;
                     }
                     throw topFailure(r, progress, "目录物理位置已到顶部，但当前首行不是先前首行「"
                             + firstRowTitle + "」，目录可能已经变化");
                 }
-                if (checked.signature.equals(current.signature)) {
-                    if (++stalledProbes > READ_RECOVERIES) {
-                        if (clickTop(r, page, progress)) {
-                            checked = recoveredScreen(r, null, directoryMode, true, false, "边界未确认后再次回顶");
-                            progress.last = checked;
-                            if (!checked.navigationReady()) throw topFailure(r, progress, checked.problem());
-                            stalledProbes = 0;
-                        } else {
-                            throw topFailure(r, progress, "目录内容虽不变，但列表探测=" + probe
-                                    + "，有限重试后仍不能确认顶部");
-                        }
-                    }
-                } else {
-                    stalledProbes = 0;
+                // 容器动过这个列表（说明它确实能滚），却又不肯拒绝：不能用“暂时不动”冒充顶部。
+                if (++stalledProbes > READ_RECOVERIES || !clickTop(r, page, progress)) {
+                    throw topFailure(r, progress, "目录内容虽不变，但列表仍接受反向滚动，不能确认顶部");
                 }
-                current = checked;
+                current = recoveredScreen(r, null, directoryMode, true, false, "边界未确认后再次回顶");
+                progress.last = current;
+                if (!current.navigationReady()) throw topFailure(r, progress, current.problem());
                 unchanged = 0;
             }
             previous = current;
@@ -1258,7 +1286,9 @@ public final class CatalogScanner {
         progress.clicks++;
         r.log("目录回顶按钮第 " + progress.clicks + "/" + TOP_CLICK_LIMIT + " 次："
                 + nodeDescription(node) + "，bounds=" + Arrays.toString(boundsOf(node)));
-        return r.pressOrLog("回到顶部", node);
+        boolean pressed = r.pressOrLog("回到顶部", node);
+        if (pressed) progress.pressed++;
+        return pressed;
     }
 
     private static boolean insideCatalogList(NodeView node) {
@@ -1271,13 +1301,16 @@ public final class CatalogScanner {
 
     private static final class TopProgress {
         int clicks;
+        /** 真正按下去了几次（手势被拒或节点点不动时不算）。 */
+        int pressed;
         int scrolls;
         int probes;
         String entered = "未读到";
         Screen last;
 
         String summary() {
-            return "回顶点击=" + clicks + "，反向滑动=" + scrolls + "，边界探测=" + probes
+            return "回顶点击=" + clicks + "（按下 " + pressed + "），反向动作=" + scrolls
+                    + "，边界探测=" + probes
                     + "；进入时：" + entered + "；当前：" + (last == null ? "未读到" : last.details());
         }
     }

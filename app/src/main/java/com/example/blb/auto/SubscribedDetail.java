@@ -45,6 +45,10 @@ public final class SubscribedDetail {
     private static final long SETTLE_TIMEOUT = 2_000L;
     private static final long SETTLE_STEP = 250L;
     private static final int SETTLE_MATCHES = 3;
+    /** 一屏没稳定时先原地重读几次，再决定跳过它继续往下读。 */
+    private static final int UNSTABLE_RETRIES = 2;
+    /** 连续这么多屏都不稳定（实在读不出证据）才按失败停下。 */
+    private static final int UNSTABLE_SCREEN_LIMIT = 3;
 
     /**
      * 「买了多久之内的章，允许清单里还没有」。
@@ -800,7 +804,9 @@ public final class SubscribedDetail {
             return runner.scrollForward();
         }
         @Override public boolean scrollWithinList(boolean forward) throws StepRunner.StepFailure {
-            return forward ? runner.scrollDetailForward() : runner.scrollDetailBackward();
+            // 只往下读：明细页也支持下拉刷新，向后的手势入口已被删除（见 StepRunner.scrollDetail）。
+            if (!forward) return false;
+            return runner.scrollDetailForward();
         }
         @Override public StepRunner.CatalogScroll probeList(boolean forward)
                 throws StepRunner.StepFailure {
@@ -1060,20 +1066,35 @@ public final class SubscribedDetail {
     private static final class ItemEvidence {
         final String kind, identity, date;
         final boolean whole, unknownDate;
+        /**
+         * 这一次观察落在列表视口的上下边缘。
+         *
+         * <p>2026-09-15 w9899 现场：被裁掉的行 frame 会被视口夹住 —— 行框顶边正好等于列表顶边，
+         * 标题已经不在可见节点里，只剩右侧的「代券」。这种「bounds 看起来整行可见」不能当作
+         * 「整行看得见却读不出来」，否则同一项在别的屏已经读全也会被抹掉覆盖证据。
+         */
+        final boolean clipped;
         final int top;
 
         ItemEvidence(String kind, String identity, String date, boolean whole,
                      boolean unknownDate, int top) {
+            this(kind, identity, date, whole, unknownDate, false, top);
+        }
+
+        ItemEvidence(String kind, String identity, String date, boolean whole,
+                     boolean unknownDate, boolean clipped, int top) {
             this.kind = kind;
             this.identity = identity;
             this.date = date;
             this.whole = whole;
             this.unknownDate = unknownDate;
+            this.clipped = clipped;
             this.top = top;
         }
 
         @Override public String toString() {
-            return kind + ":" + identity + ":" + date + ":" + whole + ":" + unknownDate + "@" + top;
+            return kind + ":" + identity + ":" + date + ":" + whole + ":" + unknownDate
+                    + (clipped ? ":屏边裁剪" : "") + "@" + top;
         }
     }
 
@@ -1347,6 +1368,7 @@ public final class SubscribedDetail {
         boolean fire = false;
         boolean capturedCountChange = false;
         int stationary = 0;
+        int unstableScreens = 0;
         String listIdentity = null;
         String previousSignature = null;
         for (int screenNo = 0; screenNo < MAX_SCROLLS; screenNo++) {
@@ -1355,14 +1377,43 @@ public final class SubscribedDetail {
             EvidenceScreen frame = stable.captured;
             logFrameEvidence(r, frame, "明细第 " + (screenNo + 1) + " 屏原始证据，稳定=" + stable.stable);
             if (!stable.stable) {
-                return evidenceResult(records, fromTop, false, false, unclassified, conflicting,
-                        itemCount, covered, !frame.ready ? "读取途中已不在订阅明细页"
+                String reason = !frame.ready ? "读取途中已不在订阅明细页"
                         : !frame.coverage.valid && !Texts.isBlank(frame.coverage.reason)
                         ? frame.coverage.reason
                         : previousSignature == null ? "明细首屏没有稳定下来，不能认作空清单"
-                        : "滚动后画面尚未稳定，不能把暂时不动当作到底",
-                        expectedChapters, screenNo + 1, problems, fire);
+                        : "滚动后画面尚未稳定，不能把暂时不动当作到底";
+                // 2026-09-15 w9899 第二次尝试：一屏在 2 秒内没稳定就作废整轮，只读到 3 屏 10 条。
+                // 首屏和「已经不在明细页」仍然当场停下；其余先原地补采两次，再不行就往前翻一屏
+                // 接着读 —— 少读的项最后由「列表项覆盖」在结尾拦住，不会变成一份看似完整的清单。
+                boolean firstScreen = previousSignature == null;
+                int retries = 0;
+                while (!stable.stable && retries < UNSTABLE_RETRIES && !firstScreen && frame.ready) {
+                    retries++;
+                    r.log("  明细第 " + (screenNo + 1) + " 屏未稳定，原地重读第 " + retries + " 次");
+                    stable = stableEvidenceScreen(r, previousSignature);
+                    fire |= stable.fireObserved;
+                    frame = stable.captured;
+                    logFrameEvidence(r, frame, "明细第 " + (screenNo + 1) + " 屏重读，稳定="
+                            + stable.stable);
+                }
+                if (!stable.stable) {
+                    if (firstScreen || !frame.ready || ++unstableScreens > UNSTABLE_SCREEN_LIMIT) {
+                        return evidenceResult(records, fromTop, false, false, unclassified,
+                                conflicting, itemCount, covered, reason, expectedChapters,
+                                screenNo + 1, problems, fire);
+                    }
+                    r.log("  明细第 " + (screenNo + 1) + " 屏始终没稳定（" + reason
+                            + "），这一屏不算证据，继续往下读");
+                    if (!r.scrollWithinList(true)) {
+                        return evidenceResult(records, fromTop, false, false, unclassified,
+                                conflicting, itemCount, covered,
+                                "列表内短滑未完成，不能据此确认到底", expectedChapters,
+                                screenNo + 1, problems, fire);
+                    }
+                    continue;
+                }
             }
+            unstableScreens = 0;
             List<Entry> current = new ArrayList<>();
             for (CapturedRow row : frame.screen.rows) {
                 current.add(parseRow(row.desc, row.amount, row.currency, null));
@@ -1373,13 +1424,7 @@ public final class SubscribedDetail {
             }
             FrameCoverage coverage = frame.coverage;
             for (String observation : coverage.problems) r.log("  明细采集观察：" + observation);
-            for (Map.Entry<Integer, ItemEvidence> item : coverage.items.entrySet()) {
-                if ("unknown".equals(item.getValue().kind)
-                        && (item.getValue().whole || !covered.contains(item.getKey()))) {
-                    classificationProblems.put(item.getKey(), "列表第 " + (item.getKey() + 1)
-                            + " 项「" + item.getValue().identity + "」尚未确定行类型");
-                } else classificationProblems.remove(item.getKey());
-            }
+            refreshClassificationProblems(coverage.items, covered, classificationProblems);
             problems.clear();
             problems.addAll(classificationProblems.values());
             r.log("  明细第 " + (screenNo + 1) + " 屏：集合项数 " + knownNumber(itemCount)
@@ -1449,6 +1494,9 @@ public final class SubscribedDetail {
                 if (!"unknown".equals(item.getValue().kind)) {
                     covered.add(index);
                     unclassified.remove(index);
+                } else if (item.getValue().clipped) {
+                    // 2026-09-15 w9899：屏边裁剪的一次观察什么也不改 —— 它既不能证明这一项读不出来
+                    // （滚到中间就能读），也不该抹掉别的屏已经取得的完整观察。
                 } else if (item.getValue().whole || !covered.contains(index)) {
                     // v1.1 懒加载回归：完整可见却无法分类的现状，不能被历史覆盖数静默抹掉。
                     // 仅屏边裁剪仍可保留此前完整观察；整行未知须等后续独立可读观察恢复。
@@ -1456,6 +1504,10 @@ public final class SubscribedDetail {
                     unclassified.add(index);
                 }
             }
+            // 问题清单在覆盖度更新之后重算：这一屏刚补齐的项不能留着上一屏的旧账。
+            refreshClassificationProblems(coverage.items, covered, classificationProblems);
+            problems.clear();
+            problems.addAll(classificationProblems.values());
             for (int rowAt = 0; rowAt < current.size(); rowAt++) {
                 Entry entry = current.get(rowAt);
                 Integer item = coverage.rowIndexByTop.get(frame.screen.rows.get(rowAt).top);
@@ -1594,11 +1646,36 @@ public final class SubscribedDetail {
         return anchors >= 2;
     }
 
+    /**
+     * 这一屏该报哪些「尚未确定行类型」。
+     *
+     * <p>屏边裁剪的行不算问题：它只是这一屏没看全，滚到中间就能读（见 {@link ItemEvidence#clipped}）。
+     * 其余读不出来的行仍按老规矩记着，直到它被某一次完整观察覆盖。
+     */
+    private static void refreshClassificationProblems(Map<Integer, ItemEvidence> items,
+                                                      Set<Integer> covered,
+                                                      Map<Integer, String> problems) {
+        for (Map.Entry<Integer, ItemEvidence> item : items.entrySet()) {
+            ItemEvidence evidence = item.getValue();
+            if ("unknown".equals(evidence.kind) && !evidence.clipped
+                    && (evidence.whole || !covered.contains(item.getKey()))) {
+                problems.put(item.getKey(), "列表第 " + (item.getKey() + 1)
+                        + " 项「" + evidence.identity + "」尚未确定行类型");
+            } else {
+                problems.remove(item.getKey());
+            }
+        }
+    }
+
     private static String mergeItemEvidence(Map<Integer, ItemEvidence> previous,
                                              Map<Integer, ItemEvidence> current) {
         for (Map.Entry<Integer, ItemEvidence> item : current.entrySet()) {
             ItemEvidence old = previous.get(item.getKey());
             ItemEvidence now = item.getValue();
+            if (old != null && !"unknown".equals(old.kind) && now.clipped) {
+                // 2026-09-15：屏边裁剪的重复观察不带任何新事实，不能污染已有的身份与日期链。
+                continue;
+            }
             if (old != null && !"unknown".equals(old.kind) && "unknown".equals(now.kind)) {
                 // 已知交易→未知→日期行不能洗掉原交易身份；未知只暂时挡住覆盖和日期传递。
                 if (now.whole || now.unknownDate) previous.put(item.getKey(),
@@ -1832,12 +1909,28 @@ public final class SubscribedDetail {
             coverage.items.put(index, new ItemEvidence("footer", fullText(item), null,
                     whole, false, topOf(item)));
         } else {
+            // v1.1 第三次修复：真机被裁掉的行 frame 会被视口夹住（行框顶边＝列表顶边），
+            // 只看 bounds 会把它当成「整行可见却读不出来」，于是同一项在别的屏读全了也被抹掉。
+            // 零面积标题仍按懒加载处理，不能混进「屏边裁剪」这条豁免里。
+            boolean clipped = !whole || clippedAtViewportEdge(item, coverage.list);
             coverage.items.put(index, new ItemEvidence("unknown", fullText(item), null,
-                    whole, unknownDate, topOf(item)));
+                    whole && !clipped, unknownDate, clipped, topOf(item)));
             coverage.problems.add("列表第 " + (index + 1) + " 项「" + fullText(item)
-                    + "」未分类：交易标题=" + descs.size() + "，日期未读全=" + unknownDate
-                    + "，整行可见=" + whole);
+                    + "」未分类：" + (clipped ? "屏边裁剪，等它滚到中间再读"
+                    : "交易标题=" + descs.size())
+                    + "，日期未读全=" + unknownDate + "，整行可见=" + (whole && !clipped));
         }
+    }
+
+    /**
+     * 行框贴着列表视口的上下边界。被视口夹过的 bounds 与整行可见无法区分，
+     * 只有贴着边界的这一种情形能确认是「这一次没看全」，因此不能据此改写覆盖证据。
+     */
+    private static boolean clippedAtViewportEdge(NodeView item, NodeView viewport) {
+        if (item == null || viewport == null
+                || !NodeMatcher.hasArea(item) || !NodeMatcher.hasArea(viewport)) return false;
+        int[] a = item.boundsInScreen(), b = viewport.boundsInScreen();
+        return a[1] <= b[1] || a[3] >= b[3];
     }
 
     private static boolean inside(NodeView node, NodeView viewport) {

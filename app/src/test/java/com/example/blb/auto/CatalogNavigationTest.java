@@ -3,8 +3,10 @@ package com.example.blb.auto;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
@@ -28,10 +30,37 @@ public class CatalogNavigationTest {
 
         assertEquals(0, runner.page);
         assertEquals(1, runner.topClicks);
-        assertTrue(runner.backwardCalls >= 2);
-        assertTrue(runner.backwardProbes > 0);
+        assertTrue(runner.backwardProbes >= 2);
         assertTrue(runner.logText().contains("第81章 心脏"));
         assertTrue(runner.logText().contains("同一纵向列表反向拒绝滚动"));
+    }
+
+    /**
+     * 2026-09-15 现场：到顶后每多滑一次就触发一次下拉刷新，页面跳回已读章节，循环 122 次仍没到顶。
+     * 回顶只许用应用自己的按钮和列表容器的原生反向动作，任何情况下都不派发向下手势。
+     */
+    @Test public void returningToTheTopNeverDispatchesADownwardGesture() throws Exception {
+        NavigationRunner runner = new NavigationRunner(normalPages());
+        runner.show(2);
+
+        CatalogScanner.toTop(runner, null, 120);
+
+        assertEquals(0, runner.page);
+        assertTrue(runner.backwardProbes > 0);
+        assertTrue(runner.logText().contains("目录回顶已确认"));
+    }
+
+    /** 没有回顶按钮时也只能靠容器动作往回走，同样不许派发向下手势。 */
+    @Test public void withoutATopButtonReturnStillUsesOnlyContainerActions() throws Exception {
+        NavigationRunner runner = new NavigationRunner(normalPages());
+        runner.hideTopButton = true;
+        runner.show(2);
+
+        CatalogScanner.toTop(runner, null, 120);
+
+        assertEquals(0, runner.topClicks);
+        assertEquals(0, runner.page);
+        assertTrue(runner.backwardProbes > 0);
     }
 
     @Test public void firstScanAcceptsASectionAtPhysicalTopWithoutGuessingPrintedChapterOne() throws Exception {
@@ -86,8 +115,7 @@ public class CatalogNavigationTest {
         ((FakeNode) runner.active).add(FakeNode.text("已选0章").withId("tvSelect"));
         topFailure(runner, null, 120);
         assertEquals(0, runner.topClicks);
-        assertEquals(0, runner.backwardCalls);
-        assertEquals(0, runner.backwardProbes);
+        assertEquals("认错页面时连容器动作都不许试", 0, runner.backwardProbes);
     }
 
     @Test public void duplicateVisibleTopButtonsUseTheVerifiedListInsteadOfGuessingCoordinates() throws Exception {
@@ -102,7 +130,7 @@ public class CatalogNavigationTest {
         assertTrue(runner.logText().contains("goto_top 数量=2"));
     }
 
-    @Test public void noTopButtonStillReturnsUsingBackwardScrollAndIndependentProbe() throws Exception {
+    @Test public void noTopButtonStillReturnsUsingOnlyContainerActions() throws Exception {
         NavigationRunner runner = new NavigationRunner(normalPages());
         runner.hideTopButton = true;
         runner.show(2);
@@ -123,7 +151,7 @@ public class CatalogNavigationTest {
 
         assertTrue(runner.page > 0);
         assertTrue(failure.getMessage().contains("达到次数上限"));
-        assertTrue(failure.getMessage().contains("反向滑动=4"));
+        assertTrue(failure.getMessage().contains("反向动作=4"));
         assertFalse(runner.logText().contains("回顶已确认"));
     }
 
@@ -138,18 +166,38 @@ public class CatalogNavigationTest {
 
         assertTrue(failure.getMessage().contains("不能确认顶部"));
         assertTrue(runner.topClicks <= 2);
-        assertTrue(runner.backwardCalls < 30);
+        assertTrue(runner.backwardProbes < 30);
         assertFalse(runner.logText().contains("回顶已确认"));
     }
 
-    @Test public void failedGesturesDoNotBecomeABlockedContainerProof() throws Exception {
+    @Test public void anUnavailableContainerCannotProveTheTop() throws Exception {
         NavigationRunner runner = new NavigationRunner(normalPages());
-        runner.failBackwardGesture = true;
+        runner.unavailableBackwardProbe = true;
         StepRunner.StepFailure failure = topFailure(runner, null, 120);
 
-        assertTrue(failure.getMessage().contains("反向滑动没有执行成功"));
-        assertEquals(3, runner.backwardCalls);
-        assertEquals(0, runner.backwardProbes);
+        assertTrue(failure.getMessage(), failure.getMessage().contains("读不到可核实的纵向目录容器"));
+        assertFalse(runner.logText().contains("回顶已确认"));
+    }
+
+    /**
+     * 2026-09-15 现场那条向下手势已经把整趟同步拖死（顶部触发下拉刷新，循环 122 次）。
+     * 修复不只是"不再调用"：入口本身被删掉，谁也不能再把它加回来而当测试看不出来。
+     */
+    @Test public void theCatalogAndDetailHaveNoDownwardGestureEntryPointLeft() {
+        for (String name : new String[]{"scrollCatalogBackward", "scrollDetailBackward"}) {
+            try {
+                StepRunner.class.getMethod(name);
+                fail(name + " 又能被调用了：向后的手势入口必须不存在");
+            } catch (NoSuchMethodException expected) {
+                // 正是我们要的：类型上就没有这个入口。
+            }
+        }
+        try {
+            BlbAccessibilityService.class.getMethod("swipeCatalogDown", NodeView.class);
+            fail("swipeCatalogDown 又能被调用了：向下的目录手势会触发下拉刷新");
+        } catch (NoSuchMethodException expected) {
+            // 同上。
+        }
     }
 
     @Test public void findingTheOldFirstTitleBelowANewFirstRowDoesNotConfirmTheOldCatalog() throws Exception {
@@ -157,6 +205,75 @@ public class CatalogNavigationTest {
         StepRunner.StepFailure failure = topFailure(runner, "第1章 开始", 120);
         assertTrue(failure.getMessage().contains("当前首行不是先前首行"));
         assertTrue(failure.getMessage().contains("新增序言"));
+    }
+
+    /**
+     * 2026-09-15 第四次现场（blb-log-f1.1.4.txt 第 86–111 行）：选择章节页是 RecyclerView，
+     * 翻页后上边被裁掉的那一行连 title 节点都不在可见树里（只剩居中的锁和勾选圈），
+     * 于是「可靠的重叠行」判不出来，整趟同步中止。它必然是重叠区前一行，必须能跳过它对位。
+     */
+    @Test public void aTitlelessFragmentAtTheTopOfThePickerListDoesNotBreakTheOverlap() throws Exception {
+        NavigationRunner directoryRunner = new NavigationRunner(normalPages());
+        directoryRunner.show(0);
+        CatalogScanner.Result directory = CatalogScanner.scanDirectory(directoryRunner);
+        assertTrue(directory.gapNote, directory.trustworthy());
+
+        NavigationRunner picker = new NavigationRunner(fragmentPages());
+        picker.picker = true;
+        picker.show(0);
+        CatalogScanner.toTop(picker, null, 120);
+        CatalogScanner.Result scan = CatalogScanner.scan(picker, directory);
+
+        assertNull("屏边残行不能变成『没有可靠的重叠行』：" + scan.gapNote, scan.gapNote);
+        assertTrue(scan.trustworthy());
+        assertEquals(titles(directory.chapters), titles(scan.chapters));
+        assertEquals(titles(directory.allRows), titles(scan.allRows));
+        assertEquals(10, scan.allRows.size());
+    }
+
+    /**
+     * 反例：读不出来的行高度正常（不是被视口裁短的残行）时，仍然必须拦住整趟扫描 ——
+     * 「屏边残行」这条豁免不能变成「读不出来就跳过」。
+     */
+    @Test public void anUnreadableFullHeightRowStillBlocksTheScan() throws Exception {
+        List<RowSpec> second = new ArrayList<>(normalPages().get(2));
+        second.get(0).missingTitle = true;   // 高度照旧，只是没有 title：不是屏边残行
+        NavigationRunner runner = new NavigationRunner(normalPages());
+        runner.show(0);
+        CatalogScanner.Result directory = CatalogScanner.scanDirectory(runner);
+
+        NavigationRunner picker = new NavigationRunner(
+                Arrays.asList(normalPages().get(1), second));
+        picker.picker = true;
+        picker.show(0);
+        CatalogScanner.Result scan = CatalogScanner.scan(picker, directory);
+
+        assertFalse(scan.trustworthy());
+        assertTrue("必须仍然报缺口：" + scan.gapNote,
+                scan.gapNote != null && scan.gapNote.contains("没有可靠的重叠行"));
+    }
+
+    /**
+     * 反方向：残行在本屏**末尾**（真机 blb-log-f1.1.5 第 88 行第 15 行：`rowBounds=[0,2181,1080,2182]`，
+     * 1px）。它落在上一屏的后缀里，同样会让「后缀↔前缀」逐位置对齐整体错位。
+     */
+    @Test public void aTitlelessFragmentAtTheBottomOfThePickerListDoesNotBreakTheOverlap() throws Exception {
+        NavigationRunner directoryRunner = new NavigationRunner(normalPages());
+        directoryRunner.show(0);
+        CatalogScanner.Result directory = CatalogScanner.scanDirectory(directoryRunner);
+        assertTrue(directory.gapNote, directory.trustworthy());
+
+        NavigationRunner picker = new NavigationRunner(bottomFragmentPages());
+        picker.picker = true;
+        picker.show(0);
+        CatalogScanner.toTop(picker, null, 120);
+        CatalogScanner.Result scan = CatalogScanner.scan(picker, directory);
+
+        assertNull("屏边残行不能变成『没有可靠的重叠行』：" + scan.gapNote, scan.gapNote);
+        assertTrue(scan.trustworthy());
+        assertEquals(titles(directory.chapters), titles(scan.chapters));
+        assertEquals(titles(directory.allRows), titles(scan.allRows));
+        assertEquals(10, scan.allRows.size());
     }
 
     @Test public void productionCaptureKeepsUnnumberedChaptersAndAuthorDuplicateNumbers() throws Exception {
@@ -381,7 +498,6 @@ public class CatalogNavigationTest {
         assertFalse(retained.trustworthy());
         assertStateConflictRetainsMarker(retained, 2, 0);
         assertEquals(0, retryRunner.topClicks);
-        assertEquals(0, retryRunner.backwardCalls);
         assertEquals(0, retryRunner.backwardProbes);
         assertEquals(0, retryRunner.forwardCalls);
         assertTrue(retryRunner.logText().contains("不用重扫覆盖原证据"));
@@ -479,6 +595,38 @@ public class CatalogNavigationTest {
         return rows.stream().map(row -> row.title).collect(Collectors.toList());
     }
 
+    /**
+     * 选择章节页的两屏：第二屏开头是「上边被裁掉、连 title 节点都没有」的残行
+     * （真机 childCount=2：只剩居中的锁和勾选圈），其余与 {@link #normalPages()} 同一份目录。
+     */
+    private static List<List<RowSpec>> fragmentPages() {
+        List<RowSpec> all = rows("铃兰花", "第1章 开始", "第2章 后续", "第81章 心脏", "第81章 沙滩",
+                "第83章 最后", "一卷总结", "星彩", "藏在地下室的恶鬼（上）", "迷信的可怖后果");
+        all.get(0).section = true;
+        all.get(7).section = true;
+        RowSpec fragment = new RowSpec("");
+        fragment.missingTitle = true;
+        fragment.clippedTop = true;
+        List<RowSpec> second = new ArrayList<>();
+        second.add(fragment);
+        second.addAll(all.subList(3, 10));
+        return Arrays.asList(new ArrayList<>(all.subList(0, 6)), second);
+    }
+
+    /** 同上，但残行在第二屏的**末尾**（1px，贴着列表下边）。 */
+    private static List<List<RowSpec>> bottomFragmentPages() {
+        List<RowSpec> all = rows("铃兰花", "第1章 开始", "第2章 后续", "第81章 心脏", "第81章 沙滩",
+                "第83章 最后", "一卷总结", "星彩", "藏在地下室的恶鬼（上）", "迷信的可怖后果");
+        all.get(0).section = true;
+        all.get(7).section = true;
+        RowSpec fragment = new RowSpec("");
+        fragment.missingTitle = true;
+        fragment.clippedBottom = true;
+        List<RowSpec> second = new ArrayList<>(all.subList(3, 10));
+        second.add(fragment);
+        return Arrays.asList(new ArrayList<>(all.subList(0, 7)), second);
+    }
+
     private static List<List<RowSpec>> normalPages() {
         List<RowSpec> all = rows("铃兰花", "第1章 开始", "第2章 后续", "第81章 心脏", "第81章 沙滩",
                 "第83章 最后", "一卷总结", "星彩", "藏在地下室的恶鬼（上）", "迷信的可怖后果");
@@ -527,6 +675,10 @@ public class CatalogNavigationTest {
         String text;
         boolean section;
         boolean missingTitle;
+        /** 视口上边裁出来的残行：行框只剩一条贴着列表上边的尾巴。 */
+        boolean clippedTop;
+        /** 视口下边裁出来的残行（真机 blb-log-f1.1.5 第 88 行：1px）。 */
+        boolean clippedBottom;
         boolean zeroRowBounds;
         boolean zeroTitleBounds;
         boolean twoTitles;
@@ -553,6 +705,8 @@ public class CatalogNavigationTest {
             FakeNode row = FakeNode.node().withClass("android.widget.RelativeLayout").clickable(true)
                     .withBounds(0, top, 1080, top + 138);
             if (spec.section && !picker) row.withId("layoutRoot");
+            if (spec.clippedTop) row.withBounds(0, 381, 1080, 415);
+            if (spec.clippedBottom) row.withBounds(0, 2399, 1080, 2400);
             if (spec.zeroRowBounds) row.withBounds(0, 0, 0, 0);
             if (!spec.missingTitle) {
                 FakeNode title = FakeNode.text(spec.text).withId("title").withClass("android.widget.TextView")
@@ -590,7 +744,6 @@ public class CatalogNavigationTest {
         final List<List<RowSpec>> pages;
         int page;
         int topClicks;
-        int backwardCalls;
         int backwardProbes;
         int forwardCalls;
         boolean picker;
@@ -598,7 +751,7 @@ public class CatalogNavigationTest {
         boolean duplicateTopButton;
         boolean neverMoveBackward;
         boolean alwaysAcceptBackwardProbe;
-        boolean failBackwardGesture;
+        boolean unavailableBackwardProbe;
         TopAction topAction = TopAction.TOP;
         NodeView oneBackwardFrame;
         NodeView temporaryBackwardFrame;
@@ -628,11 +781,13 @@ public class CatalogNavigationTest {
             if (topAction == TopAction.BOTTOM) show(pages.size() - 1);
         }
 
-        @Override public boolean scrollCatalogBackward() throws StepFailure {
+        @Override public CatalogScroll probeCatalogContainerBackward() throws StepFailure {
             checkCancelled();
-            backwardCalls++;
-            if (failBackwardGesture) return false;
-            if (!neverMoveBackward && page > 0) show(page - 1);
+            backwardProbes++;
+            if (unavailableBackwardProbe) return CatalogScroll.UNAVAILABLE;
+            if (alwaysAcceptBackwardProbe) return CatalogScroll.ACCEPTED;
+            if (neverMoveBackward) return CatalogScroll.BLOCKED;
+            if (page > 0) show(page - 1);
             if (oneBackwardFrame != null) {
                 active = oneBackwardFrame;
                 oneBackwardFrame = null;
@@ -643,16 +798,7 @@ public class CatalogNavigationTest {
                 active = temporaryBackwardFrame;
                 temporaryBackwardFrame = null;
             }
-            return true;
-        }
-
-        @Override public CatalogScroll probeCatalogContainerBackward() throws StepFailure {
-            checkCancelled();
-            backwardProbes++;
-            if (alwaysAcceptBackwardProbe) return CatalogScroll.ACCEPTED;
-            if (page == 0) return CatalogScroll.BLOCKED;
-            show(page - 1);
-            return CatalogScroll.ACCEPTED;
+            return page == 0 ? CatalogScroll.BLOCKED : CatalogScroll.ACCEPTED;
         }
 
         @Override public boolean scrollCatalogForward() throws StepFailure {

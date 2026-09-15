@@ -407,11 +407,6 @@ public class SubscribeRunRecoveryTest {
             return scrollForward() ? CatalogScroll.ACCEPTED : CatalogScroll.BLOCKED;
         }
 
-        @Override public boolean scrollCatalogBackward() throws StepFailure {
-            scrollBackward();
-            return true; // 与正向手势一样，边界必须另由容器探测确认。
-        }
-
         @Override public CatalogScroll probeCatalogContainerBackward() throws StepFailure {
             checkCancelled();
             if (!isCatalogPage()) return CatalogScroll.UNAVAILABLE;

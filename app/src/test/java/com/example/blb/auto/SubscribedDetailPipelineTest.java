@@ -112,6 +112,34 @@ public class SubscribedDetailPipelineTest {
                         .withBounds(60, 2290, 1020, 2350));
     }
 
+    /**
+     * 真机形状：可见窗口的第一项被列表视口顶边裁住 —— 行框顶边正好等于列表顶边（bounds 被视口夹过），
+     * 标题节点读不到，只剩右侧的「代券」。2026-09-15 w9899 那趟第 3、4 屏的第 8、12 项就是这样。
+     */
+    static FakeNode clippedRow(int index, int top, int bottom, String text) {
+        FakeNode row = FakeNode.node().withClass("android.widget.LinearLayout").item(index)
+                .withBounds(20, top, 1060, bottom);
+        return row.add(FakeNode.text(text).withBounds(810, top + 60, 950, top + 105));
+    }
+
+    /** 首项被顶边裁掉的窗口。 */
+    static FakeNode clippedTopWindow(int total, int first, int last) {
+        FakeNode[] rows = new FakeNode[last - first + 1];
+        rows[0] = clippedRow(first, 200, 430, "代券");
+        for (int i = first + 1; i <= last; i++) rows[i - first] = transaction(i, i - first,
+                "卷一 第" + (i + 1) + "章 标题" + (i + 1), "10", "代券", i % 6 == 0 ? DATE : null);
+        return page(total, rows);
+    }
+
+    /** 末项被底边裁掉的窗口（真机第 1 屏：只读得到金额「10」）。 */
+    static FakeNode clippedBottomWindow(int total, int first, int last) {
+        FakeNode[] rows = new FakeNode[last - first + 1];
+        for (int i = first; i < last; i++) rows[i - first] = transaction(i, i - first,
+                "卷一 第" + (i + 1) + "章 标题" + (i + 1), "10", "代券", i % 6 == 0 ? DATE : null);
+        rows[last - first] = clippedRow(last, 2020, 2250, "10");
+        return page(total, rows);
+    }
+
     static Reader twenty() throws Exception {
         return new Reader(window(15, 0, 5), window(20, 3, 8), window(20, 6, 11),
                 window(20, 9, 14), window(20, 12, 17), window(20, 14, 19));
@@ -137,6 +165,39 @@ public class SubscribedDetailPipelineTest {
             assertEquals(DATE, result.entries.get(i).date);
             assertEquals(10, result.entries.get(i).amount);
         }
+    }
+
+    /**
+     * 2026-09-15 w9899 的真机形状（blb-log-2026-09-15..txt 第 190、208 行）：
+     * 20 条明细里，屏边被裁掉的那两项只读得到「代券」，其它屏已经完整读过同两项。
+     * 屏边裁剪不能抹掉已经取得的覆盖证据，否则整个账号被报成「明细未完整」。
+     */
+    @Test public void rowsClippedAtTheViewportEdgeKeepTheirEarlierCoverage() throws Exception {
+        Reader reader = new Reader(clippedBottomWindow(15, 0, 6), window(20, 3, 8),
+                clippedTopWindow(20, 7, 13), clippedTopWindow(20, 11, 17),
+                window(20, 13, 19), window(20, 13, 19));
+        SubscribedDetail.ReadResult result = read(reader, 20);
+        assertTrue(result.describe(), result.complete());
+        assertEquals(20, result.entries.size());
+        assertEquals(20, result.collectionItems);
+        assertEquals(20, result.coveredItems);
+        assertEquals(0, result.unreadableRows);
+        for (int i = 0; i < 20; i++) assertEquals(DATE, result.entries.get(i).date);
+    }
+
+    /** 同一形状的反例：读不出来的行落在列表中部时，护栏不能跟着放宽。 */
+    @Test public void anUnreadableRowInTheMiddleOfTheListStillBlocks() throws Exception {
+        FakeNode unknown = FakeNode.node().withClass("android.widget.LinearLayout").item(3)
+                .withBounds(20, 1010, 1060, 1240);
+        FakeNode root = page(6, transaction(0, 0, "卷一 第1章 标题1", "10", "代券", DATE),
+                transaction(1, 1, "卷一 第2章 标题2", "10", "代券", null),
+                transaction(2, 2, "卷一 第3章 标题3", "10", "代券", null),
+                unknown,
+                transaction(4, 4, "卷一 第5章 标题5", "10", "代券", null),
+                transaction(5, 5, "卷一 第6章 标题6", "10", "代券", null));
+        SubscribedDetail.ReadResult result = read(new Reader(root, root), 6);
+        assertFalse(result.describe(), result.complete());
+        assertFalse(result.unreadableRows == 0);
     }
 
     @Test public void aChangedIndexCannotHideBehindTheMetadataGrowth() throws Exception {
