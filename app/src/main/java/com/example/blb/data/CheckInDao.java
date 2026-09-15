@@ -2,11 +2,9 @@ package com.example.blb.data;
 
 import androidx.lifecycle.LiveData;
 import androidx.room.Dao;
-import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.OnConflictStrategy;
 import androidx.room.Query;
-import androidx.room.Update;
 
 import java.util.List;
 
@@ -29,9 +27,6 @@ public interface CheckInDao {
      */
     @Query("SELECT a.id AS account_id, a.label AS account_label, a.nickname AS account_nickname, "
             + "a.login_name AS account_login, l.status AS status, "
-            + "IFNULL(l.ad_available, 0) AS ad_available, "
-            + "IFNULL(l.ads_watched, 0) AS ads_watched, "
-            + "IFNULL(l.ads_remaining, -1) AS ads_remaining, "
             + "l.message AS message, "
             + "IFNULL(l.created_at, 0) AS created_at "
             + "FROM account a LEFT JOIN check_in_log l "

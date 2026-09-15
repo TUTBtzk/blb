@@ -1,33 +1,35 @@
 package com.example.blb.auto;
 
 import android.content.Context;
-import android.text.TextUtils;
 
 import com.example.blb.data.Account;
 import com.example.blb.data.AccountDao;
+import com.example.blb.data.AppDatabase;
 import com.example.blb.data.Chapter;
+import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
 import com.example.blb.data.Purchase;
 import com.example.blb.data.SubscriptionDao;
+import com.example.blb.ui.LedgerEdits;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
- * 「用当前登着的这个号买尽量多的章」这一段，签到队列的第 3 步和订阅页的
+ * 「用当前登着的这个号买尽量多的章」这一段，每日队列签到之后的订阅步骤和订阅页的
  * 「开始自动订阅」共用同一份实现 —— 两边各写一遍的时候，护栏总会有一边漏掉。
  *
- * <p>每个号进来先把目录整本扫一遍（{@link CatalogSync}）：章节表就是这样长出来的，
- * 而且顺带把<b>免费章</b>按当前账号写进账本。以前这两件事要手工做，
- * 于是自动订阅每轮只会打一句「没有待订阅的章节」，一个动作都没有。
+ * <p>目录由订阅页独立同步；八个号共用同一份章节顺序，不应为了同一本书重复扫八遍。
+ * 每个号仍读取清单聚合行，准备花券时必须有本号逐章核对和全书其他账号的有效证据。
  * 付费章归谁只认真实购买记录 —— 界面上那个「已下载」是本机状态、8 个号共用，读不出买家。
  *
  * <p>要买哪一章不看当前这个号，看账本：{@code findUnownedChaptersFrom} 给的是
  * <b>所有号合起来还没买过</b>的最小章，所以各个号的券摊在不同章上，
- * 合起来把进度往前推，而不是几个号买同一章。{@code touched} 保证同一轮里一章只试一次。
+ * 合起来把进度往前推，而不是几个号买同一章。失败章仍留给下一个账号尝试，不能越过。
  *
  * <p>停止条件只有一条：<b>这个号的代券不够下一章 → 换下一个号</b>；所有号都不够 → 收工。
  * 没有章数上限 —— 一个号代券够就一直往下订到花光。
@@ -40,11 +42,13 @@ public final class SubscribeRun {
         /** 每号每日代券上限，0＝不限。 */
         public final int cap;
         public final long since;
+        public final long catalogScannedAt;
 
         public Plan(Novel novel, int cap, long since) {
             this.novel = novel;
             this.cap = cap;
             this.since = since;
+            this.catalogScannedAt = novel.catalogScannedAt;
         }
 
         public static Plan from(Context context, Novel novel) {
@@ -119,7 +123,7 @@ public final class SubscribeRun {
      * 这一轮<b>已经有定论、不必再有号碰</b>的章。
      *
      * <p>它管的是唯一一件事：什么时候允许把一章从这一趟里划掉。答案只有三种 ——
-     * 买到了、是免费章、本机已有所以谁都买不了。<b>「没走通」永远不在其中</b>。
+     * 买到了、是免费章、或账本已确认有归属。<b>「没走通」和只有本机下载状态永远不在其中</b>。
      *
      * <p>原来这里是一个裸的 {@code Set<Long>}：进页面前就 add，除了「券不够」全都不撤。
      * 于是 2026-09-03 那趟第83章在前面某个号身上没走通一次，后面 6 个号全部跳过它 ——
@@ -140,7 +144,7 @@ public final class SubscribeRun {
             return ids.contains(chapterId);
         }
 
-        /** 只在「买到／免费章／本机已有买不了」时调 —— 失败绝不许调这个。 */
+        /** 只有账本已经确认归属才调用；下载标记本身不能替代购买记录。 */
         void mark(long chapterId) {
             ids.add(chapterId);
         }
@@ -174,31 +178,69 @@ public final class SubscribeRun {
                                   AccountDao accountDao, Plan plan, Account account,
                                   Texts.Balance balance, Settled settled, Tally tally)
             throws StepRunner.StepFailure {
-        String name = account.displayName();
-        // 预算只看代券：章节费两种券都能付，但菠萝包先扣代券，而用户不充值火券。
-        int budget = balance.voucher >= 0 ? balance.voucher : account.lastKnownVouchers;
-        int spentToday = plan.cap > 0 ? subs.spentVouchersSince(account.id, plan.since) : 0;
-
-        if (!auditLedger(r, host, subs, plan, account, tally)) return;
-        if (!syncCatalog(r, host, subs, plan, account, tally)) return;
-
-        // 整条队列一次取完，不设条数上限：停下来的理由只能是「代券不够下一章」。
-        List<Chapter> chapters = subs.findUnownedChaptersFrom(
-                plan.novel.id, plan.novel.startFrom());
-        if (chapters.isEmpty()) {
-            host.log("  没有待订阅的章节：从第" + plan.novel.startFrom()
-                    + "章起的每一章都已经有号拥有了");
-            return;
+        try {
+            runAccount(r, host, subs, accountDao, plan, account, balance, settled, tally);
+        } catch (StepRunner.StepFailure failure) {
+            if (failure.kind == StepRunner.Kind.MONEY_UNCLEAR) {
+                invalidateAfterFailure(r, host, plan, account, failure);
+            }
+            throw failure;
+        } catch (RuntimeException failure) {
+            StepRunner.StepFailure unclear = new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                    "订阅账本或页面状态异常，整本停止：" + failure.getMessage());
+            invalidateAfterFailure(r, host, plan, account, unclear);
+            throw unclear;
         }
+    }
 
+    private static void runAccount(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
+                                    AccountDao accountDao, Plan plan, Account account,
+                                    Texts.Balance balance, Settled settled, Tally tally)
+            throws StepRunner.StepFailure {
+        String name = account.displayName();
+        List<Chapter> fullCatalog = subs.loadChapters(plan.novel.id);
+        requireCatalogCount(fullCatalog == null ? -1 : fullCatalog.size());
+        if (r.context() == null) throw new StepRunner.StepFailure(StepRunner.Kind.CONFIG,
+                "核对订阅需要本地数据库上下文，未执行购买");
+        AppDatabase db = Db.get(r.context());
+        int budget = balance.voucher >= 0 ? balance.voucher : account.lastKnownVouchers;
+        boolean willSpend = subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom()) != null;
+        SubscriptionAuditQueue.AccountResult audit = SubscriptionAuditQueue.auditAccount(
+                r, host, db, plan.novel, account, false,
+                Prefs.isAlwaysDetailAudit(r.context()), willSpend);
+        host.log("  " + audit.message);
+        if (!audit.verified) {
+            tally.failed++;
+            tally.notes.add(audit.message);
+            StepRunner.Kind kind = audit.failureKind != null && CheckInQueue.isGlobal(audit.failureKind)
+                    ? audit.failureKind : StepRunner.Kind.MONEY_UNCLEAR;
+            throw new StepRunner.StepFailure(kind, audit.message);
+        }
+        if (audit.backfilled > 0) tally.notes.add(audit.message);
+        // 刚补回的当天真实花费也算额度；核账前缓存这个数字会在到达上限后再花一次券。
+        int spentToday = plan.cap > 0 ? subs.spentVouchersSince(account.id, plan.since) : 0;
         int doneHere = 0;
-        int lastPaid = 0;   // 上一章的实付代券。同一本书各章同价，拿它预判下一章买不买得起。
-        for (Chapter chapter : chapters) {
+        int lastPaid = -1;
+        while (true) {
             if (host.isCancelled()) {
                 throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消");
             }
-            // 有定论的才允许往后走（买到了／免费章／本机已有谁都买不了）。「没走通」不在其中。
-            if (settled.has(chapter.id)) continue;
+            // 第83章曾因旧的整批列表被跳过；每一轮只认数据库此刻的最小未拥有章。
+            Chapter chapter = recomputeNextChapter(subs, plan, host);
+            if (chapter == null) {
+                if (doneHere > 0) host.log("  " + name + " 本轮订到当前已同步目录的末尾，共 " + doneHere + " 章");
+                return;
+            }
+            if (settled.has(chapter.id)) throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                    "第" + chapter.chapterNo + "章本轮已处理，账本却仍没有归属，整本停止以免漏章");
+            String blocker = SubscriptionAuditPolicy.bookBlocker(db.accountDao().loadEnabled(),
+                    db.auditDao().loadProgressOfNovel(plan.novel.id),
+                    startOfToday(), System.currentTimeMillis());
+            if (blocker != null) {
+                tally.failed++;
+                tally.notes.add(blocker);
+                throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR, blocker);
+            }
 
             // 进页之前先算一次「还买得起吗」。章节表里的单价是历史遗留（旧版按火券登记，
             // 扫目录不会写它），所以优先用上一章的实付代券当估价。
@@ -213,31 +255,112 @@ public final class SubscribeRun {
             }
 
             host.log("  " + name + " 试第" + chapter.chapterNo + "章「" + chapter.title + "」");
-            SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter);
+            // 2026-09-14 允许补回跨号真实历史，但自动化不能新增重复；进入购买动作前再次现查所有号的归属。
+            requireStillUnowned(chapter,
+                    subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom()));
+            SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter,
+                    remainingDailyVouchers(plan.cap, spentToday), fullCatalog);
+            // 钱已经付出去时先记购买事实。取消或后续余额回填失败都不能把这笔账丢掉。
+            boolean completed;
+            int boughtBefore = tally.bought;
+            try {
+                completed = applyDuringRun(subs, host, tally, account, chapter, result);
+            } finally {
+                // 2026-08-24 曾经扣券后因收尾失败丢账；即使购买后必须中止，
+                // 也要把已经落库的进度念出来，不能让人误以为这一章还没买。
+                if (tally.bought > boughtBefore) {
+                    Chapter next = recomputeNextChapter(subs, plan, host);
+                    if (next != null && (nextChapterRegressed(chapter.chapterNo, next.chapterNo)
+                            || next.id == chapter.id)) {
+                        throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                                "刚买第" + chapter.chapterNo + "章，账本的下一章却是第"
+                                        + next.chapterNo + "章，已停止以防前面漏章或账本发生变化");
+                    }
+                }
+            }
             host.log("    " + result.message);
             if (result.coupons >= 0) account.lastKnownCoupons = result.coupons;
             if (result.vouchers >= 0) account.lastKnownVouchers = result.vouchers;
             if (result.coupons >= 0 || result.vouchers >= 0) {
-                accountDao.setBalance(account.id, result.coupons, result.vouchers);
+                final SubscribeTask.Result paidResult = result;
+                LedgerEdits.duringRun(host, () -> {
+                    accountDao.setBalance(account.id, paidResult.coupons, paidResult.vouchers);
+                    return null;
+                });
                 // 买成之后页面上的余额就是权威预算：下一章买不买得起完全看它。
                 if (result.vouchers >= 0) budget = result.vouchers;
             }
 
-            if (!apply(subs, host, tally, account, chapter, result)) {
+            if (host.isCancelled()) {
+                throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消，已发生的购买已记账");
+            }
+            if (!completed) {
                 // 没订下来：这一章一个字都不划掉，换下一个号来试它。绝不改去买后面的章。
                 noteBlocked(host, tally, chapter,
                         result.status == SubscribeTask.Status.INSUFFICIENT
                                 ? name + " 代券不够（页面上说余额不足）" : brief(result.message));
                 return;
             }
-            // 买到了／免费章／本机已有买不了：这一章有定论，这一轮别再有号重复试它。
+            // 只有已经落到账本的购买或免费归属才有定论；本机下载状态不能使队列越过空章。
             settled.mark(chapter.id);
             doneHere++;
             if (result.costVouchers > 0) lastPaid = result.costVouchers;
             if (result.status == SubscribeTask.Status.BOUGHT) spentToday += result.costVouchers;
         }
-        if (doneHere > 0) {
-            host.log("  " + name + " 这一轮走了 " + doneHere + " 章，整条队列已经走到底了");
+    }
+
+    static void requireCatalogCount(int count) throws StepRunner.StepFailure {
+        if (count > 0) return;
+        throw new StepRunner.StepFailure(StepRunner.Kind.CONFIG, count == 0
+                ? "这本书的账本还没有章节：先在订阅页点『同步目录』"
+                : "这本书的章节数读不到：先在订阅页点『同步目录』");
+    }
+
+    /** 2026-09-14 的来源边界只允许补历史；当前最小无主章有变化就停止，不能拿旧候选继续花券。 */
+    static void requireStillUnowned(Chapter expected, Chapter current) throws StepRunner.StepFailure {
+        if (expected != null && current != null && expected.id > 0 && expected.novelId > 0
+                && expected.chapterNo > 0 && !Texts.isBlank(expected.title)
+                && expected.id == current.id && expected.novelId == current.novelId
+                && expected.chapterNo == current.chapterNo
+                && Objects.equals(expected.title, current.title)
+                && Objects.equals(expected.volumeTitle, current.volumeTitle)) return;
+        throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                "买前账本的最小无主章已变化或读不到，未执行购买；请核对订阅清单");
+    }
+
+    static void requireCatalog(SubscriptionDao subs, Novel novel) throws StepRunner.StepFailure {
+        List<Chapter> chapters = subs.loadChapters(novel.id);
+        requireCatalogCount(chapters == null ? -1 : chapters.size());
+    }
+
+    private static void invalidateProof(AppDatabase db, StepRunner.Host host,
+                                        long accountId, long novelId) {
+        LedgerEdits.duringRun(host, () -> { db.auditDao().invalidateAccount(accountId, novelId); return null; });
+    }
+
+    private static void invalidateAfterFailure(StepRunner runner, StepRunner.Host host, Plan plan,
+                                               Account account, StepRunner.StepFailure reason)
+            throws StepRunner.StepFailure {
+        if (runner.context() == null) return;
+        try {
+            invalidateProof(Db.get(runner.context()), host, account.id, plan.novel.id);
+        } catch (RuntimeException failure) {
+            throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                    reason.getMessage() + "；核对凭证未能失效：" + failure.getMessage());
+        }
+    }
+
+    private static boolean applyDuringRun(SubscriptionDao subs, StepRunner.Host host, Tally tally,
+                                          Account account, Chapter chapter, SubscribeTask.Result result)
+            throws StepRunner.StepFailure {
+        try {
+            return LedgerEdits.duringRun(host, () -> apply(subs, host, tally, account, chapter, result));
+        } catch (RuntimeException failure) {
+            for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+                if (cause instanceof StepRunner.StepFailure) throw (StepRunner.StepFailure) cause;
+            }
+            throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                    "购买结果写入异常，整趟停止：" + failure.getMessage());
         }
     }
 
@@ -302,8 +425,7 @@ public final class SubscribeRun {
      * 收尾自检：这一趟买到的章里有没有<b>越过</b>一章。返回 null＝没漏。
      *
      * <p>队列绝不越过一章，所以这句话正常永远不该出现 —— 留着它当不变量断言。还有两条路
-     * 能让缺口悄悄出现：本机已下载但谁都买不了的那种章（会被放过去，见
-     * {@link #apply} 的 DEVICE_HAS_IT 分支），以及 MIUI 半路杀掉进程之后系统重发的那一趟。
+     * 曾让缺口悄悄出现：本机已下载但买家未知的章曾被放过去，以及 MIUI 半路杀进程后重发的那一趟。
      * 用户就是这么发现 2026-09-03 那次漏订的（STATUS 说「下一章＝第83章」，那趟却买到了第87章）。
      */
     public static String gapNote(SubscriptionDao subs, Plan plan, Tally tally) {
@@ -324,6 +446,39 @@ public final class SubscribeRun {
         return next == null ? 0 : next.chapterNo;
     }
 
+    private static Chapter recomputeNextChapter(SubscriptionDao subs, Plan plan,
+                                                StepRunner.Host host)
+            throws StepRunner.StepFailure {
+        try {
+            Chapter next = subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom());
+            host.log(nextChapterNote(next, plan.novel.startFrom()));
+            return next;
+        } catch (RuntimeException failure) {
+            throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                    "下一章读不到，已停止后续购买：" + failure.getMessage());
+        }
+    }
+
+    static String nextChapterNote(Chapter next, int fromNo) {
+        if (next == null) return "下一章：当前目录中第 " + fromNo + " 章起已全部有归属";
+        return "下一章：第 " + next.chapterNo + " 章"
+                + (Texts.isBlank(next.title) ? "（标题未登记）" : "「" + next.title + "」");
+    }
+
+    /** 空目录曾被当作「全部买完」；结束摘要也必须先区分没有章节与没有待买章节。 */
+    static String currentNextChapterNote(SubscriptionDao subs, Novel novel) {
+        List<Chapter> chapters = subs.loadChapters(novel.id);
+        if (chapters == null) return "下一章：目录读不到，不能继续购买";
+        if (chapters.isEmpty()) return "下一章：目录尚无章节，请先点『同步目录』";
+        return nextChapterNote(subs.findNextUnownedChapterFrom(novel.id, novel.startFrom()),
+                novel.startFrom());
+    }
+
+    /** 2026-09-03 买到第87章却漏了第83章，不能等整队跑完才发现进度倒退。 */
+    static boolean nextChapterRegressed(int boughtNo, int nextNo) {
+        return boughtNo > 0 && nextNo > 0 && nextNo < boughtNo;
+    }
+
     /**
      * 进下一章之前判断「这个号还买得起吗」。返回 null＝还买得起，否则返回该写进日志的那句话。
      *
@@ -331,138 +486,29 @@ public final class SubscribeRun {
      * 而它在真机上要跑一整趟 8 个号才看得到一次。
      *
      * @param budget   这个号还剩多少代券（页面上刚读到的那个数）
-     * @param estimate 下一章大概要多少代券，0＝不知道（那就进页面让菠萝包自己说）
+     * @param estimate 下一章大概要多少代券，-1＝不知道（那就进页面读实付）
      */
     static String stopBecauseBroke(String name, int budget, int estimate,
                                    int spentToday, int cap, int chapterNo) {
+        if (cap > 0 && spentToday >= cap) {
+            return name + " 今天已花 " + spentToday + " 代券，已达到每日上限 "
+                    + cap + "，换下一个号";
+        }
         if (estimate <= 0 || budget < 0) return null;
         if (budget < estimate) {
             return name + " 只剩 " + budget
                     + " 代券，不够买第" + chapterNo + "章（约 " + estimate + " 代券），换下一个号";
         }
-        if (cap > 0 && spentToday + estimate > cap) {
+        if (cap > 0 && estimate > remainingDailyVouchers(cap, spentToday)) {
             return name + " 今天已花 " + spentToday + " 代券，再买第" + chapterNo
                     + "章会超过每日上限 " + cap + "，换下一个号";
         }
         return null;
     }
 
-    /**
-     * 买之前先拿服务器端的「我的 → 代券 → 订阅清单」核一次账本。返回 false＝这个号不买。
-     *
-     * <p>为什么要在买之前多走这几次点按：「这一章归谁」原先只有账本一个来源，账本写歪了
-     * App 自己看不出来 —— 2026-08-25 第49章被误挂两个号，发现它的是用户，靠的正是这份清单
-     * （见 {@link VoucherLedger}）。账本不可信的时候接着买，就会重复买或者永远跳过某一章，
-     * 而这两件事都直接违反「8 个号拼出完整一本、不多订不漏订」。
-     *
-     * <p>核两层：先是清单那一行（按书聚合：订了几章、花了多少火券），再点<b>整行</b>进
-     * 「订阅明细」<b>逐章</b>核（见 {@link SubscribedDetail}）。用户那两条硬约束是逐章的，
-     * 聚合那一层只答得出「总数差了几章」，答不出差在哪一章。
-     *
-     * <p>所以对不上就<b>整趟</b>停下（{@code MONEY_UNCLEAR}），不是只跳过这个号：账本是所有
-     * 号共用的，它错了，换个号接着买同样是错的。读不到不算对不上（清单读不出来并不说明账本
-     * 错了），只把话写进小结让人看见。
-     */
-    private static boolean auditLedger(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
-                                       Plan plan, Account account, Tally tally)
-            throws StepRunner.StepFailure {
-        if (!VoucherLedger.configured(r.selectors())) {
-            host.log("  selectors.json 里没配「代券 → 订阅清单」那几条，这一趟跳过对账");
-            return true;
-        }
-        VoucherLedger.Located found = VoucherLedger.locate(r, plan.novel.title);
-        VoucherLedger.Reading ui = found.reading;
-        int paid = subs.countPaidPurchases(account.id, plan.novel.id);
-        int fire = subs.sumFireSpent(account.id, plan.novel.id);
-        VoucherLedger.Audit audit = VoucherLedger.reconcile(
-                account.displayName(), plan.novel.title, ui, paid, fire);
-        host.log("  " + audit.message);
-        if (!audit.ok) {
-            r.ensureHome(4);
-            tally.notes.add(audit.message);
-            throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR, audit.message);
-        }
-        if (!audit.checked) tally.notes.add(audit.message);
-        // 聚合那一层只看得出「总数差了几章」。用户那两条硬约束是逐章的（「每一章只能有一个账号
-        // 订阅」、「8 个号拼出完整一本」），所以再点整行进「订阅明细」逐章核一遍 —— 差在哪一章，
-        // 只有这一页说得出来。
-        VoucherLedger.Audit detail = auditDetail(r, host, subs, plan, account, found);
-        // 读完停在清单页／明细页，而搜书那一步是从首页开始的。
-        r.ensureHome(4);
-        if (detail == null) return true;
-        host.log("  " + detail.message);
-        if (detail.ok) {
-            if (!detail.checked) tally.notes.add(detail.message);
-            return true;
-        }
-        tally.notes.add(detail.message);
-        throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR, detail.message);
-    }
-
-    /** 逐章那一层。返回 null＝这一趟没走（选择器没配齐，或清单里压根没有这本书那一行）。 */
-    private static VoucherLedger.Audit auditDetail(StepRunner r, StepRunner.Host host,
-                                                   SubscriptionDao subs, Plan plan,
-                                                   Account account, VoucherLedger.Located found)
-            throws StepRunner.StepFailure {
-        if (!SubscribedDetail.configured(r.selectors())) {
-            host.log("  selectors.json 里没配「订阅明细」那几条，这一趟只做了按书聚合的对账");
-            return null;
-        }
-        if (found.row == null) return null;   // 清单里没这本书那一行，上面已经核过了
-        List<SubscribedDetail.Entry> entries =
-                SubscribedDetail.read(r, found.row, plan.novel.title);
-        for (SubscribedDetail.Entry e : entries == null
-                ? java.util.Collections.<SubscribedDetail.Entry>emptyList() : entries) {
-            host.log("    明细：" + e.describe());
-        }
-        return SubscribedDetail.reconcile(account.displayName(), account.id, plan.novel.title,
-                entries, subs.loadPaidRowsOfNovel(plan.novel.id), System.currentTimeMillis());
-    }
-
-    /** 扫目录并写账本。返回 false = 这个号一章都不买。 */
-    private static boolean syncCatalog(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
-                                       Plan plan, Account account, Tally tally)
-            throws StepRunner.StepFailure {
-        String name = account.displayName();
-        CatalogSync.Report catalog = CatalogSync.sync(r, subs, plan.novel, account.id);
-        host.log("  " + catalog.message);
-        if (catalog.realigned != null) {
-            // 章号搬家是账本的结构性变化，光写日志不够 —— 队列小结里也得看得见。
-            tally.notes.add(catalog.realigned);
-            host.log("    " + catalog.realigned);
-        }
-        if (!catalog.skipped.isEmpty()) {
-            host.log("    跳过的无标号行（卷标题一类）：" + TextUtils.join("｜", catalog.skipped));
-        }
-        if (!catalog.foreign.isEmpty()) {
-            // 付费章 + 本机已下载 + 8 个号的账本里都查不到：买家真的说不清。这里判「有没有
-            // 归属」是跨号问的（见 CatalogSync.Report#foreign）—— 只问当前号的那个版本，
-            // 会把皓平买的章在另外 7 个号身上各报一次「没有归属」，2026-09-03 那趟刷出的
-            // 8 条备注全是这样来的误报，而同一趟的逐章对账明明说「都对上了」。
-            String note = catalog.foreign.size() + " 章在这台手机上已下载、但 8 个号的账本里"
-                    + "都查不到归属（"
-                    + TextUtils.join("、",
-                    catalog.foreign.subList(0, Math.min(5, catalog.foreign.size())))
-                    + (catalog.foreign.size() > 5 ? "…" : "")
-                    + "），一个字都没写，请对着订阅清单核对是哪个号买的";
-            tally.notes.add(note);
-            host.log("    " + note);
-        }
-        if (!catalog.contradictions.isEmpty()) {
-            // 账本说这个号买过、界面上却还要花券。不自动改账本：删记录会让它被重新买一次，
-            // 留着又会让它一直被跳过。这件事必须由人看过再决定。
-            String note = name + " 有 " + catalog.contradictions.size()
-                    + " 章账本说买过、界面上却还要花券才看得到（" + TextUtils.join("、",
-                    catalog.contradictions.subList(0, Math.min(5, catalog.contradictions.size())))
-                    + "…），请核对";
-            tally.notes.add(note);
-            host.log("    " + note);
-        }
-        if (!catalog.ok) {
-            tally.failed++;
-            return false;
-        }
-        return true;
+    /** 只传本章还能使用的每日额度；未知单价必须等页面实付读出来后再校验。 */
+    static int remainingDailyVouchers(int cap, int spentToday) {
+        return cap <= 0 ? -1 : Math.max(0, cap - Math.max(0, spentToday));
     }
 
     /**
@@ -473,20 +519,30 @@ public final class SubscribeRun {
      *                                整趟就此收工。2026-08-24 那次事故就差这一下：三个号各点了
      *                                一次，两个真扣了券。
      */
-    private static boolean apply(SubscriptionDao subs, StepRunner.Host host, Tally tally,
-                                 Account account, Chapter chapter, SubscribeTask.Result result)
+    static boolean apply(SubscriptionDao subs, StepRunner.Host host, Tally tally,
+                         Account account, Chapter chapter, SubscribeTask.Result result)
             throws StepRunner.StepFailure {
         String name = account.displayName();
         String label = "第" + chapter.chapterNo + "章";
         switch (result.status) {
             case BOUGHT:
-                subs.upsertPurchase(Purchase.of(account.id, chapter.id,
-                        result.cost, result.costVouchers, Purchase.SRC_AUTO));
+                try {
+                    subs.upsertPurchase(Purchase.of(account.id, chapter.id,
+                            result.cost, result.costVouchers, Purchase.SRC_AUTO));
+                } catch (RuntimeException failure) {
+                    throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                            name + " " + label + " 已扣券，但购买记录写入失败，整趟已停止："
+                                    + failure.getMessage());
+                }
                 tally.bought++;
                 tally.spent += result.costVouchers;
                 if (chapter.chapterNo > tally.maxBoughtNo) tally.maxBoughtNo = chapter.chapterNo;
                 host.log("  " + name + " 订到" + label + "，花 " + result.costVouchers + " 代券"
                         + (result.cost > 0 ? "＋" + result.cost + " 火券（不该发生，请核对）" : ""));
+                if (result.abortRun) {
+                    throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                            name + " " + label + " 的购买已记账，整趟已停止：" + result.message);
+                }
                 return true;
             case ALREADY:
                 // 免费章：谁登录都看得到，账本补一条，否则每轮都会再来一次。
@@ -496,15 +552,23 @@ public final class SubscribeRun {
                 host.log("  " + name + " " + label + " 是免费章，已补记账本");
                 return true;
             case DEVICE_HAS_IT:
-                // 本机已下载但看不出是哪个号买的：绝不按当前号记账（那正是第49章多出一个
-                // 订阅者的原因），也买不了。跳过这一章，这个号接着试下一章。
-                tally.notes.add(label + " 本机已有但不知道是谁买的（" + name
-                        + " 买不了它），请对着订阅清单核对");
-                host.log("  " + name + " 跳过" + label + "：本机已下载，买家不明");
+                List<Long> owners = subs.realPurchasedChapterIds(chapter.novelId);
+                String problem = deviceOwnershipProblem(
+                        owners != null && owners.contains(chapter.id), chapter.chapterNo);
+                if (problem != null) {
+                    tally.failed++;
+                    tally.notes.add(problem);
+                    throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR, problem);
+                }
+                host.log("  " + label + " 的归属已在账本里确认，继续重算下一章");
                 return true;
             case INSUFFICIENT:
                 tally.notes.add(name + " 代券不够（" + label + "）");
                 host.log("  " + name + " 买不起，换下一个号");
+                return false;
+            case DAILY_LIMIT:
+                tally.notes.add(name + " 每日额度不足（" + label + "）");
+                host.log("  " + name + " " + result.message);
                 return false;
             default:
                 tally.failed++;
@@ -517,5 +581,10 @@ public final class SubscribeRun {
                 }
                 return false;
         }
+    }
+
+    static String deviceOwnershipProblem(boolean globallyOwned, int chapterNo) {
+        return globallyOwned ? null : "第" + chapterNo
+                + "章本机已有但账本没有买家，整本停止；请先核对订阅清单，不能跳过此章";
     }
 }

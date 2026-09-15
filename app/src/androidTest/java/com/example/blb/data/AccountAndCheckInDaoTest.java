@@ -91,6 +91,27 @@ public class AccountAndCheckInDaoTest extends DbTestBase {
     }
 
     @Test
+    public void deletingAnAccountCannotCascadeAwayPaidOrOwnedEvidence() {
+        long paid = newAccount("paid@x.com", 0, true, 1);
+        long owned = newAccount("owned@x.com", 0, true, 2);
+        long novel = newNovel("目标书", true);
+        long first = newChapter(novel, 1, 10);
+        long second = newChapter(novel, 2, 10);
+        buy(paid, first, 0, 10, Purchase.SRC_AUTO);
+        buy(owned, second, 0, 0, Purchase.SRC_OWNED);
+        for (long id : new long[]{paid, owned}) {
+            try {
+                accounts.delete(accounts.byId(id));
+                fail("删账号不能绕过订阅记录的留痕要求");
+            } catch (IllegalStateException expected) {
+                assertTrue(expected.getMessage().contains("订阅"));
+            }
+            assertNotNull(accounts.byId(id));
+        }
+        assertEquals(2, subs.loadPurchasesOfNovel(novel).size());
+    }
+
+    @Test
     public void purgeOlderThanKeepsRecentLogs() {
         long acc = newAccount("a@x.com", 0, true, 1);
         checkIns.upsert(log(acc, "2026-08-01", CheckInLog.OK, 100));

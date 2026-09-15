@@ -9,13 +9,15 @@ import com.example.blb.data.AppDatabase;
 import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
 import com.example.blb.data.SubscriptionDao;
+import com.example.blb.ui.LedgerEdits;
+import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 订阅页那颗「开始自动订阅」：只做订阅，不签到、不看广告。
+ * 订阅页次要操作里的「只跑订阅」：按启用账号逐个完成订阅。
  *
  * <p>按账号顺序走，一个号在场时把它能买的章一次买完，代券花光了才换下一个 ——
  * 而不是按章换号。换号意味着退登重登，重登是最招验证码的动作，所以每个号只登一次。
@@ -38,6 +40,8 @@ public final class SubscribeQueue {
         /** 实付代券累计。 */
         public int spent;
         public String abortReason;
+        public String catalogNote;
+        public String nextChapterNote;
         /**
          * 整本现在<b>停在第几章</b>（{@link SubscribeRun#stuckNote}）；没卡住就是 null。
          * 队列绝不越过一章，所以一趟里最多只会停在一章上。代券不够也算，那不是失败。
@@ -65,7 +69,18 @@ public final class SubscribeQueue {
         SubscriptionDao subs = db.subscriptionDao();
         AccountDao accountDao = db.accountDao();
 
-        Novel novel = prepare(context, subs, summary, host);
+        Novel novel;
+        try {
+            novel = prepare(context, subs, summary, host);
+        } catch (StepRunner.StepFailure failure) {
+            summary.abortReason = failure.getMessage();
+            host.log(summary.abortReason);
+            return summary;
+        } catch (RuntimeException failure) {
+            summary.abortReason = "订阅账本预检失败，整趟停止：" + failure.getMessage();
+            host.log(summary.abortReason);
+            return summary;
+        }
         if (novel == null) return summary;
 
         SelectorSet selectors = SelectorSet.load(context);
@@ -93,55 +108,86 @@ public final class SubscribeQueue {
         StepRunner runner = new StepRunner(context, selectors, host);
         SubscribeRun.Settled settled = new SubscribeRun.Settled();
 
-        for (int i = 0; i < accounts.size(); i++) {
-            if (host.isCancelled()) {
-                summary.abortReason = "已取消";
-                break;
-            }
-            Account account = accounts.get(i);
-            host.log("[" + (i + 1) + "/" + accounts.size() + "] " + account.displayName()
-                    + "（" + account.loginKindLabel() + "）");
-            try {
-                AccountSwitcher.ensureLoggedIn(runner, account, accountDao, accounts.size() == 1);
-                // 余额得从「我的」页读，签到面板上一个数字都没有；读不到就退回账号库里记的代券。
-                Texts.Balance balance = runner.readBalanceFromMine();
-                host.log("  " + balance.describe());
-                if (balance.known()) {
-                    if (balance.fire >= 0) account.lastKnownCoupons = balance.fire;
-                    if (balance.voucher >= 0) account.lastKnownVouchers = balance.voucher;
-                    accountDao.setBalance(account.id, balance.fire, balance.voucher);
-                }
-                SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                        balance, settled, tally);
-            } catch (StepRunner.StepFailure e) {
-                host.log("  " + e.getMessage());
-                if (isGlobal(e.kind)) {
-                    summary.abortReason = e.getMessage();
+        try {
+            for (int i = 0; i < accounts.size(); i++) {
+                if (host.isCancelled()) {
+                    summary.abortReason = "已取消";
                     break;
                 }
-                tally.failed++;
-                tally.notes.add(account.displayName() + "：" + e.getMessage());
-            } catch (Exception e) {
-                tally.failed++;
-                host.log("  意外错误：" + e);
+                Account account = accounts.get(i);
+                host.log("[" + (i + 1) + "/" + accounts.size() + "] " + account.displayName()
+                        + "（" + account.loginKindLabel() + "）");
+                try {
+                    AccountSwitcher.ensureLoggedIn(runner, account, accountDao, accounts.size() == 1);
+                    plan = CatalogQueue.syncIfExpired(runner, host, subs, plan, account, i);
+                    summary.catalogNote = CatalogStatus.runNote(plan.novel,
+                            System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+                    // 余额得从「我的」页读，签到面板上一个数字都没有；读不到就退回账号库里记的代券。
+                    Texts.Balance balance = runner.readBalanceFromMine();
+                    host.log("  " + balance.describe());
+                    if (balance.known()) {
+                        if (balance.fire >= 0) account.lastKnownCoupons = balance.fire;
+                        if (balance.voucher >= 0) account.lastKnownVouchers = balance.voucher;
+                        accountDao.setBalance(account.id, balance.fire, balance.voucher);
+                    }
+                    SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
+                            balance, settled, tally);
+                } catch (StepRunner.StepFailure e) {
+                    if (isGlobal(e.kind)) summary.abortReason = e.getMessage();
+                    host.log("  " + e.getMessage());
+                    if (isGlobal(e.kind)) {
+                        summary.abortReason = e.getMessage();
+                        break;
+                    }
+                    tally.failed++;
+                    tally.notes.add(account.displayName() + "：" + e.getMessage());
+                } catch (Exception e) {
+                    tally.failed++;
+                    host.log("  意外错误：" + e);
+                }
+            }
+        } catch (RuntimeException failure) {
+            String note = "流程或失败记录保存异常，整趟停止：" + failure.getMessage();
+            if (summary.abortReason == null) summary.abortReason = note;
+            else summary.notes.add(note);
+        } finally {
+            // 后续账号记失败也可能抛错；已经买到的章和花掉的券必须留在同一份结论里。
+            summary.bought = tally.bought;
+            summary.already = tally.ownedAlready;
+            summary.failed = tally.failed;
+            summary.spent = tally.spent;
+        }
+        try {
+            Novel latest = subs.novelById(plan.novel.id);
+            summary.catalogNote = CatalogStatus.runNote(latest == null ? plan.novel : latest,
+                    System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+            summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
+            summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
+            summary.nextChapterNote = SubscribeRun.currentNextChapterNote(subs, plan.novel);
+            host.log(summary.catalogNote);
+            host.log(summary.nextChapterNote);
+        } catch (RuntimeException failure) {
+            summary.nextChapterNote = "下一章：账本读取失败，不能继续购买";
+            if (summary.abortReason == null) {
+                summary.abortReason = "收尾核对账本失败：" + failure.getMessage();
             }
         }
-        summary.bought = tally.bought;
-        summary.already = tally.ownedAlready;
-        summary.failed = tally.failed;
-        summary.spent = tally.spent;
-        summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
-        summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
         return summary;
     }
 
     /** 跑之前必须成立的几件事。返回 null = 这一轮不跑，原因已经写进 summary。 */
     private static Novel prepare(Context context, SubscriptionDao subs, Summary summary,
-                                 StepRunner.Host host) {
-        Novel novel = SubscribeRun.resolveTarget(subs, host);
+                                 StepRunner.Host host) throws StepRunner.StepFailure {
+        Novel novel = LedgerEdits.duringRun(host, () -> SubscribeRun.resolveTarget(subs, host));
         if (novel == null) {
-            summary.abortReason = "还没有设定集中订阅的目标小说";
+            summary.abortReason = "先在订阅页选一本目标小说";
             host.log(summary.abortReason);
+        } else {
+            summary.catalogNote = CatalogStatus.runNote(novel,
+                    System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+            summary.nextChapterNote = SubscribeRun.currentNextChapterNote(subs, novel);
+            host.log(summary.catalogNote);
+            SubscribeRun.requireCatalog(subs, novel);
         }
         return novel;
     }

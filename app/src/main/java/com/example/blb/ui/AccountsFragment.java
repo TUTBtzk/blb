@@ -1,5 +1,6 @@
 package com.example.blb.ui;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.text.format.DateFormat;
 import android.view.LayoutInflater;
@@ -212,57 +213,56 @@ public class AccountsFragment extends Fragment {
             return;
         }
 
-        KeyStoreBox.Sealed sealed = null;
-        if (needsPassword && !Texts.isBlank(draft.password)) {
-            try {
-                sealed = KeyStoreBox.seal(draft.password);
-            } catch (KeyStoreBox.CryptoException e) {
-                toast("密码加密失败：" + e.getMessage());
-                return;
-            }
-        }
-
-        Account account = existing == null ? new Account() : existing;
-        account.label = Texts.isBlank(draft.label) ? null : draft.label;
-        account.loginName = draft.login;
-        account.loginKind = draft.kind;
-        account.enabled = draft.enabled;
-        account.nickname = Texts.isBlank(draft.nickname) ? null : draft.nickname;
-        int fire = Texts.parseCount(draft.coupons);
-        if (fire >= 0) account.lastKnownCoupons = fire;
-        int voucher = Texts.parseCount(draft.vouchers);
-        if (voucher >= 0) account.lastKnownVouchers = voucher;
-        if (sealed != null) {
-            account.encPassword = sealed.cipherText;
-            account.encIv = sealed.iv;
-        }
-        // 换了登录名就说明这条记录换了个号，旧昵称会让切号校验一直判失败。
-        if (existing != null && !draft.login.equals(existing.loginName)
-                && Texts.isBlank(draft.nickname)) {
-            account.nickname = null;
-        }
-
         boolean isNew = existing == null;
-        Db.io(() -> {
+        long accountId = isNew ? 0 : existing.id;
+        Context app = requireContext().getApplicationContext();
+        LedgerEdits.submit(app, () -> {
             try {
+                // 占用成功后再取数据库对象，不能提前修改列表正在显示的账号。
+                Account account = isNew ? new Account() : dao.byId(accountId);
+                if (account == null) {
+                    throw new IllegalStateException("账号已被删除，请重新添加");
+                }
+                if (needsPassword && !Texts.isBlank(draft.password)) {
+                    KeyStoreBox.Sealed sealed = KeyStoreBox.seal(draft.password);
+                    account.encPassword = sealed.cipherText;
+                    account.encIv = sealed.iv;
+                }
+                account.label = Texts.isBlank(draft.label) ? null : draft.label;
+                account.loginName = draft.login;
+                account.loginKind = draft.kind;
+                account.enabled = draft.enabled;
+                account.nickname = Texts.isBlank(draft.nickname) ? null : draft.nickname;
+                int fire = Texts.parseCount(draft.coupons);
+                if (fire >= 0) account.lastKnownCoupons = fire;
+                int voucher = Texts.parseCount(draft.vouchers);
+                if (voucher >= 0) account.lastKnownVouchers = voucher;
                 if (isNew) {
                     account.sortOrder = dao.maxSortOrder() + 1;
                     dao.insert(account);
                 } else {
                     dao.update(account);
                 }
-            } catch (Exception e) {
-                post(() -> toast("保存失败（登录名可能已存在）：" + e.getMessage()));
+                // 身份或启用名单一变，旧清单结论就不能再替这批账号证明购买归属。
+                Db.get(app).auditDao().invalidateAll();
+            } catch (KeyStoreBox.CryptoException e) {
+                throw new IllegalStateException("密码加密失败：" + e.getMessage(), e);
             }
         });
     }
 
     private void confirmDelete(Account account) {
+        Context app = requireContext().getApplicationContext();
         new AlertDialog.Builder(requireContext())
-                .setTitle("删除 " + account.displayName() + "？")
-                .setMessage("它的签到日志和订阅记录会一起删掉，这个操作没法撤销。")
+                .setTitle("删除无订阅记录的账号？")
+                .setMessage(account.displayName() + "：仅允许删除没有订阅记录的账号，其签到日志会一起删除。"
+                        + "已有订阅记录时请停用账号；怀疑记错时，先在订阅页点『核对订阅清单』。")
                 .setNegativeButton(R.string.cancel, null)
-                .setPositiveButton(R.string.delete, (d, w) -> Db.io(() -> dao.delete(account)))
+                .setPositiveButton("删除无账账号", (d, w) ->
+                        LedgerEdits.submit(app, () -> {
+                            dao.delete(account);
+                            Db.get(app).auditDao().invalidateAll();
+                        }))
                 .show();
     }
 

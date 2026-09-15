@@ -14,6 +14,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 
+import com.example.blb.auto.AccessibilityAccess;
 import com.example.blb.ui.AccountsFragment;
 import com.example.blb.ui.CheckInFragment;
 import com.example.blb.ui.SettingsFragment;
@@ -54,7 +55,15 @@ public class MainActivity extends AppCompatActivity {
         nav.setSelectedItemId(currentTab);
         show(currentTab);
 
+        AccessibilityAccess.restoreIfAuthorized(this);
         askNotificationPermission();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // MIUI 从最近任务划掉后会清除 secure setting；只要照护者授过权，重开即自动补回。
+        AccessibilityAccess.restoreIfAuthorized(this);
     }
 
     @Override

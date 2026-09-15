@@ -4,17 +4,22 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.os.Bundle;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.view.ViewCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.example.blb.R;
 import com.google.android.material.color.MaterialColors;
 
 /**
@@ -58,6 +63,7 @@ public class FastScrollBar extends View {
     @Nullable
     private Labeler labeler;
     private boolean dragging;
+    private float touchClickY = Float.NaN;
     /** 滑块顶端和高度（px）：onDraw 和拖动折算共用。 */
     private float thumbTop;
     private float thumbH;
@@ -80,7 +86,10 @@ public class FastScrollBar extends View {
         thumbColor = MaterialColors.getColor(context,
                 com.google.android.material.R.attr.colorSecondary, 0xFF6D4C41);
         trackColor = ColorUtils.setAlphaComponent(thumbColor, 0x2E);
-        setContentDescription(context.getString(com.example.blb.R.string.detail_scrollbar_hint));
+        setContentDescription(context.getString(R.string.detail_scrollbar_hint));
+        setClickable(true);
+        setFocusable(true);
+        setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_YES);
     }
 
     /**
@@ -105,6 +114,7 @@ public class FastScrollBar extends View {
     /** 气泡上写什么。不设＝拖动时不弹气泡。 */
     public void setLabeler(@Nullable Labeler value) {
         labeler = value;
+        sync();
     }
 
     /** 重新算滑块该多高、停在哪儿；内容不到一屏就整根收起来（没得滚，露着只是碍眼）。 */
@@ -122,6 +132,7 @@ public class FastScrollBar extends View {
         thumbH = Math.max(minThumb, height * extent / (float) range);
         float free = Math.max(1f, height - thumbH);
         thumbTop = free * clamp(offset / (float) (range - extent));
+        updateAccessibilityPosition();
         invalidate();
     }
 
@@ -150,26 +161,122 @@ public class FastScrollBar extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (list == null || getVisibility() != VISIBLE) return false;
+        if (!isEnabled() || list == null || getVisibility() != VISIBLE) return false;
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 dragging = true;
                 // 手指压在这根条上的时候，别让列表把这串事件抢去当滑动。
-                getParent().requestDisallowInterceptTouchEvent(true);
+                if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
                 jumpTo(event.getY());
                 return true;
             case MotionEvent.ACTION_MOVE:
                 if (dragging) jumpTo(event.getY());
                 return dragging;
             case MotionEvent.ACTION_UP:
+                if (!dragging) return false;
+                touchClickY = event.getY();
+                try {
+                    performClick();
+                } finally {
+                    touchClickY = Float.NaN;
+                    finishDrag();
+                }
+                return true;
             case MotionEvent.ACTION_CANCEL:
-                dragging = false;
-                if (bubble != null) bubble.setVisibility(INVISIBLE);
-                sync();
+                finishDrag();
                 return true;
             default:
                 return false;
         }
+    }
+
+    private void finishDrag() {
+        dragging = false;
+        if (bubble != null) bubble.setVisibility(INVISIBLE);
+        if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(false);
+        sync();
+    }
+
+    /** 触屏点按按位置跳转；读屏或键盘的点击没有坐标，执行有明确标签的向下翻页。 */
+    @Override
+    public boolean performClick() {
+        boolean handled = super.performClick();
+        if (!isEnabled() || list == null || getVisibility() != VISIBLE) return handled;
+        if (!Float.isNaN(touchClickY)) return jumpTo(touchClickY) || handled;
+        return list.performAccessibilityAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD, null)
+                || handled;
+    }
+
+    @Override
+    public CharSequence getAccessibilityClassName() {
+        return SeekBar.class.getName();
+    }
+
+    @Override
+    public void onInitializeAccessibilityNodeInfo(@NonNull AccessibilityNodeInfo info) {
+        super.onInitializeAccessibilityNodeInfo(info);
+        boolean available = isEnabled() && list != null && getVisibility() == VISIBLE;
+        boolean forward = available && list.canScrollVertically(1);
+        boolean backward = available && list.canScrollVertically(-1);
+        info.setScrollable(forward || backward);
+        info.setClickable(forward);
+        info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_CLICK);
+        if (forward) {
+            info.addAction(new AccessibilityNodeInfo.AccessibilityAction(
+                    AccessibilityNodeInfo.ACTION_CLICK,
+                    getContext().getString(R.string.detail_scrollbar_next_page)));
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD);
+        }
+        if (backward) {
+            info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
+        }
+        if (available && list.getLayoutManager() instanceof LinearLayoutManager) {
+            int travel = list.computeVerticalScrollRange() - list.computeVerticalScrollExtent();
+            if (travel > 0) {
+                float progress = 100f * clamp(list.computeVerticalScrollOffset() / (float) travel);
+                info.setRangeInfo(AccessibilityNodeInfo.RangeInfo.obtain(
+                        AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, 0f, 100f, progress));
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS);
+            }
+        }
+    }
+
+    @Override
+    public boolean performAccessibilityAction(int action, @Nullable Bundle arguments) {
+        if (!isEnabled() || list == null || getVisibility() != VISIBLE) {
+            return super.performAccessibilityAction(action, arguments);
+        }
+        if (action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                || action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
+            return list.performAccessibilityAction(action, arguments);
+        }
+        if (action == AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.getId()) {
+            if (arguments == null) return false;
+            float progress = arguments.getFloat(
+                    AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE, Float.NaN);
+            if (Float.isNaN(progress) || Float.isInfinite(progress)) return false;
+            float free = Math.max(1f, getHeight() - thumbH);
+            boolean handled = jumpTo(clamp(progress / 100f) * free + thumbH / 2f);
+            if (bubble != null) bubble.setVisibility(INVISIBLE);
+            sync();
+            return handled;
+        }
+        return super.performAccessibilityAction(action, arguments);
+    }
+
+    /** 状态独立于操作说明，读屏聚焦在滚动条上时也能知道已经到了哪一项。 */
+    private void updateAccessibilityPosition() {
+        if (list == null || !(list.getLayoutManager() instanceof LinearLayoutManager)) return;
+        RecyclerView.Adapter<?> adapter = list.getAdapter();
+        if (adapter == null || adapter.getItemCount() == 0) return;
+        int count = adapter.getItemCount();
+        int first = ((LinearLayoutManager) list.getLayoutManager()).findFirstVisibleItemPosition();
+        if (first == RecyclerView.NO_POSITION) return;
+        int position = Math.min(first, count - 1);
+        String label = labeler == null ? null : labeler.label(position);
+        ViewCompat.setStateDescription(this, label == null
+                ? getContext().getString(R.string.detail_scrollbar_position, position + 1, count)
+                : label);
     }
 
     /**
@@ -179,13 +286,13 @@ public class FastScrollBar extends View {
      * 而 {@code computeVerticalScrollRange()} 对 RecyclerView 只是拿平均行高估的，
      * 用它折算越往后越偏。
      */
-    private void jumpTo(float y) {
-        if (list == null) return;
+    private boolean jumpTo(float y) {
+        if (list == null) return false;
         RecyclerView.LayoutManager lm = list.getLayoutManager();
         RecyclerView.Adapter<?> adapter = list.getAdapter();
-        if (!(lm instanceof LinearLayoutManager) || adapter == null) return;
+        if (!(lm instanceof LinearLayoutManager) || adapter == null) return false;
         int count = adapter.getItemCount();
-        if (count <= 0) return;
+        if (count <= 0) return false;
 
         float free = Math.max(1f, getHeight() - thumbH);
         float fraction = clamp((y - thumbH / 2f) / free);
@@ -195,6 +302,7 @@ public class FastScrollBar extends View {
         thumbTop = fraction * free;
         invalidate();
         showBubble(Math.round(fraction * (count - 1)));
+        return true;
     }
 
     /** 拖到哪一章要当场说出来：光看滑块位置猜不出「这是第几章」。 */

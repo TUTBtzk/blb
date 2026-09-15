@@ -38,18 +38,27 @@ public class SubscriptionDaoTest extends DbTestBase {
     }
 
     @Test
-    public void samePurchaseTwiceOverwritesInsteadOfDoubleCounting() {
+    public void exactReplayKeepsTheOriginalFactAndChangedFactsCannotOverwriteIt() {
         long acc = newAccount("a@x.com", 100, true, 1);
         long novel = newNovel("目标书", true);
         long ch = newChapter(novel, 1, 20);
 
-        buy(acc, ch, 20, Purchase.SRC_AUTO);
-        buy(acc, ch, 25, Purchase.SRC_MANUAL);
+        Purchase original = Purchase.of(acc, ch, 20, Purchase.SRC_AUTO);
+        long originalId = subs.upsertPurchase(original);
+        assertEquals(originalId, subs.upsertPurchase(original));
+        try {
+            buy(acc, ch, 25, Purchase.SRC_MANUAL);
+            fail("没有核对证据，不能覆盖原来花过的券");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("不能覆盖"));
+        }
 
         List<Purchase> rows = subs.loadPurchasesOfNovel(novel);
         assertEquals(1, rows.size());
-        assertEquals(25, rows.get(0).costCoupons);
-        assertEquals(Purchase.SRC_MANUAL, rows.get(0).source);
+        assertEquals(originalId, rows.get(0).id);
+        assertEquals(20, rows.get(0).costCoupons);
+        assertEquals(original.purchasedAt, rows.get(0).purchasedAt);
+        assertEquals(Purchase.SRC_AUTO, rows.get(0).source);
     }
 
     @Test
@@ -63,18 +72,62 @@ public class SubscriptionDaoTest extends DbTestBase {
     }
 
     @Test
-    public void deletingNovelCascadesToChaptersAndPurchases() {
+    public void deletingNovelCannotCascadeAwayPurchaseEvidence() {
         long acc = newAccount("a@x.com", 100, true, 1);
         long novel = newNovel("目标书", true);
         long ch = newChapter(novel, 1, 20);
         buy(acc, ch, 20, Purchase.SRC_AUTO);
 
         Novel n = subs.novelById(novel);
-        subs.deleteNovel(n);
+        try {
+            subs.deleteNovel(n);
+            fail("删书不能绕过账本的证据与撤销要求");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("订阅"));
+        }
 
+        assertNotNull(subs.novelById(novel));
+        assertEquals(1, subs.loadChapters(novel).size());
+        assertEquals(1, subs.loadPurchasesOfNovel(novel).size());
+        assertEquals(1, subs.countRealPurchase(acc, ch));
+    }
+
+    @Test
+    public void deletingAnUnpurchasedNovelStillRemovesItsEmptyCatalog() {
+        long novel = newNovel("空账本", true);
+        newChapter(novel, 1, 20);
+        subs.deleteNovel(subs.novelById(novel));
+        assertNull(subs.novelById(novel));
         assertTrue(subs.loadChapters(novel).isEmpty());
-        assertTrue(subs.loadPurchasesOfNovel(novel).isEmpty());
-        assertEquals(0, subs.countRealPurchase(acc, ch));
+    }
+
+    @Test
+    public void directAndChapterCascadeDeletesCannotEraseEvenFreeOwnedEvidence() {
+        long account = newAccount("mine@x.com", 0, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        long id = buy(account, chapter, 0, Purchase.SRC_OWNED);
+        try {
+            subs.deletePurchase(subs.loadPurchasesOfNovel(novel).get(0));
+            fail("直接删记录不能绕过核对留痕");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("核对"));
+        }
+        try {
+            subs.deleteChapter(subs.chapterById(chapter));
+            fail("删章不能级联抹掉 OWNED 事实");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("订阅"));
+        }
+        try {
+            subs.deleteChapterById(chapter);
+            fail("按 id 删章同样要保护原记录");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("订阅"));
+        }
+        assertNotNull(subs.chapterById(chapter));
+        assertEquals(1, subs.countRealPurchase(account, chapter));
+        assertEquals(id, subs.loadPurchasesOfNovel(novel).get(0).id);
     }
 
     @Test
@@ -153,8 +206,14 @@ public class SubscriptionDaoTest extends DbTestBase {
         buy(rich, ch, 20, Purchase.SRC_AUTO);
         assertEquals("已经买过的号不该再被建议", poor, subs.suggestBuyer(ch).id);
 
-        buy(poor, ch, 20, Purchase.SRC_AUTO);
-        assertNull("剩下的都停用了，就该老实说没有人选", subs.suggestBuyer(ch));
+        try {
+            buy(poor, ch, 20, Purchase.SRC_AUTO);
+            fail("候选号排序不能授权第二个号重复花券");
+        } catch (IllegalStateException expected) {
+            assertTrue(expected.getMessage().contains("其他账号花过券"));
+        }
+        assertNull("整本下一章以所有号的归属为准", subs.findNextUnownedChapter(novel));
+        assertEquals(1, subs.loadPurchasesOfNovel(novel).size());
         assertEquals(0, subs.countRealPurchase(richButOff, ch));
     }
 
@@ -223,5 +282,227 @@ public class SubscriptionDaoTest extends DbTestBase {
         assertEquals(7, subs.chapterByNo(novel, 7).chapterNo);
         assertNull(subs.chapterByNo(novel, 8));
         assertEquals(7, subs.maxChapterNo(novel));
+    }
+
+    private boolean restore(long accountId, long novelId, List<Purchase> purchases) {
+        return subs.restoreRemotePurchases(accountId, novelId, purchases,
+                subs.loadChapters(novelId), subs.loadPaidRowsOfNovel(novelId));
+    }
+
+    /** 2026-09-14 的真实跨号订阅要整批补回；别号既有事实、主键和金额都必须保留。 */
+    @Test
+    public void remoteRecoveryCommitsTheWholeBatchAlongsideAnotherAccount() {
+        long mine = newAccount("mine@x.com", 0, 100, true, 1);
+        long other = newAccount("other@x.com", 0, 100, true, 2);
+        long novel = newNovel("目标书", true);
+        long ch1 = newChapter(novel, 1, 20);
+        long ch2 = newChapter(novel, 2, 20);
+        long otherId = buy(other, ch2, 0, 20, Purchase.SRC_AUTO);
+
+        Purchase first = Purchase.of(mine, ch1, 0, 20, Purchase.SRC_REMOTE_DETAIL);
+        Purchase sharedHistory = Purchase.of(mine, ch2, 0, 20, Purchase.SRC_REMOTE_DETAIL);
+        assertTrue(restore(mine, novel, java.util.Arrays.asList(first, sharedHistory)));
+        assertEquals(1, subs.countRealPurchase(mine, ch1));
+        assertEquals(1, subs.countRealPurchase(mine, ch2));
+        assertEquals(1, subs.countRealPurchase(other, ch2));
+        assertEquals(3, subs.loadPurchasesOfNovel(novel).size());
+        for (Purchase stored : subs.loadPurchasesOfNovel(novel)) {
+            if (stored.accountId == other) {
+                assertEquals(otherId, stored.id);
+                assertEquals(20, stored.costVouchers);
+                assertEquals(Purchase.SRC_AUTO, stored.source);
+            }
+        }
+        assertNull(subs.findNextUnownedChapter(novel));
+    }
+
+    /** 2026-09-14 跨号事实允许保留；同账号再次恢复必须幂等，不能换主键或覆盖旧金额。 */
+    @Test
+    public void remoteRecoveryIsIdempotentWhenAnotherPaidAccountAlreadyExists() {
+        long mine = newAccount("mine@x.com", 0, 100, true, 1);
+        long other = newAccount("other@x.com", 0, 100, true, 2);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        buy(other, chapter, 0, 20, Purchase.SRC_AUTO);
+        Purchase recovered = Purchase.of(mine, chapter, 0, 20,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+        assertTrue(restore(mine, novel, java.util.Collections.singletonList(recovered)));
+        List<Purchase> before = subs.loadPurchasesOfNovel(novel);
+        assertTrue(restore(mine, novel, java.util.Collections.singletonList(recovered)));
+        List<Purchase> after = subs.loadPurchasesOfNovel(novel);
+        assertEquals(2, after.size());
+        for (Purchase old : before) {
+            Purchase same = SubscriptionDao.purchaseOf(after, old.accountId);
+            assertNotNull(same);
+            assertTrue(LedgerWritePolicy.samePurchase(old, same));
+        }
+    }
+
+    /** DAO 边界也拒绝同批重复章节，不能依赖上层 planner 永远传干净参数。 */
+    @Test
+    public void remoteRecoveryRejectsDuplicateIncomingChapters() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        Purchase first = Purchase.of(account, chapter, 0, 20,
+                Purchase.SRC_REMOTE_DETAIL);
+        Purchase duplicate = Purchase.of(account, chapter, 0, 20,
+                Purchase.SRC_REMOTE_DETAIL);
+
+        assertTrue(!restore(account, novel,
+                java.util.Arrays.asList(first, duplicate)));
+        assertTrue(subs.loadPurchasesOfNovel(novel).isEmpty());
+    }
+
+    /** 带主键的恢复对象可能 REPLACE 完全无关的一行，事务入口只收 id=0 的新记录。 */
+    @Test
+    public void remoteRecoveryRejectsAnIncomingPrimaryKey() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        Purchase recovered = Purchase.of(account, chapter, 0, 20,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.id = 123;
+
+        assertTrue(!restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        assertTrue(subs.loadPurchasesOfNovel(novel).isEmpty());
+    }
+
+    @Test
+    public void remoteRecoveryPromotesOwnedBesideAnotherPaidAccountWithoutChangingItsId() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long other = newAccount("other@x.com", 0, 100, true, 2);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        long originalId = buy(account, chapter, 0, 0, Purchase.SRC_OWNED);
+        long otherId = buy(other, chapter, 0, 20, Purchase.SRC_AUTO);
+        Purchase recovered = Purchase.of(account, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+
+        assertTrue(restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        List<Purchase> rows = subs.loadPurchasesOfNovel(novel);
+        Purchase stored = SubscriptionDao.purchaseOf(rows, account);
+        assertNotNull(stored);
+        assertEquals(originalId, stored.id);
+        assertEquals(12, stored.costVouchers);
+        assertEquals(Purchase.SRC_REMOTE_DETAIL, stored.source);
+        assertEquals(1_700_000_000_000L, stored.purchasedAt);
+        assertEquals(otherId, SubscriptionDao.purchaseOf(rows, other).id);
+        assertEquals(2, rows.size());
+    }
+
+    @Test
+    public void anotherAccountsZeroCostOwnedDoesNotBlockRecovery() {
+        long mine = newAccount("mine@x.com", 0, 100, true, 1);
+        long other = newAccount("other@x.com", 0, 100, true, 2);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        buy(other, chapter, 0, 0, Purchase.SRC_OWNED);
+        Purchase recovered = Purchase.of(mine, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+
+        assertTrue(restore(mine, novel,
+                java.util.Collections.singletonList(recovered)));
+        assertEquals(2, subs.loadPurchasesOfNovel(novel).size());
+        assertEquals(1, subs.countPaidPurchases(mine, novel));
+    }
+
+    @Test
+    public void idempotentRemoteRecoveryPreservesPrimaryKey() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        Purchase recovered = Purchase.of(account, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+        assertTrue(restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        long originalId = subs.loadPurchasesOfNovel(novel).get(0).id;
+
+        assertTrue(restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        assertEquals(originalId, subs.loadPurchasesOfNovel(novel).get(0).id);
+    }
+
+    @Test
+    public void anExistingAutoFactIsNotReplacedByRecovery() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        long originalId = buy(account, chapter, 0, 12, Purchase.SRC_AUTO);
+        Purchase recovered = Purchase.of(account, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+
+        assertTrue(!restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        Purchase stored = subs.loadPurchasesOfNovel(novel).get(0);
+        assertEquals(originalId, stored.id);
+        assertEquals(Purchase.SRC_AUTO, stored.source);
+    }
+
+    @Test
+    public void changedCatalogSnapshotRejectsRecoveryWithoutWriting() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        List<Chapter> plannedChapters = subs.loadChapters(novel);
+        List<PurchaseRow> plannedPaid = subs.loadPaidRowsOfNovel(novel);
+        Purchase recovered = Purchase.of(account, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+        Chapter changed = subs.chapterById(chapter);
+        changed.title = "1 改名了";
+        subs.updateChapter(changed);
+
+        assertTrue(!subs.restoreRemotePurchases(account, novel,
+                java.util.Collections.singletonList(recovered), plannedChapters, plannedPaid));
+        assertTrue(subs.loadPurchasesOfNovel(novel).isEmpty());
+    }
+
+    @Test
+    public void newPaidFactAfterPlanningRejectsRecoveryWithoutOverwritingIt() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long other = newAccount("other@x.com", 0, 100, true, 2);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        List<Chapter> plannedChapters = subs.loadChapters(novel);
+        List<PurchaseRow> plannedPaid = subs.loadPaidRowsOfNovel(novel);
+        Purchase recovered = Purchase.of(account, chapter, 0, 12,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+        long autoId = buy(other, chapter, 0, 12, Purchase.SRC_AUTO);
+
+        assertTrue(!subs.restoreRemotePurchases(account, novel,
+                java.util.Collections.singletonList(recovered), plannedChapters, plannedPaid));
+        List<Purchase> stored = subs.loadPurchasesOfNovel(novel);
+        assertEquals(1, stored.size());
+        assertEquals(autoId, stored.get(0).id);
+        assertEquals(Purchase.SRC_AUTO, stored.get(0).source);
+    }
+
+    /** 同一批经核实的历史账可以幂等重放，并保留真实购买日期。 */
+    @Test
+    public void remoteRecoveryIsIdempotentAndCountsAsPaid() {
+        long account = newAccount("mine@x.com", 0, 100, true, 1);
+        long novel = newNovel("目标书", true);
+        long chapter = newChapter(novel, 1, 20);
+        Purchase recovered = Purchase.of(account, chapter, 0, 20,
+                Purchase.SRC_REMOTE_DETAIL);
+        recovered.purchasedAt = 1_700_000_000_000L;
+
+        assertTrue(restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        assertTrue(restore(account, novel,
+                java.util.Collections.singletonList(recovered)));
+        assertEquals(1, subs.countPaidPurchases(account, novel));
+        assertEquals(1, subs.loadPurchasesOfNovel(novel).size());
+        assertEquals(1_700_000_000_000L,
+                subs.loadPurchasesOfNovel(novel).get(0).purchasedAt);
+        assertNull("恢复后绝不能再买同一章", subs.findNextUnownedChapter(novel));
     }
 }

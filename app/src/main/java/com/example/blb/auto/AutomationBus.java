@@ -1,5 +1,7 @@
 package com.example.blb.auto;
 
+import android.util.Log;
+
 import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -33,6 +35,7 @@ public final class AutomationBus {
     private static final int MAX_LOG_LINES = 800;
 
     private static final MutableLiveData<Boolean> RUNNING = new MutableLiveData<>(false);
+    private static final MutableLiveData<Boolean> BUSY = new MutableLiveData<>(false);
     private static final MutableLiveData<String> STATUS = new MutableLiveData<>("空闲");
     private static final MutableLiveData<String> PAUSE_REASON = new MutableLiveData<>(null);
     private static final MutableLiveData<List<String>> LOG = new MutableLiveData<>(new ArrayList<>());
@@ -40,13 +43,22 @@ public final class AutomationBus {
     private static final Deque<String> LINES = new ArrayDeque<>();
     private static final BlockingQueue<StepRunner.Decision> DECISIONS = new ArrayBlockingQueue<>(1);
 
-    private static volatile boolean cancelled;
+    private static final RunGate GATE = new RunGate();
+    private static Runnable cancelCleanup;
 
     private AutomationBus() {
     }
 
     public static LiveData<Boolean> running() {
         return RUNNING;
+    }
+
+    public static LiveData<Boolean> busy() {
+        return BUSY;
+    }
+
+    public static boolean isBusy() {
+        return GATE.isBusy();
     }
 
     public static LiveData<String> status() {
@@ -63,17 +75,52 @@ public final class AutomationBus {
     }
 
     public static boolean isRunning() {
-        return Boolean.TRUE.equals(RUNNING.getValue());
+        return GATE.isRunning();
     }
 
-    /** 由任务驱动方（前台 Service 或 WorkManager）调用。 */
-    public static void setRunning(boolean value) {
-        RUNNING.postValue(value);
-        if (value) {
-            cancelled = false;
+    /** Service 和 Worker 必须先取得同一把锁，再启动任何队列或清空日志。 */
+    public static boolean tryStartRun(Object owner, Runnable onCancel) {
+        synchronized (GATE) {
+            if (!GATE.tryStart(owner)) return false;
+            cancelCleanup = onCancel;
             DECISIONS.clear();
-        } else {
             PAUSE_REASON.postValue(null);
+            RUNNING.postValue(true);
+            BUSY.postValue(true);
+            return true;
+        }
+    }
+
+    /** 只有取得锁的任务能结束它，拒绝旧任务或未启动成功的任务清掉别人的状态。 */
+    public static void finishRun(Object owner) {
+        synchronized (GATE) {
+            if (!GATE.isRunning() || !GATE.finish(owner)) return;
+            cancelCleanup = null;
+            PAUSE_REASON.postValue(null);
+            RUNNING.postValue(false);
+            BUSY.postValue(false);
+        }
+    }
+
+    /** 编辑与自动化互斥，但编辑不会显示为可停止的自动化任务。 */
+    public static boolean tryStartEdit(Object owner) {
+        synchronized (GATE) {
+            if (!GATE.tryStartEdit(owner)) return false;
+            BUSY.postValue(true);
+            return true;
+        }
+    }
+
+    public static void finishEdit(Object owner) {
+        synchronized (GATE) {
+            if (GATE.isRunning() || !GATE.finish(owner)) return;
+            BUSY.postValue(false);
+        }
+    }
+
+    public static boolean ownsRun(Object owner) {
+        synchronized (GATE) {
+            return GATE.isRunning() && GATE.owns(owner);
         }
     }
 
@@ -99,21 +146,41 @@ public final class AutomationBus {
     // ---------- 取消 ----------
 
     public static void cancel() {
-        cancelled = true;
-        // 正卡在等人工时，取消也要能立刻把它唤醒。
-        DECISIONS.offer(StepRunner.Decision.ABORT);
+        synchronized (GATE) {
+            if (!GATE.isRunning()) return;
+            GATE.cancel();
+            // 即使之前排了一次“继续”，停止也必须唤醒等待并覆盖旧决定。
+            DECISIONS.clear();
+            DECISIONS.offer(StepRunner.Decision.ABORT);
+            if (cancelCleanup != null) {
+                try {
+                    cancelCleanup.run();
+                } catch (RuntimeException e) {
+                    Log.w("BlbAuto", "停止任务时清理返回闹钟失败", e);
+                }
+            }
+        }
     }
 
     public static boolean isCancelled() {
-        return cancelled;
+        return GATE.isCancelled();
+    }
+
+    public static void cancelRun(Object owner) {
+        synchronized (GATE) {
+            if (GATE.isRunning() && GATE.owns(owner)) cancel();
+        }
     }
 
     // ---------- 暂停等人工 ----------
 
     /** 由任务线程调用，阻塞直到用户做出选择；等太久（30 分钟）就当作中止。 */
     static StepRunner.Decision awaitDecision(String reason) {
-        PAUSE_REASON.postValue(reason);
-        DECISIONS.clear();
+        synchronized (GATE) {
+            if (GATE.isCancelled()) return StepRunner.Decision.ABORT;
+            DECISIONS.clear();
+            PAUSE_REASON.postValue(reason);
+        }
         try {
             StepRunner.Decision d = DECISIONS.poll(30, TimeUnit.MINUTES);
             return d == null ? StepRunner.Decision.ABORT : d;
@@ -128,7 +195,12 @@ public final class AutomationBus {
     /** 由通知按钮或界面调用。 */
     public static void submitDecision(@Nullable StepRunner.Decision decision) {
         if (decision == null) return;
-        if (decision == StepRunner.Decision.ABORT) cancelled = true;
-        DECISIONS.offer(decision);
+        if (decision == StepRunner.Decision.ABORT) {
+            cancel();
+            return;
+        }
+        synchronized (GATE) {
+            if (!GATE.isCancelled()) DECISIONS.offer(decision);
+        }
     }
 }

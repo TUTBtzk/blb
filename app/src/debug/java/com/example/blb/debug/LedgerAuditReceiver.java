@@ -247,7 +247,8 @@ public class LedgerAuditReceiver extends BroadcastReceiver {
         }
         VoucherLedger.Audit detail = SubscribedDetail.reconcile(
                 account.displayName(), account.id, novel.title, entries,
-                subs.loadPaidRowsOfNovel(novel.id), System.currentTimeMillis());
+                subs.loadChapters(novel.id), subs.loadPaidRowsOfNovel(novel.id),
+                System.currentTimeMillis());
         if (detail.ok) {
             Log.i(TAG, (detail.checked ? "逐章对上了：" : "逐章没能核对：") + detail.message);
         } else {

@@ -5,9 +5,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <!-- 按下广告里的跳转键之后，用一个准点闹钟保证「按返回把人带回来」这一下一定会发生：
-         实测第三方落地页占着前台时，系统会把我们冻住甚至杀掉（MIUI: stop … due to SwipeUpClean），
-         那时候只有闹钟能把进程解冻／重新拉起来。见 ReturnWatchdog。 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- 普通安装不会得到这项权限。照护者安装后用 adb pm grant 授予一次，应用才能在
+         MIUI 从最近任务划掉时把被系统清除的无障碍条目自动补回来。
+         这是可由 ADB 授予的 development 权限；AccessibilityAccess 每次写入前都检查授权，
+         此处仅排除 Lint 对普通应用自动获取系统权限的通用提示。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- 返回看门狗用准点闹钟防止回程中断：既有真机记录表明第三方界面占着前台时，
+         MIUI 可能冻结或杀掉进程（stop … due to SwipeUpClean）。
+         2026-09-14 精简日常流程仍保留公共返回能力，见 ReturnWatchdog。 -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <!-- 整趟任务期间把屏幕点着（AutomationService.acquireScreenLock）：无障碍的点击只对亮着的
          屏幕有效，2026-08-23 那趟就是跑到第 5 个号时屏幕自己睡了，后面全报「拉不起菠萝包」。 -->
@@ -66,7 +74,8 @@
             android:name=".auto.BlbAccessibilityService"
             android:exported="false"
             android:label="@string/accessibility_label"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:stopWithTask="false">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
@@ -79,7 +88,8 @@
         <service
             android:name=".auto.AutomationService"
             android:exported="false"
-            android:foregroundServiceType="specialUse">
+            android:foregroundServiceType="specialUse"
+            android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="按顺序为多个账号执行签到，需要在无障碍服务驱动下持续运行到队列结束" />
@@ -88,6 +98,15 @@
         <receiver
             android:name=".auto.ReturnWatchdog"
             android:exported="false" />
+
+        <receiver
+            android:name=".auto.AccessibilityRecoveryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

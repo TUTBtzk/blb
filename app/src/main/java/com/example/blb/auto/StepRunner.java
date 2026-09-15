@@ -2,6 +2,7 @@ package com.example.blb.auto;
 
 import android.content.Context;
 import android.content.Intent;
+import android.os.SystemClock;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -23,8 +24,9 @@ public class StepRunner {
 
     private static final String TAG = "BlbAuto";
     private static final long POLL_MS = 400;
-    /** {@link #ensureHome} 里最多替你清几下广告残局，免得和广告的确认框来回死磕。 */
-    private static final int MAX_AD_ESCAPES = 4;
+    /** 返回前留给活动窗口补齐导航节点的时间，避免在切页或临时无树时连续按返回。 */
+    private static final long HOME_READY_WAIT_MS = 1_500;
+    private static final long HOME_READY_POLL_MS = 200;
     /**
      * 点完三方登录图标之后，等那个 App 起身的宽限。这段时间里「前台还是菠萝包」不算
      * 「不需要确认」—— 见 {@link #confirmThirdPartyAuth}。
@@ -83,8 +85,39 @@ public class StepRunner {
         this.host = host;
     }
 
+    /** 离线运行器可替换节点和动作来源，不需要构造 Android Context。 */
+    StepRunner(SelectorSet selectors, Host host) {
+        this.appContext = null;
+        this.selectors = selectors;
+        this.host = host;
+    }
+
     public SelectorSet selectors() {
         return selectors;
+    }
+
+    Context context() { return appContext; }
+
+    Host host() { return host; }
+
+    /** 失败现场要在返回首页前保存；取证失败不得覆盖原来的业务失败或改变付款结论。 */
+    public void recordDiagnostic(String stage) {
+        if (appContext == null) return;
+        try {
+            recordDiagnostic(stage, activeRoot());
+        } catch (StepFailure | RuntimeException failure) {
+            host.log("现场取证未保存：" + failure.getMessage());
+        }
+    }
+
+    public void recordDiagnostic(String stage, NodeView root) {
+        if (appContext == null || root == null) return;
+        try {
+            java.io.File file = DiagnosticStore.save(appContext, stage, root, selectors);
+            host.log("现场取证已保存：" + file.getName() + "；节点探测器 → 运行取证 → 保存到文件");
+        } catch (Exception failure) {
+            host.log("现场取证未保存：" + failure.getMessage());
+        }
     }
 
     // ---------- 查找与等待 ----------
@@ -95,7 +128,7 @@ public class StepRunner {
         return svc;
     }
 
-    /** 长时间自己等待的步骤（等广告播完）要定期调用，保证「停止」按得动。 */
+    /** 长时间等待的步骤要定期调用，保证「停止」按得动。 */
     public void checkCancelled() throws StepFailure {
         if (host.isCancelled()) throw new StepFailure(Kind.CANCELLED, "已取消");
     }
@@ -103,16 +136,21 @@ public class StepRunner {
     /**
      * 非阻塞：看这批 key 里有没有已经在屏幕上的，返回第一个命中的，没有返回 null。
      *
-     * <p>先在活动窗口里找（原来的行为一点没变），找不到才去菠萝包<b>别的</b>窗口里找。
-     * 广告播放页实测是好几层窗口叠起来的，活动窗口那层可能是一个连字都没有的 WebView ——
-     * 那颗要点的按钮在另一层里。顺序是「活动窗口优先」，所以不会因为背后还挂着签到页
-     * 就把播放中的广告误判成「已经回到签到页了」。
+     * <p>页面状态只能从活动窗口判断。弹窗后面的首页即使仍在窗口列表里，
+     * 也不能用来判断「已经回来了」。需要跨窗口查询时显式用 findAnyAcrossWindows。
      */
     public Outcome findAny(String... keys) throws StepFailure {
-        BlbAccessibilityService svc = service();
-        Outcome hit = findAnyIn(svc.root(), keys);
+        return findAnyIn(activeRoot(), keys);
+    }
+
+    /** 跨窗口查控件；不能用于首页、签到页或登录结果等状态判断。 */
+    public Outcome findAnyAcrossWindows(String... keys) throws StepFailure {
+        NodeView root = activeRoot();
+        // root() 会核对活动包名；别的 App 占着前台时不能对背后的窗口发出点击。
+        if (root == null) return null;
+        Outcome hit = findAnyIn(root, keys);
         if (hit != null) return hit;
-        return findAnyIn(svc.otherWindows(), keys);
+        return findAnyIn(otherRoots(), keys);
     }
 
     private Outcome findAnyIn(NodeView root, String... keys) {
@@ -166,13 +204,22 @@ public class StepRunner {
      * 退化链，并集会把同一行按两种方式各记一遍。
      */
     public List<NodeView> findAllOn(String key) throws StepFailure {
-        NodeView root = service().root();
+        NodeView root = activeRoot();
         if (root == null) return new ArrayList<>();
         for (Selector selector : selectors.get(key)) {
             List<NodeView> hits = NodeMatcher.findAll(root, selector);
             if (!hits.isEmpty()) return hits;
         }
         return new ArrayList<>();
+    }
+
+    /** 同一屏要查多种节点时只取一次根，避免把 RecyclerView 两个时刻的内容拼在一起。 */
+    NodeView activeRoot() throws StepFailure {
+        return service().root();
+    }
+
+    NodeView otherRoots() throws StepFailure {
+        return service().otherWindows();
     }
 
     /**
@@ -238,6 +285,7 @@ public class StepRunner {
     }
 
     public void clickNode(String label, NodeView node) throws StepFailure {
+        checkCancelled();
         BlbAccessibilityService.Press p = service().press(node);
         if (p != BlbAccessibilityService.Press.OK) {
             throw new StepFailure(Kind.TIMEOUT, "点不动：" + label + describe(p, node));
@@ -249,10 +297,10 @@ public class StepRunner {
     /**
      * 点一下，按不动只记日志、返回 false，不抛异常。
      *
-     * <p>给广告流程用：一颗按钮按不动只该让这一支广告作废，不该把整个账号（连它剩下的
-     * 广告一起）判失败。
+     * <p>目录的「回到顶部」等可选动作允许另走公共返回路径，不应因一次按不动就误判整趟失败。
      */
     public boolean pressOrLog(String label, NodeView node) throws StepFailure {
+        checkCancelled();
         BlbAccessibilityService.Press p = service().press(node);
         if (p != BlbAccessibilityService.Press.OK) {
             host.log("  点不动：" + label + describe(p, node));
@@ -263,61 +311,24 @@ public class StepRunner {
         return true;
     }
 
-    /**
-     * 点「整张卡」的中心：认不出卡上哪颗是按钮时的退路，见
-     * {@link BlbAccessibilityService#pressCard}。按不动只记日志、返回 false。
-     */
-    public boolean pressCardOrLog(String label, NodeView node) throws StepFailure {
-        BlbAccessibilityService.Press p = service().pressCard(node);
-        if (p != BlbAccessibilityService.Press.OK) {
-            host.log("  点不动：" + label + describe(p, node));
-            return false;
-        }
-        host.log("点击 " + label);
-        sleepHuman();
-        return true;
-    }
-
-    /** 菠萝包现在挂着几个窗口。广告播放页是多层窗口叠起来的，写进日志好对照。 */
+    /** 菠萝包现在挂着几个窗口，写进日志便于核对模态窗口覆盖。 */
     public int windowCount() throws StepFailure {
         return service().windowCount();
     }
 
     /**
-     * 认不出按钮、连整张卡的矩形都读不出来时，按屏幕几何位置点正中偏下。
-     * 见 {@link BlbAccessibilityService#pressScreenCenter}；只许在确认促销卡在屏幕上之后用。
-     */
-    public boolean pressScreenCenterOrLog(String label) throws StepFailure {
-        BlbAccessibilityService.Press p = service().pressScreenCenter();
-        if (p != BlbAccessibilityService.Press.OK) {
-            host.log("  点不动：" + label + describe(p, null));
-            return false;
-        }
-        host.log("点击 " + label);
-        sleepHuman();
-        return true;
-    }
-
-    /**
-     * 点右上角那颗关闭 X，见 {@link BlbAccessibilityService#pressCloseCorner}。
-     * 只许在奖励已经到手（ad_earned 在屏幕上）之后调用 —— 同一位置在别家 SDK 上是「跳过」。
-     */
-    public boolean pressCloseCornerOrLog(String label) throws StepFailure {
-        BlbAccessibilityService.Press p = service().pressCloseCorner();
-        if (p != BlbAccessibilityService.Press.OK) {
-            host.log("  点不动：" + label + describe(p, null));
-            return false;
-        }
-        host.log("点击 " + label);
-        sleepHuman();
-        return true;
-    }
-
-    /**
      * 上「把你从落地页带回来」的闹钟。落地页上系统可能把我们冻住，见 {@link ReturnWatchdog}。
      */
-    public void armReturnWatchdog(long dwellMs) {
+    public void armReturnWatchdog(long dwellMs) throws StepFailure {
+        checkCancelled();
         ReturnWatchdog.arm(appContext, dwellMs);
+        // 停止可能恰好发生在检查与上闹之间；不要把取消钩子刚撤掉的闹钟重新留着。
+        try {
+            checkCancelled();
+        } catch (StepFailure e) {
+            ReturnWatchdog.disarm(appContext);
+            throw e;
+        }
     }
 
     /** 自己回来了就撤掉闹钟。 */
@@ -354,6 +365,7 @@ public class StepRunner {
 
     public void setText(String key, String value, long timeoutMs) throws StepFailure {
         NodeView node = waitFor(key, timeoutMs);
+        checkCancelled();
         if (!service().setText(node, value)) {
             throw new StepFailure(Kind.TIMEOUT, "填不进去：" + key);
         }
@@ -371,7 +383,7 @@ public class StepRunner {
     }
 
     /**
-     * 只看当前屏，不等待。用在「有就读、没有就算了」的地方（广告剩余次数），
+     * 只看当前屏，不等待。用在「有就读、没有就算了」的地方，
      * 免得每次都白等一轮超时。文本为空时退而取 contentDescription。
      */
     public String peekText(String key) throws StepFailure {
@@ -394,10 +406,7 @@ public class StepRunner {
      * 「我的」页那一行数字<b>连 id 都没有</b>，只能靠标签定位、取标签正上方那个数字。
      */
     public Texts.Balance peekBalance() throws StepFailure {
-        BlbAccessibilityService svc = service();
-        Texts.Balance hit = BalanceReader.read(svc.root(), selectors::get);
-        if (hit.known()) return hit;
-        return BalanceReader.read(svc.otherWindows(), selectors::get);
+        return BalanceReader.read(activeRoot(), selectors::get);
     }
 
     /**
@@ -467,6 +476,7 @@ public class StepRunner {
     }
 
     public void back() throws StepFailure {
+        checkCancelled();
         service().back();
         sleepHuman();
     }
@@ -485,6 +495,7 @@ public class StepRunner {
      * 不做任何自动过验证的尝试。
      */
     public void guardCaptcha() throws StepFailure {
+        checkCancelled();
         Outcome hit = findAny(Keys.CAPTCHA_HINT);
         if (hit == null) return;
         host.log("检测到安全验证，已暂停");
@@ -505,7 +516,7 @@ public class StepRunner {
         loose.textContains = text.trim();
         loose.clickableAncestor = true;
 
-        NodeMatcher.Hit hit = findEverywhere(Arrays.asList(exact, loose));
+        NodeMatcher.Hit hit = findOnActive(Arrays.asList(exact, loose));
         return hit == null ? null : new Outcome(label, hit.node);
     }
 
@@ -515,7 +526,7 @@ public class StepRunner {
         Selector exact = new Selector();
         exact.text = text.trim();
         exact.clickableAncestor = true;
-        NodeMatcher.Hit hit = findEverywhere(Collections.singletonList(exact));
+        NodeMatcher.Hit hit = findOnActive(Collections.singletonList(exact));
         return hit == null ? null : new Outcome(label, hit.node);
     }
 
@@ -534,7 +545,7 @@ public class StepRunner {
         for (Selector candidate : selectors.get(key)) {
             Selector s = candidate.withText(text);
             if (s.isEmpty()) continue;
-            NodeMatcher.Hit hit = findEverywhere(Collections.singletonList(s));
+            NodeMatcher.Hit hit = findOnActive(Collections.singletonList(s));
             if (hit != null) return new Outcome(label, hit.node);
         }
         return null;
@@ -549,15 +560,13 @@ public class StepRunner {
         Selector s = new Selector();
         s.textRegex = regex;
         s.clickableAncestor = true;
-        NodeMatcher.Hit hit = findEverywhere(Collections.singletonList(s));
+        NodeMatcher.Hit hit = findOnActive(Collections.singletonList(s));
         return hit == null ? null : new Outcome(label, hit.node);
     }
 
-    /** 活动窗口优先，其次才是菠萝包别的窗口（弹窗是独立窗口，见 {@link #findAny}）。 */
-    private NodeMatcher.Hit findEverywhere(List<Selector> candidates) throws StepFailure {
-        BlbAccessibilityService svc = service();
-        NodeMatcher.Hit hit = NodeMatcher.find(svc.root(), candidates);
-        return hit != null ? hit : NodeMatcher.find(svc.otherWindows(), candidates);
+    /** 运行时书名、章节名也只从活动窗口找，避免点到背景页面的同名行。 */
+    private NodeMatcher.Hit findOnActive(List<Selector> candidates) throws StepFailure {
+        return NodeMatcher.find(activeRoot(), candidates);
     }
 
     /** 往下翻页找某个 key。菠萝包的「设置」在「我的」页最底下，不翻根本看不见。 */
@@ -616,14 +625,140 @@ public class StepRunner {
 
     /** 优先让最靠里的可滚动容器自己滚，没有就退化成手势滑动。 */
     public boolean scrollForward() throws StepFailure {
+        checkCancelled();
         BlbAccessibilityService svc = service();
         NodeView scrollable = NodeMatcher.findScrollable(svc.root());
         if (scrollable != null && svc.scrollForward(scrollable)) return true;
         return svc.swipeUp();
     }
 
+    /** 目录需要用前后屏重叠的行核对顺序，不能直接让容器跳过一整屏。 */
+    public boolean scrollCatalogForward() throws StepFailure {
+        checkCancelled();
+        BlbAccessibilityService svc = service();
+        NodeView viewport = catalogViewport(svc.root());
+        if (viewport == null) return false;
+        boolean completed = svc.swipeCatalogUp(viewport);
+        checkCancelled();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new StepFailure(Kind.CANCELLED, "目录滑动已中止");
+        }
+        return completed;
+    }
+
+    /** 2026-09-14 普通目录上方还有横向标签；回顶也只能滑动已识别的纵向章节容器。 */
+    public boolean scrollCatalogBackward() throws StepFailure {
+        checkCancelled();
+        BlbAccessibilityService svc = service();
+        NodeView viewport = catalogViewport(svc.root());
+        if (viewport == null) return false;
+        boolean completed = svc.swipeCatalogDown(viewport);
+        checkCancelled();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new StepFailure(Kind.CANCELLED, "目录回顶已中止");
+        }
+        return completed;
+    }
+
+    public enum CatalogScroll { UNAVAILABLE, ACCEPTED, BLOCKED }
+
+    /** 明细与目录复用带完成回调的短滑，保留重叠；不再把全屏手势提交当作翻页完成。 */
+    public boolean scrollDetailForward() throws StepFailure { return scrollDetail(true); }
+
+    public boolean scrollDetailBackward() throws StepFailure { return scrollDetail(false); }
+
+    private boolean scrollDetail(boolean forward) throws StepFailure {
+        checkCancelled();
+        BlbAccessibilityService svc = service();
+        NodeView viewport = detailViewport(svc.root(), selectors);
+        if (viewport == null) return false;
+        boolean completed = forward ? svc.swipeCatalogUp(viewport) : svc.swipeCatalogDown(viewport);
+        checkCancelled();
+        if (Thread.currentThread().isInterrupted()) {
+            throw new StepFailure(Kind.CANCELLED, "订阅明细滑动已中止");
+        }
+        return completed;
+    }
+
+    public CatalogScroll probeDetailContainerForward() throws StepFailure {
+        return probeDetailContainer(true);
+    }
+
+    public CatalogScroll probeDetailContainerBackward() throws StepFailure {
+        return probeDetailContainer(false);
+    }
+
+    private CatalogScroll probeDetailContainer(boolean forward) throws StepFailure {
+        checkCancelled();
+        BlbAccessibilityService svc = service();
+        NodeView viewport = detailViewport(svc.root(), selectors);
+        if (viewport == null || AccessibilityNodeView.rawOf(viewport) == null) {
+            return CatalogScroll.UNAVAILABLE;
+        }
+        boolean accepted = forward ? svc.scrollForward(viewport) : svc.scrollBackward(viewport);
+        checkCancelled();
+        // BLOCKED 只是这一容器拒绝了方向动作；调用方还须核对稳定首末屏、索引连续性与聚合。
+        return accepted ? CatalogScroll.ACCEPTED : CatalogScroll.BLOCKED;
+    }
+
+    static NodeView detailViewport(NodeView root, SelectorSet selectors) {
+        if (root == null || selectors == null) return null;
+        NodeMatcher.Hit ready = NodeMatcher.find(root, selectors.get(Keys.SUBSCRIBED_DETAIL_READY));
+        if (ready == null || !ready.node.visible() || !NodeMatcher.hasArea(ready.node)) return null;
+        Selector listSelector = new Selector();
+        listSelector.id = "baseListView";
+        listSelector.visibleOnly = true;
+        listSelector.requireArea = true;
+        List<NodeView> lists = NodeMatcher.findAll(root, listSelector);
+        if (lists.size() != 1) return null;
+        NodeView list = lists.get(0);
+        String className = list.className();
+        if (!list.enabled() || className == null
+                || !(className.endsWith("ListView") || className.endsWith("RecyclerView"))
+                || className.contains("Horizontal")) return null;
+        return list;
+    }
+
+    /**
+     * 2026-09-14 番外未进目录的反馈要求同时证明列表已到底；手势回调成功只证明手势发完。
+     * 仅在两屏内容不变后尝试同一个目录容器，不能用全局手势的返回值冒充容器边界。
+     */
+    public CatalogScroll probeCatalogContainerForward() throws StepFailure {
+        return probeCatalogContainer(true);
+    }
+
+    public CatalogScroll probeCatalogContainerBackward() throws StepFailure {
+        return probeCatalogContainer(false);
+    }
+
+    private CatalogScroll probeCatalogContainer(boolean forward) throws StepFailure {
+        checkCancelled();
+        BlbAccessibilityService svc = service();
+        NodeView viewport = catalogViewport(svc.root());
+        if (viewport == null || AccessibilityNodeView.rawOf(viewport) == null) {
+            return CatalogScroll.UNAVAILABLE;
+        }
+        boolean accepted = forward ? svc.scrollForward(viewport) : svc.scrollBackward(viewport);
+        checkCancelled();
+        return accepted ? CatalogScroll.ACCEPTED : CatalogScroll.BLOCKED;
+    }
+
+    private NodeView catalogViewport(NodeView root) {
+        // 2026-09-14 普通目录 dump 同时有 HorizontalScrollView/ViewPager；不能让它们证明章节已到底。
+        String key;
+        if (findIn(root, Keys.SELECTED_COUNT) != null) key = Keys.CATALOG_PICKER_LIST;
+        else if (findIn(root, Keys.CATALOG_DIRECTORY_READY) != null) key = Keys.CATALOG_DIRECTORY_LIST;
+        else return null;
+        List<NodeView> lists = findAllIn(root, key);
+        if (lists.size() != 1) return null;
+        NodeView list = lists.get(0);
+        return list.visible() && NodeMatcher.hasArea(list)
+                && findIn(list, Keys.CHAPTER_ROW_TITLE) != null ? list : null;
+    }
+
     /** 同上，反方向。 */
     public boolean scrollBackward() throws StepFailure {
+        checkCancelled();
         BlbAccessibilityService svc = service();
         NodeView scrollable = NodeMatcher.findScrollable(svc.root());
         if (scrollable != null && svc.scrollBackward(scrollable)) return true;
@@ -720,7 +855,7 @@ public class StepRunner {
      *
      * <p>两个实测教训写在这里：
      *
-     * <p>1）广告可能把别的 App 拉起来，而有些落地页是<b>透明</b>的（实测残留过
+     * <p>1）有些第三方界面是<b>透明</b>的（实测残留过
      * {@code com.jingdong.app.mall/.personel.FloatViewActivity}）—— 截图上看着还是菠萝包，
      * 但活动窗口是它，于是「拉不起菠萝包」白等一轮超时。所以顶上是第三方 App 时先按一次返回把
      * 它关掉。只按全局返回，不读也不点那个 App 里的任何东西；顶上是我们自己的界面时不按，
@@ -730,6 +865,7 @@ public class StepRunner {
      * 5 秒再发一次，而不是只在开头发一次。
      */
     public void launchTarget(long timeoutMs) throws StepFailure {
+        checkCancelled();
         BlbAccessibilityService svc = service();
         if (svc.isTargetForeground()) return;
         Intent intent = appContext.getPackageManager()
@@ -802,115 +938,47 @@ public class StepRunner {
     public void ensureHome(int maxBacks) throws StepFailure {
         launchTarget(25_000);
         int backs = 0;
-        int escapes = 0;
+        long homeReadyDeadline = elapsedRealtime() + HOME_READY_WAIT_MS;
         while (true) {
             checkCancelled();
-            if (findAny(Keys.HOME_READY) != null) return;
+            // 部分版本或外置选择器读不到首页容器/书架标签，但「我的」入口已经可用。
+            // 它同样证明主导航已出现；只查活动窗口，不能把被覆盖的标签当成首页。
+            if (findAny(Keys.HOME_READY, Keys.MINE_TAB) != null) return;
             if (!isTargetForeground()) {
                 launchTarget(15_000);
+                homeReadyDeadline = elapsedRealtime() + HOME_READY_WAIT_MS;
                 continue;
             }
-            // 清广告残局要按好几下（跳过 → 二次确认 → 坚持退出），这些不算进 maxBacks，
-            // 否则返回键的额度还没走到首页就用完了。
-            if (escapes < MAX_AD_ESCAPES && escapeStuckAd()) {
-                escapes++;
+            // 前台包名可来自缓存事件，不能据此把临时无树当成必须返回。等待期间每轮
+            // 仍检查取消和前台；导航一出现就结束，不动后台窗口里的首页。
+            long remaining = homeReadyDeadline - elapsedRealtime();
+            if (remaining > 0) {
+                waitMillis(Math.min(HOME_READY_POLL_MS, remaining));
                 continue;
             }
+            // 前台检查也会重新取树；导航可能在最初那次检查之后才出现。
+            if (findAny(Keys.HOME_READY, Keys.MINE_TAB) != null) return;
+            if (!isTargetForeground()) {
+                homeReadyDeadline = elapsedRealtime() + HOME_READY_WAIT_MS;
+                continue;
+            }
+            checkCancelled();
             if (backs++ >= maxBacks) {
                 // 额度用完还没看到首页。不在这里报错（可能只是停在没有底部 tab 的页面，
                 // 让后面那一步报「等不到什么」更具体），但一定要留下这一行 ——
                 // 2026-08-24 15:26 那趟有 3 个号只留下一句「等 mine_tab 超时」，
                 // 事后完全看不出「返回键额度不够」才是真凶。
-                host.log("按了 " + maxBacks + " 次返回还没回到首页（活动窗口 " + activePackage()
-                        + "，菠萝包挂着 " + windowCount() + " 个窗口），后面那一步大概会等超时");
+                host.log("按了 " + maxBacks + " 次返回仍未识别到首页导航（活动窗口 " + activePackage()
+                        + "，菠萝包挂着 " + windowCount() + " 个窗口）");
                 return;
             }
-            // 带上活动窗口的包名和窗口数。2026-08-24 09:47 那趟这一行连打了 21 遍，而真相是
-            // 我们还站在广告播放页上 —— 它和菠萝包同属 com.sfacg，光看包名分不出来，窗口数
-            // 和后面那句「等 mine_tab 超时」合起来才能事后判出「根本不在首页上」。
-            host.log("首页被弹窗盖住了，按返回关掉它（活动窗口 " + activePackage()
+            // 2026-08-24 连续返回仍等不到首页的事故说明：同一包名不能证明导航已可用，
+            // 必须同时记录活动窗口和窗口数，才能定位遮挡首页的界面。
+            host.log("正在返回首页，按返回（活动窗口 " + activePackage()
                     + "，菠萝包挂着 " + windowCount() + " 个窗口）");
             back();
+            homeReadyDeadline = elapsedRealtime() + HOME_READY_WAIT_MS;
         }
-    }
-
-    /**
-     * 上一趟没退干净、播放页还挂在最上面时的退路。
-     *
-     * <p>穿山甲那种「去浏览N秒免看此广告」的卡会把返回键整个吃掉（实测连按 4 次一动不动），
-     * 于是整趟任务从第一步「点我的」就超时。这时候按它自己那颗「跳过」把它了结掉 ——
-     * 判断条件和 {@link AdWatchTask} 放弃广告时一样（卡还在＝奖励本来就拿不到），
-     * 所以不存在「本来能领却被跳掉」。正常播着的广告不会命中这里。
-     *
-     * <p>「跳过」按下去只会弹一个二次确认（「继续看28秒或下载安装即可领奖，确定要退出吗？」），
-     * 而那个确认框是<b>独立窗口</b> —— 弹出来之后 {@code getRootInActiveWindow()} 里只剩确认框
-     * 这一层，广告卡上那些字全都看不见了。所以这里先认确认框、再认广告卡：不然第二下就会
-     * 认不出自己刚按出来的东西，白按一轮返回。确认框上那颗「去领取奖励」一律不碰 ——
-     * 它走的是「下载安装」那条路。
-     *
-     * <p>还有第三种残局：奖励已经到手、卡在关不掉的领奖弹窗上（实测优量汇那张「恭喜获得奖励」，
-     * X 没文字没 id、返回键在它上面一动不动）。这种情形排在最前面单独处理，按位置点那颗 X。
-     *
-     * <p>第四种、也是排在最前面的一种：菠萝包自己弹的代券发放卡（{@link Keys#REWARD_GRANT}）。
-     * 它按返回关不掉，而且盖着它的时候整棵树里只有它 —— 2026-08-24 那趟就是它让后面 7 个号
-     * 全部卡在「等 mine_tab 超时」。按「开心收下」是收下代券，不是丢掉。
-     *
-     * <p>第五种（2026-08-24 09:47 实测）：优量汇的播放页还挂在最上面，而这一家的关闭键
-     * <b>既没有 id 也没有文字</b>，{@link Keys#AD_SKIP} 认不出来。要命的是广告 Activity
-     * （{@code com.qq.e.ads.PortraitADActivity}）就在 {@code com.sfacg} 包里，
-     * {@code isTargetForeground()} 因此一直是 true，{@link #ensureHome} 会把它误诊成
-     * 「首页被弹窗盖住了」并连按返回（播放页把返回吃掉）—— 那一趟 8 个号里有 7 个就是这么
-     * 每个白等 12 秒、全部签到失败的。所以「卡在／顶栏还在数秒」而认不出「跳过」时，
-     * 按位置点右上角那颗关闭。
-     */
-    private boolean escapeStuckAd() throws StepFailure {
-        // 排在最前面：菠萝包自己弹的那张代券发放卡（「+3 开心收下 已发放到"我的-我的钱包"中」）。
-        // 它是模态的、按返回关不掉，盖着它的时候底部 tab 一个都不在树里 —— 2026-08-24 09:28 实测
-        // 就是它让后面 7 个号全部卡在「等 mine_tab 超时」。按「开心收下」既把代券真正收进账号
-        // （不按不算收完），也是唯一能清掉它的动作，所以在任何地方撞见它都直接按。
-        Outcome grant = findAny(Keys.REWARD_GRANT);
-        if (grant != null) {
-            host.log("菠萝包的代券发放卡还挂着，按「开心收下」把代券收进账号（顺便把路让开）");
-            return pressOrLog(Keys.REWARD_GRANT, grant.node);
-        }
-        // 奖励已经到手、只是那张领奖弹窗关不掉（实测优量汇：X 没文字没 id、返回键在它上面
-        // 一动不动）。这时候先按位置点掉那颗 X —— 奖励已经到账，点它不会损失任何东西，
-        // 而下面那条「按跳过」的路是为「奖励拿不到」准备的，不该拿来处理这种情形。
-        if (findAny(Keys.AD_EARNED) != null) {
-            host.log("上一趟的领奖弹窗还挂着（奖励已到手），按右上角那颗关闭 X 清掉");
-            return pressCloseCornerOrLog("领奖弹窗的关闭 X");
-        }
-        if (findAny(Keys.AD_LEAVE_CONFIRM) != null) {
-            Outcome abandon = findAny(Keys.AD_ABANDON);
-            if (abandon == null) return false;
-            host.log("广告问要不要退出，按「坚持退出」（这一支的奖励本来也拿不到）");
-            return pressOrLog(Keys.AD_ABANDON, abandon.node);
-        }
-        boolean promo = findAny(Keys.AD_PROMO) != null;
-        // 「奖励将于 N 秒后发放」＝我们还站在别人的播放页上、奖励也还没到手。在 ensureHome
-        // 这个语境里它只有一个意思：上一支广告没退干净。ensureHome 只在一趟任务的开头和切号
-        // 之间调，正在播的广告永远走不到这里，所以不存在「把正在播的广告关掉」。
-        boolean pending = !promo && findAny(Keys.AD_PENDING) != null;
-        if (!promo && !pending) return false;
-        Outcome skip = findAny(Keys.AD_SKIP);
-        if (skip != null) {
-            host.log("上一趟的广告播放页还挂着且按不动返回键，用它的「跳过」清掉（那一支本来也拿不到奖励）");
-            return pressOrLog(Keys.AD_SKIP, skip.node);
-        }
-        // 2026-08-24 09:47 那趟的教训：优量汇（com.qq.e.ads.PortraitADActivity）的播放页
-        // 右上角那颗关闭键既没有 id 也没有文字，「跳过」这一组认不出它，于是这里旧代码直接
-        // return false —— 而广告页跟菠萝包<b>同属 com.sfacg 包</b>，isTargetForeground() 照样
-        // 是 true，ensureHome 于是把它误诊成「首页被弹窗盖住了」，连按 3 次返回（被播放页吃掉）
-        // 再等 mine_tab 超时。结果第 1 个号之后的 7 个号每一个都白等 12 秒、全部签到失败。
-        // 认不出「跳过」时就按位置点右上角那颗关闭：这时奖励本来就拿不到，点它只是把它了结掉，
-        // 弹出的「放弃奖励离开」下一轮由上面 AD_LEAVE_CONFIRM 那一段收尾。
-        host.log(promo
-                ? "上一趟那张「点进落地页才给奖」的卡还挂着，这一家连「跳过」都认不出来，"
-                + "按右上角那颗关闭把它了结掉（那一支本来也拿不到奖励）"
-                : "上一趟的广告播放页还挂着（顶栏还在数「奖励将于几秒后发放」），"
-                + "按右上角那颗关闭把它了结掉 —— 广告页和菠萝包是同一个包，不这么做会被"
-                + "当成「首页有弹窗」白按一轮返回");
-        return pressCloseCornerOrLog("广告播放页的关闭 X");
     }
 
     /** 步骤之间留一点随机间隔：给界面渲染时间，也不制造异常整齐的高频操作。 */
@@ -926,8 +994,13 @@ public class StepRunner {
         }
     }
 
-    /** 明确要等一段时间时用（等广告按真实时长播完）。 */
+    /** 明确需要等待界面更新时用。 */
     public void waitMillis(long ms) {
         sleep(ms);
+    }
+
+    /** 界面等待使用单调时钟，系统校时不会改变等待时长。 */
+    long elapsedRealtime() {
+        return SystemClock.elapsedRealtime();
     }
 }

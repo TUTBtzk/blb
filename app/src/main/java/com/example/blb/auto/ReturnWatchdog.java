@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -12,10 +13,10 @@ import android.os.SystemClock;
 import android.util.Log;
 
 /**
- * 「把人带回来」的闹钟：按下广告里的跳转键之前上闹，回到广告页之后撤掉。
+ * 「把人带回来」的闹钟：需要离开目标应用一段时间时上闹，回到目标应用之后撤掉。
  *
  * <p>为什么需要它。2026-08-23 13:30:35 那一趟第一次真的按开了落地页（淘宝），随后<b>我们自己的
- * 进程就不动了</b>：日志停在「点击 ad_jump」这一行整整五分钟，一句新的都没有，最后 MIUI 在
+ * 进程就不动了</b>：日志在跳转之后停了整整五分钟，一句新的都没有，最后 MIUI 在
  * 13:35:45 把它结束掉（{@code exit-info: reason=10 USER REQUESTED, subreason=21 FORCE STOP,
  * description=stop com.example.blb due to SwipeUpClean}）。也就是说：第三方 App 占着前台的时候，
  * 系统可以把我们冻住甚至杀掉，于是「停够秒数再按返回」这段代码根本没机会执行 —— 手按不动的人
@@ -33,6 +34,13 @@ public final class ReturnWatchdog extends BroadcastReceiver {
     private static final int REQUEST = 4711;
     /** 闹钟比正常返回晚这么久才响，正常情况下永远轮不到它。 */
     private static final long GRACE_MS = 8_000;
+    private static final String PREFS = "return_watchdog";
+    private static final String TOKEN = "armed_token";
+    private static final String GENERATION = "generation";
+    private static final ReturnWatchdogGuard GUARD = new ReturnWatchdogGuard();
+    private static Handler handler;
+    private static Runnable pendingReturn;
+    private static PendingResult pendingResult;
 
     /** 上一次是被闹钟救回来的吗（给日志用，让「被系统冻住了」这件事说得出来）。 */
     private static volatile long lastFiredAt;
@@ -47,31 +55,50 @@ public final class ReturnWatchdog extends BroadcastReceiver {
     public static void arm(Context context, long dwellMs) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
-        long at = SystemClock.elapsedRealtime() + Math.max(1_000, dwellMs) + GRACE_MS;
-        PendingIntent pi = intent(context);
-        try {
-            boolean exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
-                    || am.canScheduleExactAlarms();
-            if (exact) {
-                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi);
-            } else {
-                am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi);
+        synchronized (GUARD) {
+            clearPendingReturn();
+            SharedPreferences prefs = preferences(context);
+            long token = Math.max(System.currentTimeMillis(), prefs.getLong(GENERATION, 0) + 1);
+            // 闹钟能在进程被回收后送达，所以令牌必须先落盘，接收器也要核对它。
+            if (!prefs.edit().putLong(GENERATION, token).putLong(TOKEN, token).commit()) {
+                GUARD.cancel();
+                Log.w(TAG, "无法保存返回闹钟状态，这次不上闹钟");
+                return;
             }
-            Log.i(TAG, "已上「带你回来」的闹钟：" + (dwellMs + GRACE_MS) / 1000 + " 秒后"
-                    + (exact ? "" : "（系统只给了不精确闹钟，可能晚几分钟）"));
-        } catch (Exception e) {
-            Log.w(TAG, "上闹钟失败", e);
+            GUARD.activate(token);
+            long at = SystemClock.elapsedRealtime() + Math.max(1_000, dwellMs) + GRACE_MS;
+            try {
+                boolean exact = Build.VERSION.SDK_INT < Build.VERSION_CODES.S
+                        || am.canScheduleExactAlarms();
+                if (exact) {
+                    am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            at, intent(context, token));
+                } else {
+                    am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                            at, intent(context, token));
+                }
+                Log.i(TAG, "已上「带你回来」的闹钟：" + (dwellMs + GRACE_MS) / 1000 + " 秒后"
+                        + (exact ? "" : "（系统只给了不精确闹钟，可能晚几分钟）"));
+            } catch (Exception e) {
+                disarm(context);
+                Log.w(TAG, "上闹钟失败", e);
+            }
         }
     }
 
     /** 撤闹：我们自己回来了，就不用它了。 */
     public static void disarm(Context context) {
-        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am == null) return;
-        try {
-            am.cancel(intent(context));
-        } catch (Exception e) {
-            Log.w(TAG, "撤闹钟失败", e);
+        synchronized (GUARD) {
+            GUARD.cancel();
+            clearPendingReturn();
+            preferences(context).edit().remove(TOKEN).commit();
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am == null) return;
+            try {
+                am.cancel(intent(context, 0));
+            } catch (Exception e) {
+                Log.w(TAG, "撤闹钟失败", e);
+            }
         }
     }
 
@@ -80,8 +107,9 @@ public final class ReturnWatchdog extends BroadcastReceiver {
         return lastFiredAt >= sinceElapsedRealtime;
     }
 
-    private static PendingIntent intent(Context context) {
-        Intent i = new Intent(context, ReturnWatchdog.class).setAction(ACTION);
+    private static PendingIntent intent(Context context, long token) {
+        Intent i = new Intent(context, ReturnWatchdog.class).setAction(ACTION)
+                .putExtra(TOKEN, token);
         return PendingIntent.getBroadcast(context.getApplicationContext(), REQUEST, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
@@ -89,25 +117,52 @@ public final class ReturnWatchdog extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent received) {
         if (received == null || !ACTION.equals(received.getAction())) return;
-        lastFiredAt = SystemClock.elapsedRealtime();
         final Context app = context.getApplicationContext();
-        BlbAccessibilityService svc = BlbAccessibilityService.peek();
-        Log.i(TAG, "闹钟响了：该把人从落地页带回来了（无障碍" + (svc == null ? "不在" : "在") + "）");
-        if (svc != null && svc.isTargetForeground()) return;   // 已经回来了，不用管
-        if (svc != null) {
-            svc.back();
-            // 返回键有时要过一下才生效，隔一会儿再确认一次、必要时直接拉起菠萝包。
-            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    BlbAccessibilityService s = BlbAccessibilityService.peek();
-                    if (s != null && s.isTargetForeground()) return;
-                    launchTarget(app);
+        final long token = received.getLongExtra(TOKEN, 0);
+        synchronized (GUARD) {
+            if (token == 0 || preferences(app).getLong(TOKEN, 0) != token
+                    || !GUARD.activate(token)) return;
+            clearPendingReturn();
+            lastFiredAt = SystemClock.elapsedRealtime();
+            BlbAccessibilityService svc = BlbAccessibilityService.peek();
+            Log.i(TAG, "闹钟响了：该把人从落地页带回来了（无障碍"
+                    + (svc == null ? "不在" : "在") + "）");
+            if (svc != null && svc.isTargetForeground()) {
+                disarm(app);
+                return;
+            }
+            if (svc == null) {
+                GUARD.runIfCurrent(token, () -> launchTarget(app));
+                disarm(app);
+                return;
+            }
+            GUARD.runIfCurrent(token, svc::back);
+            // 已收到广播也仍可能被停止：回调执行时再次核对令牌，disarm 同时移除它。
+            pendingResult = goAsync();
+            if (handler == null) handler = new Handler(Looper.getMainLooper());
+            pendingReturn = () -> {
+                synchronized (GUARD) {
+                    GUARD.runIfCurrent(token, () -> {
+                        BlbAccessibilityService current = BlbAccessibilityService.peek();
+                        if (current == null || !current.isTargetForeground()) launchTarget(app);
+                        disarm(app);
+                    });
                 }
-            }, 1_500);
-            return;
+            };
+            handler.postDelayed(pendingReturn, 1_500);
         }
-        launchTarget(app);
+    }
+
+    private static SharedPreferences preferences(Context context) {
+        return context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    /** 必须持有 GUARD；取消广播的延迟动作时也结束 goAsync，避免接收器一直挂起。 */
+    private static void clearPendingReturn() {
+        if (handler != null && pendingReturn != null) handler.removeCallbacks(pendingReturn);
+        pendingReturn = null;
+        if (pendingResult != null) pendingResult.finish();
+        pendingResult = null;
     }
 
     /** 只用系统给的启动入口把菠萝包拉到前台，不碰它界面里的任何东西。 */

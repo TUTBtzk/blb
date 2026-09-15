@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  订阅页：上面一张卡说清「订谁、订到哪了、下一步该点什么」，下面两行是「点进去看全部」。
-  那五个次要操作（选书／加书／加章／导入导出）横着滚，不再和主操作抢注意力。
+  2026-09-14 两页重复的整套流程入口造成混淆；这里仅保留同步目录、核对清单两颗主按钮。
+  整套流程统一从签到页启动。
+  只跑订阅、选书、加书、加章、导入导出留在横滚区，避免和每天都要点的操作挤在一起。
 
   为什么章节列表和各账号累计都变成一行：它们原来是「信息很多、窗口很小」的典型 ——
   六百多章挤在下半屏的内嵌滚动区里，8 个号的累计被拼成一条 13sp 小字横向截断，
   第三个号往后根本看不见。完整内容现在各占 DetailActivity 一整屏。
 
-  两行都必须带一句摘要：使用者手指不能动，只有点开才看得到的信息对他等于不存在。
+  每颗主按钮和每条入口都必须带摘要：使用者手指不能动，只有点开才看得到的信息对他等于不存在。
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -48,24 +49,55 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/run_catalog"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:singleLine="false"
+                    android:text="@string/sub_sync_catalog"
+                    app:icon="@drawable/ic_action_run" />
+
+                <TextView
+                    android:id="@+id/catalog_summary"
+                    style="@style/Blb.Text.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:text="@string/sub_catalog_unscanned" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/run_audit"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:singleLine="false"
+                    android:text="@string/sub_audit"
+                    app:icon="@drawable/ic_action_run" />
+
+                <TextView
+                    android:id="@+id/audit_summary"
+                    style="@style/Blb.Text.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:accessibilityLiveRegion="polite"
+                    android:text="@string/sub_audit_unchecked" />
+
                 <TextView
                     android:id="@+id/suggestion"
                     style="@style/Blb.Text.Body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="6dp"
+                    android:accessibilityLiveRegion="polite"
                     android:background="@drawable/bg_notice"
                     android:padding="14dp"
+                    android:text="@string/sub_suggestion_loading"
                     android:textColor="?attr/colorOnPrimaryContainer" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/run_subscribe"
-                    style="@style/Blb.Button"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="@string/sub_run"
-                    app:icon="@drawable/ic_action_run" />
 
                 <HorizontalScrollView
                     android:layout_width="match_parent"
@@ -79,10 +111,18 @@
                         android:orientation="horizontal">
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/run_subscribe"
+                            style="@style/Blb.Button.Outlined"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/sub_run" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/pick_novel"
                             style="@style/Blb.Button.Tonal"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
                             android:text="@string/sub_pick_novel" />
 
                         <com.google.android.material.button.MaterialButton
@@ -129,9 +169,15 @@
             android:layout_marginBottom="8dp"
             android:text="@string/sub_ledger_section" />
 
-        <!-- 两行入口。标题和摘要都在 SubscriptionFragment 里灌，摘要随数据变。 -->
+        <!-- 账本、核对依据和账号累计都要直接带摘要，不能要求使用者逐个点开才能知道结果。 -->
         <com.example.blb.ui.EntryRowView
             android:id="@+id/entry_chapters"
+            style="@style/Blb.Card.Row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <com.example.blb.ui.EntryRowView
+            android:id="@+id/entry_suspect"
             style="@style/Blb.Card.Row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />

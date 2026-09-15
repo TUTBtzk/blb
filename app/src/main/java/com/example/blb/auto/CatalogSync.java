@@ -1,19 +1,26 @@
 package com.example.blb.auto;
 
 import com.example.blb.data.Chapter;
+import com.example.blb.data.Account;
+import com.example.blb.data.AppDatabase;
+import com.example.blb.data.Db;
+import com.example.blb.data.LedgerWritePolicy;
 import com.example.blb.data.Novel;
 import com.example.blb.data.Purchase;
 import com.example.blb.data.SubscriptionDao;
 import com.example.blb.util.Texts;
+import com.example.blb.ui.LedgerEdits;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
- * 把「选择章节」页扫到的东西写进账本：整本书的章节顺序，以及<b>免费章</b>按当前账号回填的
+ * 把「选择章节」页扫到的东西写进账本：整本书的章节顺序，以及<b>免费章</b>按所有启用账号回填的
  * 「已拥有」记录。付费章归谁只认真实购买记录 —— 界面上读不出来（见 {@link ChapterRowState}）。
  *
  * <p>没有这一步，自动订阅是空转的：{@code chapter} 表空着，
@@ -31,12 +38,9 @@ import java.util.regex.Pattern;
  * </ol>
  *
  * <p>加在<b>末尾</b>的新章不需要重排：位置没动，扫一遍就由 {@link #write} 登记进账本 ——
- * 所以「作者更新了新章，App 的记录也跟着更新」靠的是每一趟都重扫一遍目录，不是手工登记。
+ * 所以作者新增章节由订阅页的「同步目录」登记，不能再要求手工逐章输入。
  */
 public final class CatalogSync {
-
-    /** 台账里手工登记的标题可能只有「久违的笑」，界面上是「11   久违的笑」。 */
-    private static final Pattern LEADING_NO = Pattern.compile("^\\d{1,5}\\s*");
 
     public static final class Report {
         /** 账本写成了吗。false = 一个字都没写。 */
@@ -44,15 +48,17 @@ public final class CatalogSync {
         /** 给日志看的一句话。 */
         public String message;
         /** 界面上一共几章。 */
-        public int scanned;
+        public int scanned = -1;
         /** 这次新登记进账本的章数。 */
         public int added;
-        /** 免费章行数（没有锁）—— 这些才可以按当前账号补进账本。 */
-        public int free;
+        /** 免费章行数（没有锁），这份证据对全部启用账号成立。 */
+        public int free = -1;
         /** 这个号还能花券买的章数（付费、还有勾选圈）。 */
-        public int buyable;
+        public int buyable = -1;
         /** 这次新补记的「免费章已拥有」记录数。 */
         public int backfilled;
+        public int accounts;
+        public int realignedCount;
         /** 账本说这个号买过、界面上却还能勾选要花券的章 —— 对不上，必须让人知道。 */
         public final List<String> contradictions = new ArrayList<>();
         /**
@@ -67,9 +73,11 @@ public final class CatalogSync {
          * 一个订阅者的），也买不了（没有勾选圈）。只能报出来让人对着
          * 「我的 → 代券 → 订阅清单」核对是谁买的。
          */
-        public final List<String> foreign = new ArrayList<>();
-        /** 跳过的无标号行（卷标题这类），原样带出来写日志。 */
+        // 保留稳定的章节 id，供核账补回购买记录后重新核实，避免报告已经修复的漏账。
+        public final Map<Long, String> foreign = new LinkedHashMap<>();
+        /** 已核实的分节行，原样带出；无标号或 heading 本身均不能证明这是分节。 */
         public final List<String> skipped = new ArrayList<>();
+        public final List<String> unresolved = new ArrayList<>();
         /** 作者动过目录、这次按界面重排了章号时，写这一句；没动过就是 null。 */
         public String realigned;
         /** 扫描时的第一行，扫完靠它核对「真的回到顶部了」。 */
@@ -80,46 +88,144 @@ public final class CatalogSync {
     }
 
     /**
-     * 进选择章节页 → 扫完 → 写账本 → 把列表滚回顶部（后面买章要从顶上往下找）。
+     * 普通目录核实角色 → 选择章节页逐行对照并读状态 → 确认回顶 → 写账本。
      *
-     * @param accountId 现在登录的是哪个号；<b>免费章</b>会记成它的
-     *                  {@link Purchase#SRC_OWNED}。付费章一个字都不写。
+     * @param accountId 当前账号只用于提示付费记录矛盾；免费章对所有启用账号补记 OWNED。
      */
     public static Report sync(StepRunner r, SubscriptionDao subs, Novel novel, long accountId)
             throws StepRunner.StepFailure {
         Report out = new Report();
+        // 2026-09-14 两份真机 dump 证实：下载页卷名与免费番外同形，普通目录的 layoutRoot 才能区分。
+        // 两页都从顶部完整读到底，并逐位置对照；不在扫描时勾选，也不按书名硬编码卷标题。
+        SubscribeTask.openCatalogDirectory(r, novel);
+        CatalogScanner.toTop(r, null, CatalogScanner.DEFAULT_MAX_SCROLLS);
+        CatalogScanner.Result directory = rescanIfGap(r, CatalogScanner.scanDirectory(r), null);
+        logScanEvidence(r, "普通目录", directory);
+        if (!directory.trustworthy()) {
+            out.scanned = directory.chapters.size();
+            out.skipped.addAll(directory.skipped);
+            out.unresolved.addAll(directory.unresolved);
+            out.firstRowTitle = firstTitle(directory);
+            out.message = "普通目录没扫干净，这轮不写账本也不买："
+                    + scanProblem(directory) + classificationNote(out);
+            restoreAfterFailedScan(r, out.firstRowTitle, directory.scrolls);
+            return out;
+        }
         SubscribeTask.openChapterPicker(r, novel);
-        CatalogScanner.Result scan = rescanIfGap(r, CatalogScanner.scan(r));
+        CatalogScanner.toTop(r, null, CatalogScanner.DEFAULT_MAX_SCROLLS);
+        CatalogScanner.Result scan = rescanIfGap(r, CatalogScanner.scan(r, directory), directory);
 
         out.scanned = scan.chapters.size();
         out.free = scan.freeCount();
         out.buyable = scan.buyableCount();
         out.skipped.addAll(scan.skipped);
-        if (!scan.chapters.isEmpty()) out.firstRowTitle = scan.chapters.get(0).title;
+        out.unresolved.addAll(scan.unresolved);
+        out.firstRowTitle = firstTitle(scan);
+
+        // 2026-09-14 只报「跳过12行」仍无法核对番外是否被丢掉，类别和原文必须一起留下。
+        logScanEvidence(r, "选择章节", scan);
 
         if (!scan.trustworthy()) {
             out.message = "目录没扫干净，这轮不写账本也不买："
-                    + (scan.chapters.isEmpty() ? "一行章节都没读到"
-                    : scan.truncated ? "翻了 " + scan.scrolls + " 屏还没到底（这本书太长）"
-                            : scan.gapNote);
-            CatalogScanner.toTop(r, out.firstRowTitle, scan.scrolls);
+                    + scanProblem(scan) + classificationNote(out);
+            restoreAfterFailedScan(r, out.firstRowTitle, scan.scrolls);
             return out;
         }
 
-        if (!realign(subs, novel, scan, out)) {
-            CatalogScanner.toTop(r, out.firstRowTitle, scan.scrolls);
-            return out;
+        // 2026-09-14 两页对照加严了回顶证明；先归位再提交，不能写完账才抛错而丢掉实际补记报告。
+        CatalogScanner.toTop(r, out.firstRowTitle, scan.scrolls);
+        List<Long> freeAccounts = new ArrayList<>();
+        if (r.context() == null) {
+            // 离线回归只提供内存账本和当前账号；生产入口由 Context 取得全部启用账号。
+            if (accountId > 0) freeAccounts.add(accountId);
+            if (!realign(subs, novel, scan, out)) return out;
+            write(subs, novel, accountId, freeAccounts, scan, out);
+            out.ok = true;
+        } else {
+            AppDatabase db = Db.get(r.context());
+            try {
+                LedgerEdits.duringRun(r.host(), () -> db.runInTransaction(() -> {
+                    List<Chapter> before = subs.loadChapters(novel.id);
+                    for (Account account : db.accountDao().loadEnabled()) freeAccounts.add(account.id);
+                    // 重排和新增必须一起成功；以前搬完号再失败会留下只改了一半的目录。
+                    if (!realign(subs, novel, scan, out)) throw new Rejected(out.message);
+                    write(subs, novel, accountId, freeAccounts, scan, out);
+                    if (!LedgerWritePolicy.sameChapters(before, subs.loadChapters(novel.id))) {
+                        // 作者插章会改变远端明细的本地映射；结构变过就不能复用旧的逐章凭证。
+                        db.auditDao().invalidateNovel(novel.id);
+                    }
+                    long scannedAt = System.currentTimeMillis();
+                    if (db.auditDao().setCatalogScan(novel.id, scannedAt, out.scanned) != 1) {
+                        throw new Rejected("目标小说已变化，这次目录未写入");
+                    }
+                    novel.catalogScannedAt = scannedAt;
+                    novel.catalogChapterCount = out.scanned;
+                    return true;
+                }));
+                out.ok = true;
+            } catch (Rejected failure) {
+                out.message = failure.getMessage();
+                out.added = out.backfilled = out.realignedCount = 0;
+                return out;
+            }
         }
-        write(subs, novel, accountId, scan, out);
-        out.ok = true;
+        out.accounts = freeAccounts.size();
         out.message = "目录 " + out.scanned + " 章（新登记 " + out.added + "）"
-                + "，免费 " + out.free + " 章（新补记 " + out.backfilled + "）"
+                + "，免费 " + out.free + " 章（补记 " + out.backfilled
+                + " 条，按 " + out.accounts + " 个启用账号每章各一条）"
                 + "，这个号还能买 " + out.buyable + " 章"
                 + (out.foreign.isEmpty() ? ""
                 : "，本机已下载但不知道是谁买的 " + out.foreign.size() + " 章")
-                + (out.skipped.isEmpty() ? "" : "，跳过 " + out.skipped.size() + " 行卷标题");
-        CatalogScanner.toTop(r, out.firstRowTitle, scan.scrolls);
+                + classificationNote(out);
         return out;
+    }
+
+    private static final class Rejected extends RuntimeException {
+        Rejected(String message) { super(message); }
+    }
+
+    private static String firstTitle(CatalogScanner.Result scan) {
+        String title = scan.allRows.isEmpty() ? null : scan.allRows.get(0).title;
+        return title == null || title.isEmpty() ? null : title;
+    }
+
+    private static void restoreAfterFailedScan(StepRunner r, String firstTitle, int scrolls)
+            throws StepRunner.StepFailure {
+        try {
+            CatalogScanner.toTop(r, firstTitle, scrolls);
+        } catch (StepRunner.StepFailure failure) {
+            if (failure.kind == StepRunner.Kind.CANCELLED) throw failure;
+            // 2026-09-15 回顶失败不能覆盖已经取得的坏行与扫描进度，否则又只剩一句笼统错误。
+            r.log("不完整扫描后的回顶也未完成；保留原扫描结果：" + failure.getMessage());
+        }
+    }
+
+    private static String scanProblem(CatalogScanner.Result scan) {
+        return scan.stateConflict != null ? scan.stateConflict : scan.gapNote != null ? scan.gapNote
+                : scan.truncated ? "翻了 " + scan.scrolls + " 屏仍未取得到底证据"
+                : scan.chapters.isEmpty() ? "一行章节都没读到" : "存在不能确认身份的目录行";
+    }
+
+    private static void logScanEvidence(StepRunner r, String page, CatalogScanner.Result scan) {
+        r.log(page + "扫描证据：已读章节=" + scan.chapters.size() + "，scrolls=" + scan.scrolls
+                + "，endProbes=" + scan.endProbes + "，truncated=" + scan.truncated
+                + "，gapNote=" + (scan.gapNote == null ? "无" : scan.gapNote)
+                + "，状态冲突=" + (scan.stateConflict == null ? "无" : scan.stateConflict)
+                + "，全部目录行=" + scan.allRows.size()
+                + "，首行「" + (scan.allRows.isEmpty() ? "未读到" : scan.allRows.get(0).title)
+                + "」，末行「" + (scan.allRows.isEmpty() ? "未读到" : scan.allRows.get(scan.allRows.size() - 1).title) + "」");
+        r.log(page + "卷标题（已跳过）" + scan.skipped.size() + " 行：" + String.join("、", scan.skipped));
+        r.log(page + "未确认目录行（请核对）" + scan.unresolved.size() + " 行："
+                + String.join("、", scan.unresolved));
+        for (int i = 0; i < Math.min(3, scan.rowProblems.size()); i++) {
+            r.log(page + "未读全原因：" + scan.rowProblems.get(i));
+        }
+    }
+
+    static String classificationNote(Report report) {
+        return "；卷标题（已跳过）" + report.skipped.size() + " 行"
+                + (report.unresolved.isEmpty() ? "" : "；未确认目录行（请核对）"
+                + report.unresolved.size() + " 行：" + String.join("、", report.unresolved));
     }
 
     /**
@@ -146,6 +252,7 @@ public final class CatalogSync {
             novel.startChapterNo = plan.newStartChapterNo;
         }
         out.realigned = plan.describe();
+        out.realignedCount = plan.renumber.size();
 
         // 搬完再核对一次「账本第 k 章就是界面第 k 行」。这一步本不该失败，
         // 失败说明搬号没落库（比如撞了唯一索引）—— 那就绝不能拿这份账本去买。
@@ -164,31 +271,45 @@ public final class CatalogSync {
      * 2026-08-24 15:26 那趟第 4 个号刚按完「回到顶部」列表只铺出 4 行，翻一屏就跳到了标号 13，
      * 于是那个号一章都没买。第二遍照样有缺口才当真 —— 护栏不放松，只是不拿一次抖动当结论。
      */
-    private static CatalogScanner.Result rescanIfGap(StepRunner r, CatalogScanner.Result first)
+    static CatalogScanner.Result rescanIfGap(StepRunner r, CatalogScanner.Result first,
+                                                     CatalogScanner.Result directory)
             throws StepRunner.StepFailure {
-        if (first.gapNote == null || first.chapters.isEmpty()) return first;
+        if (first.stateConflict != null) {
+            r.log("目录存在已确认的状态冲突，不用重扫覆盖原证据：" + first.stateConflict);
+            return first;
+        }
+        if (first.gapNote == null || first.allRows.isEmpty()) return first;
         r.log("  目录第一遍有缺口（" + first.gapNote + "），回到顶部重扫一遍");
-        CatalogScanner.toTop(r, first.chapters.get(0).title, first.scrolls);
-        CatalogScanner.Result second = CatalogScanner.scan(r);
+        try {
+            CatalogScanner.toTop(r, firstTitle(first), first.scrolls);
+        } catch (StepRunner.StepFailure failure) {
+            if (failure.kind == StepRunner.Kind.CANCELLED) throw failure;
+            r.log("重扫前未能确认回顶，保留第一遍的不完整证据：" + failure.getMessage());
+            return first;
+        }
+        CatalogScanner.Result second = first.directoryScanned
+                ? CatalogScanner.scanDirectory(r) : CatalogScanner.scan(r, directory);
+        if (second.stateConflict != null) return second;
         if (second.gapNote == null) return second;
         // 两遍都有缺口：取行数多的那一份报给用户，缺口位置更接近真相。
         return second.chapters.size() >= first.chapters.size() ? second : first;
     }
 
     /**
-     * 落库：章节按位置登记；<b>只有免费章</b>按当前账号回填「已拥有」。
+     * 免费章谁登录都能看，独立扫描不应让其余七个号的免费章统计永远为零。
      *
      * <p>为什么只认免费章：「已下载」是本机的下载状态、8 个号共用（皓平买完第49章下载到本机，
      * 换五杯半雪碧登录那一行照样写着「已下载」）。2026-08-25 用户核对订阅清单发现
      * 「第49章实际上只有皓平购买了，却显示已订阅：皓平、五杯半雪碧」—— 就是这里按「已下载」
-     * 回填出来的第二个订阅者。它直接违反「每一章只能有一个账号订阅」，还会让这一章
-     * 永远算成「有人有了」而漏订。所以付费章的归属只认真实购买记录，界面上读不出来。
+     * 回填出来的第二个订阅者。2026-09-14 已确认服务器上的跨号购买可以是真实事实，
+     * 但本机下载文件仍不能证明当前账号付过钱；付费归属必须来自购买记录或完整远端明细。
      *
      * <p><b>「有没有归属」跨号问，「是不是我的」才问当前号</b>：同一个「已下载」标记，
      * 8 个号看到的是同一份文件。2026-09-03 那趟把这两件事混成了一个 {@code recorded}，
      * 于是别的号买过的章被当成「没有归属」报了 8 遍（见 {@link Report#foreign}）。
      */
     private static void write(SubscriptionDao subs, Novel novel, long accountId,
+                              List<Long> freeAccounts,
                               CatalogScanner.Result scan, Report out) {
         // 全书跨号的归属集合，一次取完：8 个号里任何一个买过，这一章就是有主的。
         Set<Long> ownedByAnyone = new HashSet<>(subs.realPurchasedChapterIds(novel.id));
@@ -196,25 +317,32 @@ public final class CatalogSync {
             CatalogScanner.Row row = scan.chapters.get(i);
             int no = i + 1; // 章号＝界面上的位置，不是行首那个标号（分卷会各自从 1 重排）
             Chapter before = subs.chapterByNo(novel.id, no);
-            Chapter chapter = subs.ensureChapter(novel.id, no, row.title, 0);
-            if (chapter == null) continue;
+            Chapter chapter = subs.ensureChapter(novel.id, no, row.title, -1);
+            if (chapter == null) throw new Rejected("第" + no + "章未能登记，目录写入已回滚");
             if (before == null) {
                 out.added++;
-            } else if (!row.title.equals(chapter.title)) {
+            }
+            if (!row.title.equals(chapter.title) || !Objects.equals(row.volumeTitle, chapter.volumeTitle)) {
                 // 只在「兼容但不完全一样」时才发生（台账里是手工登记的短标题），
                 // 顺手换成界面上的全文，之后按标题精确定位那一行才找得到。
                 chapter.title = row.title;
+                chapter.volumeTitle = row.volumeTitle;
                 subs.updateChapter(chapter);
             }
-            if (accountId <= 0) continue;
-            boolean mine = subs.countRealPurchase(accountId, chapter.id) > 0;
+            if (row.state.free()) {
+                for (long freeAccount : freeAccounts) {
+                    if (subs.countRealPurchase(freeAccount, chapter.id) == 0) {
+                        subs.upsertPurchase(Purchase.of(freeAccount, chapter.id, 0, 0,
+                                Purchase.SRC_OWNED));
+                        out.backfilled++;
+                    }
+                }
+                continue;
+            }
+            boolean mine = accountId > 0 && subs.countRealPurchase(accountId, chapter.id) > 0;
             switch (verdict(row.state, mine, ownedByAnyone.contains(chapter.id))) {
-                case BACKFILL_FREE:
-                    subs.upsertPurchase(Purchase.of(accountId, chapter.id, 0, Purchase.SRC_OWNED));
-                    out.backfilled++;
-                    break;
                 case FOREIGN:
-                    out.foreign.add("第" + no + "章");
+                    out.foreign.put(chapter.id, "第" + no + "章");
                     break;
                 case CONTRADICTION:
                     out.contradictions.add("第" + no + "章");
@@ -285,14 +413,10 @@ public final class CatalogSync {
      */
     static boolean sameChapter(String ledgerTitle, String scanned) {
         if (Texts.isBlank(ledgerTitle)) return true; // 从没登记过标题，谈不上对不上
-        String a = ledgerTitle.trim();
-        String b = scanned == null ? "" : scanned.trim();
-        if (a.equals(b)) return true;
-        return strip(a).equals(strip(b));
-    }
-
-    private static String strip(String s) {
-        return LEADING_NO.matcher(s).replaceFirst("").trim();
+        String raw = ledgerTitle.replaceAll("[\\s\\u00a0\\u3000]+", " ").trim();
+        String title = Texts.chapterTitle(scanned);
+        // 手填的纯标题可能以数字开头；先按正文原样对，不能把正文数字当成又一个章号。
+        return raw.equals(title) || Texts.chapterTitle(ledgerTitle).equals(title);
     }
 
     private static String text(String s) {

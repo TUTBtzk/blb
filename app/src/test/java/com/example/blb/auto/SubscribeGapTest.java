@@ -38,13 +38,22 @@ public class SubscribeGapTest {
         }
     }
 
-    /** 买到了／免费章／本机已有买不了 —— 有定论才划掉，别让下一个号白翻一遍目录。 */
+    /** 买到或免费归属已经入账才有定论；本机下载但买家未知不能被划掉。 */
     @Test
     public void aSettledChapterIsClosedAtOnce() {
         SubscribeRun.Settled settled = new SubscribeRun.Settled();
         settled.mark(83L);
         assertTrue(settled.has(83L));
         assertFalse("各章分开算：第83章有定论不该影响第84章", settled.has(84L));
+    }
+
+    /** 第49章曾因本机下载状态而误挂买家，不能再把同一种未知当作可以跨过的章节。 */
+    @Test
+    public void aDeviceDownloadWithoutAnOwnerStillBlocksTheMissingChapter() {
+        String reason = SubscribeRun.deviceOwnershipProblem(false, 83);
+        assertNotNull(reason);
+        assertTrue(reason, reason.contains("不能跳过此章"));
+        assertNotNull("无归属的83章仍在时，买到87章就是缺口", SubscribeRun.gapNote(87, 83));
     }
 
     // ---------- 跑完回头看：整本停在哪一章 ----------
@@ -91,7 +100,7 @@ public class SubscribeGapTest {
      * 没人报告过也要看得出来：买到了第87章，可最小的未买章还是第83章 —— 中间空了。
      *
      * <p>队列绝不越过一章，所以这句话正常永远不该出现；留着它当不变量断言 ——
-     * 本机已下载但谁都买不了的章、被 MIUI 杀掉之后重跑的那一趟，都可能让缺口悄悄出现。
+     * 旧版曾跨过本机已下载但归属未知的章，被 MIUI 杀掉后的重跑也可能读到这样的历史缺口。
      * 用户就是这么发现 2026-09-03 那次漏订的。
      */
     @Test

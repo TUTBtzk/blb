@@ -37,6 +37,8 @@ public class BlbAccessibilityService extends AccessibilityService {
     private static final String TAG = "BlbAuto";
     /** 按下多久。零长度 + 60 ms 的点击实测按不动 Lynx／Canvas 画出来的按钮。 */
     private static final int TAP_MS = 110;
+    private static final long CATALOG_SWIPE_MS = 700;
+    private static final long CATALOG_SWIPE_TIMEOUT_MS = 2_000;
 
     /**
      * 允许在「等授权键」这一小段时间里读的三个 App。
@@ -47,6 +49,7 @@ public class BlbAccessibilityService extends AccessibilityService {
     private static final Set<String> AUTH_PACKAGES = new HashSet<>(Arrays.asList(
             "com.tencent.mobileqq", "com.tencent.mm", "com.sina.weibo"));
 
+    private static final Object CONNECTION_LOCK = new Object();
     private static volatile BlbAccessibilityService instance;
 
     private volatile String lastEventPackage;
@@ -59,8 +62,15 @@ public class BlbAccessibilityService extends AccessibilityService {
         return instance;
     }
 
-    public static boolean isReady() {
+    /** 当前进程是否已经收到系统连接回调；它不代表系统设置中的开关状态。 */
+    public static boolean isConnected() {
         return instance != null;
+    }
+
+    /** 兼容旧调用；新代码应使用 {@link #isConnected()}，避免误解成系统开关已开启。 */
+    @Deprecated
+    public static boolean isReady() {
+        return isConnected();
     }
 
     /**
@@ -72,37 +82,56 @@ public class BlbAccessibilityService extends AccessibilityService {
      * 10 s（内存压力下甚至 0 ms）、无障碍服务排在 30 s —— 也就是队列一定比无障碍服务先醒。
      * 那一趟就是这么废掉的：[2/8] 报「无障碍服务未开启」直接把整队掐死，其实再等十几秒它就回来了。
      */
-    public static boolean awaitReady(long timeoutMs) {
-        long deadline = System.currentTimeMillis() + timeoutMs;
-        while (instance == null && System.currentTimeMillis() < deadline) {
-            try {
-                Thread.sleep(300);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
+    public static boolean awaitConnected(long timeoutMs) {
+        long deadline = android.os.SystemClock.elapsedRealtime() + timeoutMs;
+        synchronized (CONNECTION_LOCK) {
+            while (instance == null) {
+                long left = deadline - android.os.SystemClock.elapsedRealtime();
+                if (left <= 0) return false;
+                try {
+                    CONNECTION_LOCK.wait(left);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
             }
+            return true;
         }
-        return instance != null;
+    }
+
+    /** @deprecated 使用 {@link #awaitConnected(long)}。 */
+    @Deprecated
+    public static boolean awaitReady(long timeoutMs) {
+        return awaitConnected(timeoutMs);
     }
 
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        instance = this;
+        synchronized (CONNECTION_LOCK) {
+            instance = this;
+            CONNECTION_LOCK.notifyAll();
+        }
         Log.i(TAG, "无障碍服务已连接");
     }
 
     @Override
     public boolean onUnbind(android.content.Intent intent) {
-        instance = null;
+        clearInstance(this);
         Log.i(TAG, "无障碍服务已断开");
         return super.onUnbind(intent);
     }
 
     @Override
     public void onDestroy() {
-        instance = null;
+        clearInstance(this);
         super.onDestroy();
+    }
+
+    private static void clearInstance(BlbAccessibilityService service) {
+        synchronized (CONNECTION_LOCK) {
+            if (instance == service) instance = null;
+        }
     }
 
     @Override
@@ -178,12 +207,6 @@ public class BlbAccessibilityService extends AccessibilityService {
 
     /**
      * 活动窗口<b>之外</b>那些属于菠萝包的窗口，拼成一棵树；没有就返回 null。
-     *
-     * <p>为什么要有它：广告播放页不是一个窗口。实测淘宝那支试玩广告，截图上卡片写满了字，
-     * 而活动窗口抓下来只有 21 个节点（FrameLayout / LinearLayout / {@code android.webkit.WebView}）、
-     * <b>一个字都没有</b> —— 那颗「我要直接拿奖励」根本不在活动窗口里，只查
-     * {@code getRootInActiveWindow()} 的话任何选择器都不可能命中它，于是流程就只剩「按跳过」这条
-     * 死路（那等于把奖励扔了）。
      *
      * <p>三条界限：<b>只</b>收 {@code com.sfacg} 的窗口（别的 App 的界面一个节点都不读）；
      * 按 {@code getLayer()} 从下往上排，好让 {@link Selector#topmost} 继续等于「画在最上层的那个」；
@@ -267,7 +290,7 @@ public class BlbAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 一次点击的结局。分这么细是因为广告播放页上「点不动」有好几种完全不同的原因，
+     * 一次点击的结局。「点不动」有好几种完全不同的原因，
      * 合成一个 boolean 之后日志里只剩一句「点不动」，没法判断该改选择器还是该重连服务。
      */
     public enum Press {
@@ -286,8 +309,7 @@ public class BlbAccessibilityService extends AccessibilityService {
     /**
      * 点一个节点，并说清楚失败在哪一步。
      *
-     * <p>梯队：节点自身 ACTION_CLICK → 最近的可点击祖先 → 按 bounds 中心做手势。广告播放页
-     * （穿山甲那套 Lynx 渲染树实测 209 个节点里一个 clickable 都没有）只有最后一条路能走。
+     * <p>梯队：节点自身 ACTION_CLICK → 最近的可点击祖先 → 按 bounds 中心做手势。
      *
      * <p><b>会阻塞</b>最多约 2 秒等手势回调，只许在工作线程上调用（手势回调发在主线程）。
      */
@@ -305,106 +327,6 @@ public class BlbAccessibilityService extends AccessibilityService {
         Rect r = tappableBounds(node);
         if (r == null) return Press.NO_BOUNDS;
         return tapAt(r.exactCenterX(), r.exactCenterY());
-    }
-
-    /**
-     * 点「这张卡」的中心，而不是某颗按钮 —— 认不出按钮时的退路。
-     *
-     * <p>穿山甲那张促销卡自己写着「上滑或<b>点击</b>跳转到详情页或第三方应用」：整张卡就是跳转
-     * 热区。所以在已经确认「卡在屏幕上、视频被停住了」之后，还是找不到那颗按钮时，点卡片中心
-     * 比按右上角那颗「跳过」正确得多 —— 跳过是把奖励扔掉，点卡片是广告主写明的那条路。
-     *
-     * <p>做法：从传进来的节点（通常是卡上某段文字）往上走，取<b>最大但还没铺满全屏</b>的那个
-     * 祖先当作卡片，点它中心。两条保险：铺满全屏（&gt;85%）的祖先不算卡片，免得退化成「点屏幕
-     * 正中」；落点在屏幕最上面 12% 之内时拒绝下手 —— 那一带住着「跳过」和倒计时。
-     */
-    public Press pressCard(NodeView view) {
-        AccessibilityNodeInfo node = AccessibilityNodeView.rawOf(view);
-        if (node == null) return Press.NO_NODE;
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        long screen = (long) dm.widthPixels * dm.heightPixels;
-        Rect best = null;
-        AccessibilityNodeInfo cur = node;
-        for (int i = 0; i < 8 && cur != null; i++) {
-            Rect box = new Rect();
-            try {
-                cur.getBoundsInScreen(box);
-            } catch (Exception e) {
-                break;
-            }
-            long area = (long) box.width() * box.height();
-            if (!box.isEmpty() && area <= screen * 85 / 100
-                    && (best == null || area > (long) best.width() * best.height())) {
-                best = new Rect(box);
-            }
-            try {
-                cur = cur.getParent();
-            } catch (Exception e) {
-                break;
-            }
-        }
-        if (best == null) return Press.NO_BOUNDS;
-        float y = best.exactCenterY();
-        if (y < dm.heightPixels * 0.12f) return Press.NO_BOUNDS;
-        Log.i(TAG, "点卡片中心 " + best.toShortString());
-        return tapAt(best.exactCenterX(), y);
-    }
-
-    /**
-     * 最后一招：点屏幕正中偏下一点。
-     *
-     * <p>2026-08-23 实测有一张促销卡，从按钮那段文字往上八层<b>全都是零面积</b>的 Lynx 占位节点
-     * （日志里是 {@code bounds=[0,111][0,111]}），{@link #pressCard} 因此拿不到任何矩形，那一支
-     * 广告就变成「没有可点的目标」。这时候按屏幕几何位置下手：卡片本体就在屏幕中间那一带，
-     * 而「跳过」和倒计时住在最上面 12%、常驻的「立即下载」在最下面，都碰不到。
-     *
-     * <p>只在<b>已经确认促销卡在屏幕上、视频被它停住</b>之后才允许调用 —— 它是盲点，
-     * 唯一的正当理由是「不点就拿不到奖励，而按跳过等于把奖励扔掉」。
-     */
-    public Press pressScreenCenter() {
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        float x = dm.widthPixels / 2f;
-        float y = dm.heightPixels * 0.55f;
-        Log.i(TAG, "点屏幕正中 (" + x + "," + y + ")");
-        return tapAt(x, y);
-    }
-
-    /**
-     * 点右上角那颗关闭 X。<b>只许在奖励已经到手之后调用</b>。
-     *
-     * <p>2026-08-23 14:14 实测：优量汇那支广告跳转、浏览、返回之后，播放页上弹出「恭喜获得奖励／
-     * 已完成浏览10秒，提前获得奖励」，代券确实到账了（签到面板上「今日还剩」从 3 变成 2）。但这张
-     * 弹窗的出口只有右上角那颗 X，而它是个 44×44 的 ImageView，<b>没文字、没 desc、没 id、
-     * 也不 clickable</b>，选择器一条都认不到；同时全局返回在这张弹窗上连按 8 次一动不动。结果脚本
-     * 退不回签到页、读不到「今日还剩 N 次」，把已经到账的奖励记成「没确认到」并停下，
-     * 白丢了这个号剩下的广告。
-     *
-     * <p>做法：先按位置在节点树里找那颗图标（{@link NodeMatcher#findCornerClose}），找到就点它
-     * 中心；整棵树里都没有（画在 Canvas 上）就按几何位置点右上角。两层都不问 clickable。
-     *
-     * <p><b>为什么必须先确认奖励到手</b>：同一个位置在穿山甲的播放页上是「跳过」。奖励还没到手时
-     * 点那儿等于把奖励扔掉 —— 那是这个项目里最不能犯的错。到手之后再点它，最坏也只是关掉一张
-     * 已经领完奖的弹窗。
-     */
-    public Press pressCloseCorner() {
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        int w = dm.widthPixels;
-        int h = dm.heightPixels;
-        NodeView icon = NodeMatcher.findCornerClose(root(), w, h);
-        if (icon == null) icon = NodeMatcher.findCornerClose(otherWindows(), w, h);
-        if (icon != null) {
-            int[] b = icon.boundsInScreen();
-            if (b != null && b.length == 4) {
-                float x = (b[0] + b[2]) / 2f;
-                float y = (b[1] + b[3]) / 2f;
-                Log.i(TAG, "点右上角关闭图标 (" + x + "," + y + ")");
-                return tapAt(x, y);
-            }
-        }
-        float x = w * 0.913f;
-        float y = h * 0.086f;
-        Log.i(TAG, "点右上角关闭位置（树里找不到图标）(" + x + "," + y + ")");
-        return tapAt(x, y);
     }
 
     /** 向上找最近的可点击且可用的祖先，找不到返回 null。 */    private static AccessibilityNodeInfo clickableAncestor(AccessibilityNodeInfo node) {
@@ -445,7 +367,7 @@ public class BlbAccessibilityService extends AccessibilityService {
 
     /**
      * 手势点一下坐标。被取消（{@link Press#CANCELLED}）时隔 250 ms 再试一次 ——
-     * 实测广告页上偶发一次取消，重来就好。
+     * 系统取消与节点拒绝的原因不同，需分别留给调用方判断。
      */
     public Press tapAt(float x, float y) {
         Press first = tapOnce(x, y);
@@ -543,7 +465,79 @@ public class BlbAccessibilityService extends AccessibilityService {
         return swipe(0.32f, 0.72f);
     }
 
+    /** 缺少目录容器时保留屏幕内短滑。 */
+    public boolean swipeCatalogUp() {
+        return swipeCatalogUp(null);
+    }
+
+    /**
+     * 在目录可见区域内慢速短滑，供自动化工作线程调用；实际完成后才返回成功。
+     * 目录扫描会用滑动结果判断页尾，系统只接受了手势、随后取消或没有回调都不能算完成。
+     * 传入容器无效或可见区域太小时返回失败，只有未提供容器时才使用屏幕范围。
+     */
+    public boolean swipeCatalogUp(NodeView viewport) {
+        return swipeCatalog(viewport, true);
+    }
+
+    /** 2026-09-14 两页目录对照必须先证实回到顶部；反向也复用同一容器及完成回调。 */
+    public boolean swipeCatalogDown(NodeView viewport) {
+        return swipeCatalog(viewport, false);
+    }
+
+    private boolean swipeCatalog(NodeView viewport, boolean forward) {
+        if (Thread.currentThread().isInterrupted()) return false;
+        try {
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            if (dm.widthPixels <= 0 || dm.heightPixels <= 0) return false;
+            Rect visible = new Rect(0, 0, dm.widthPixels, dm.heightPixels);
+            if (viewport != null) {
+                if (!viewport.visible()) return false;
+                int[] bounds = viewport.boundsInScreen();
+                if (bounds == null || bounds.length < 4
+                        || bounds[0] >= bounds[2] || bounds[1] >= bounds[3]) return false;
+                if (!visible.intersect(bounds[0], bounds[1], bounds[2], bounds[3])) return false;
+                float density = dm.density > 0f ? dm.density : 1f;
+                // 至少容得下常规触控目标和约两行章节，才足够做可识别的短滑。
+                if (visible.width() < 48f * density || visible.height() < 120f * density) {
+                    return false;
+                }
+            }
+            float x = Math.max(0f, Math.min(dm.widthPixels - 1f,
+                    visible.left + visible.width() / 2f));
+            float fromY = Math.max(0f, Math.min(dm.heightPixels - 1f,
+                    visible.top + visible.height() * (forward ? 0.72f : 0.32f)));
+            float toY = Math.max(0f, Math.min(dm.heightPixels - 1f,
+                    visible.top + visible.height() * (forward ? 0.32f : 0.72f)));
+            if (fromY == toY) return false;
+            Path path = new Path();
+            path.moveTo(x, fromY);
+            path.lineTo(x, toY);
+            GestureDescription gesture = new GestureDescription.Builder()
+                    .addStroke(new GestureDescription.StrokeDescription(path, 0, CATALOG_SWIPE_MS))
+                    .build();
+            CatalogGestureCompletion completion = new CatalogGestureCompletion();
+            if (Thread.currentThread().isInterrupted()) return false;
+            boolean accepted = dispatchGesture(gesture, new GestureResultCallback() {
+                @Override public void onCompleted(GestureDescription description) {
+                    completion.completed();
+                }
+
+                @Override public void onCancelled(GestureDescription description) {
+                    completion.cancelled();
+                }
+            }, null);
+            return completion.await(accepted, CATALOG_SWIPE_TIMEOUT_MS);
+        } catch (Exception e) {
+            Log.w(TAG, "目录滑动失败", e);
+            return false;
+        }
+    }
+
     private boolean swipe(float fromRatio, float toRatio) {
+        return swipe(fromRatio, toRatio, 320);
+    }
+
+    private boolean swipe(float fromRatio, float toRatio, long durationMs) {
         try {
             DisplayMetrics dm = getResources().getDisplayMetrics();
             float x = dm.widthPixels / 2f;
@@ -551,7 +545,7 @@ public class BlbAccessibilityService extends AccessibilityService {
             path.moveTo(x, dm.heightPixels * fromRatio);
             path.lineTo(x, dm.heightPixels * toRatio);
             GestureDescription gesture = new GestureDescription.Builder()
-                    .addStroke(new GestureDescription.StrokeDescription(path, 0, 320))
+                    .addStroke(new GestureDescription.StrokeDescription(path, 0, durationMs))
                     .build();
             return dispatchGesture(gesture, null, null);
         } catch (Exception e) {

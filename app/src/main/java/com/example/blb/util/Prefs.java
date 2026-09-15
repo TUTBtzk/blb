@@ -11,12 +11,14 @@ public final class Prefs {
     private static final String KEY_DAILY_ENABLED = "daily_enabled";
     private static final String KEY_DAILY_HOUR = "daily_hour";
     private static final String KEY_DAILY_SPEND_CAP = "daily_spend_cap";
-    private static final String KEY_ADS_PER_ACCOUNT = "ads_per_account";
-    private static final String KEY_AD_ASSIST = "ad_assist_tap";
-    private static final String KEY_AD_JUMP = "ad_press_jump";
+    private static final String KEY_CATALOG_MAX_AGE_HOURS = "catalog_max_age_hours";
+    private static final String KEY_CATALOG_AUTO_SYNC = "catalog_auto_sync";
+    private static final String KEY_ALWAYS_DETAIL_AUDIT = "always_detail_audit";
     /** 「被系统杀掉之后自动接着跑」的当天计数，见 AutomationService。 */
     private static final String KEY_RESUME_YMD = "auto_resume_ymd";
     private static final String KEY_RESUME_COUNT = "auto_resume_count";
+    private static final String KEY_AUDIT_SUMMARY = "last_audit_summary_";
+    private static final String KEY_AUDIT_DAY = "last_audit_day_";
 
     private Prefs() {
     }
@@ -50,45 +52,35 @@ public final class Prefs {
         sp(c).edit().putInt(KEY_DAILY_SPEND_CAP, Math.max(0, cap)).apply();
     }
 
-    /**
-     * 一个账号每天有几个广告可领。只在界面上那句「今日还剩 N 次」读不到时当兜底用。
-     */
-    public static int adsPerAccount(Context c) {
-        return clamp(sp(c).getInt(KEY_ADS_PER_ACCOUNT, 5), 0, 20);
+    /** 八个号过去每号都扫整本目录；过期阈值只决定提醒，不能暗中重新启用逐号扫描。 */
+    public static int catalogMaxAgeHours(Context c) {
+        return catalogHoursOrDefault(sp(c).getInt(KEY_CATALOG_MAX_AGE_HOURS, 24));
     }
 
-    public static void setAdsPerAccount(Context c, int n) {
-        sp(c).edit().putInt(KEY_ADS_PER_ACCOUNT, clamp(n, 0, 20)).apply();
+    public static void setCatalogMaxAgeHours(Context c, int hours) {
+        sp(c).edit().putInt(KEY_CATALOG_MAX_AGE_HOURS, catalogHoursOrDefault(hours)).apply();
     }
 
-    /**
-     * 默认开：由脚本替你按下「看广告」和播完之后的关闭键。
-     *
-     * <p>替按键不等于替观看 —— 视频照真实时长完整播放，不快进、不跳过、播不满不许关，
-     * 看的人始终是你。这是给按不动屏幕的人做的无障碍适配。关掉之后回到「只提醒」：
-     * 脚本只数还剩几个、每个都停下等你自己点。
-     */
-    public static boolean isAdAssist(Context c) {
-        return sp(c).getBoolean(KEY_AD_ASSIST, true);
+    static int catalogHoursOrDefault(int hours) {
+        return hours > 0 ? hours : 24;
     }
 
-    public static void setAdAssist(Context c, boolean value) {
-        sp(c).edit().putBoolean(KEY_AD_ASSIST, value).apply();
+    /** 同步目录已独立成按钮；只有用户明确打开后，过期目录才可占用整套流程的时间。 */
+    public static boolean isCatalogAutoSync(Context c) {
+        return sp(c).getBoolean(KEY_CATALOG_AUTO_SYNC, false);
     }
 
-    /**
-     * 默认关：广告里那颗跳到别的 App 的按钮，要不要也替你按。
-     *
-     * <p>和「替你按播放」不是一回事 —— 那一下是广告主另外按点击/安装付费的动作，所以要你
-     * 单独开一次，而且只在你人在屏幕前的那趟里生效（定时任务一律不按）。按下去之后不会把你
-     * 丢在别的 App 里：落地页停留一会儿让你看清，再用全局返回把你带回广告页接着播。
-     */
-    public static boolean isAdJump(Context c) {
-        return sp(c).getBoolean(KEY_AD_JUMP, false);
+    public static void setCatalogAutoSync(Context c, boolean enabled) {
+        sp(c).edit().putBoolean(KEY_CATALOG_AUTO_SYNC, enabled).apply();
     }
 
-    public static void setAdJump(Context c, boolean value) {
-        sp(c).edit().putBoolean(KEY_AD_JUMP, value).apply();
+    /** 默认复用仍有效的逐章证据；聚合异常或准备花券时，购买护栏仍须强制重读。 */
+    public static boolean isAlwaysDetailAudit(Context c) {
+        return sp(c).getBoolean(KEY_ALWAYS_DETAIL_AUDIT, false);
+    }
+
+    public static void setAlwaysDetailAudit(Context c, boolean enabled) {
+        sp(c).edit().putBoolean(KEY_ALWAYS_DETAIL_AUDIT, enabled).apply();
     }
 
     /**
@@ -111,6 +103,31 @@ public final class Prefs {
     /** 用户自己按了「跑今天的流程」就把计数清零：这是一趟新的、有人看着的运行。 */
     public static void clearAutoResumes(Context c, String ymd) {
         sp(c).edit().putString(KEY_RESUME_YMD, ymd).putInt(KEY_RESUME_COUNT, 0).apply();
+    }
+
+    /** 摘要必须跟书走，切换目标书不能借用另一本书的「八个号都核过」。 */
+    public static String lastAuditSummary(Context c, long novelId) {
+        if (novelId <= 0) return "";
+        SharedPreferences prefs = sp(c);
+        return datedAuditSummary(prefs.getString(KEY_AUDIT_SUMMARY + novelId, ""),
+                prefs.getString(KEY_AUDIT_DAY + novelId, ""), Texts.todayYmd());
+    }
+
+    /** 调用者持有 LedgerEdits 的运行占用并在 Db.io 内保存，页面收工刷新时立即读到本轮结论。 */
+    public static void setLastAuditSummary(Context c, long novelId, String summary) {
+        if (novelId <= 0) throw new IllegalArgumentException("核对摘要缺少目标小说");
+        sp(c).edit().putString(KEY_AUDIT_SUMMARY + novelId, summary == null ? "" : summary)
+                .putString(KEY_AUDIT_DAY + novelId, Texts.todayYmd()).apply();
+    }
+
+    /** 原样存下「今天」会在隔天仍冒充新证据；跨日只改日期，保留真实的账号数和修账结果。 */
+    static String datedAuditSummary(String summary, String savedDay, String today) {
+        if (summary == null) return "";
+        String prefix = "最后核对 今天 ";
+        if (summary.startsWith(prefix) && !Texts.isBlank(savedDay) && !savedDay.equals(today)) {
+            return "最后核对 " + savedDay + " " + summary.substring(prefix.length());
+        }
+        return summary;
     }
 
     // ---------- 常驻真买授权 ----------

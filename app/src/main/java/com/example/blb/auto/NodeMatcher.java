@@ -38,8 +38,7 @@ public final class NodeMatcher {
             if (s == null || s.isEmpty()) continue;
             List<NodeView> found = findAll(root, s);
             if (found.size() > s.index) {
-                // topmost：从后往前数。DFS 顺序里靠后的那个通常是后画上去、盖在最上层的
-                // （广告的促销卡就压在下载卡上面），点被盖住的那颗等于空点。
+                // 从后往前数可区分同文案的前后两层，避免对被覆盖的控件空点。
                 NodeView node = s.topmost
                         ? found.get(found.size() - 1 - s.index)
                         : found.get(s.index);
@@ -123,63 +122,6 @@ public final class NodeMatcher {
             cur = cur.parent();
         }
         return node;
-    }
-
-    /** {@link #findCornerClose} 认的那一小块：右上角这么大的范围。 */
-    private static final float CORNER_MIN_X = 0.82f;
-    private static final float CORNER_MAX_Y = 0.16f;
-    /** 关闭图标最大多大（占屏宽的比例）。再大就是包着它的整条顶栏了，点中心会点偏。 */
-    private static final float CORNER_MAX_SIZE = 0.16f;
-    /** 太小的就是一像素的分隔线之类，不是图标。 */
-    private static final int CORNER_MIN_SIZE = 16;
-
-    /**
-     * 找右上角那颗关闭键，只按<b>位置和大小</b>认。
-     *
-     * <p>为什么不能用选择器：实测优量汇的领奖弹窗（「恭喜获得奖励／已完成浏览10秒，提前获得
-     * 奖励」）右上角那颗 X 是一个 44×44 的 ImageView，<b>没有 text、没有 contentDescription、
-     * 没有 resource-id，也不是 clickable</b> —— 选择器语言里没有一条能认到它。而它是这个弹窗
-     * 唯一的出口：实测在这张弹窗上连按 8 次全局返回一动不动，脚本因此退不回签到页、
-     * 也就读不到「今日还剩 N 次」，明明已经到账的奖励被记成「没确认到」。
-     *
-     * <p>取中心落在右上角那一小块里、<b>面积最小</b>的那个有面积节点：面积最小 ≈ 图标本身，
-     * 而不是包着它的容器（容器的中心也许偏到文字那边去）。
-     *
-     * <p><b>调用方必须先确认奖励已经到手</b>（ad_earned 在屏幕上）。同一个位置在穿山甲的
-     * 播放页上是「跳过」—— 奖励还没到手时点那儿等于把奖励扔掉。
-     */
-    public static NodeView findCornerClose(NodeView root, int screenWidth, int screenHeight) {
-        if (root == null || screenWidth <= 0 || screenHeight <= 0) return null;
-        NodeView[] best = new NodeView[1];
-        long[] bestArea = {Long.MAX_VALUE};
-        collectCorner(root, screenWidth, screenHeight, 0, new int[]{0}, best, bestArea);
-        return best[0];
-    }
-
-    private static void collectCorner(NodeView node, int w, int h, int depth, int[] visited,
-                                      NodeView[] best, long[] bestArea) {
-        if (node == null || depth > MAX_DEPTH || visited[0] >= MAX_VISITED) return;
-        visited[0]++;
-        int[] b = node.boundsInScreen();
-        if (b != null && b.length == 4) {
-            int width = b[2] - b[0];
-            int height = b[3] - b[1];
-            int cx = (b[0] + b[2]) / 2;
-            int cy = (b[1] + b[3]) / 2;
-            long area = (long) width * height;
-            if (width >= CORNER_MIN_SIZE && height >= CORNER_MIN_SIZE
-                    && width <= w * CORNER_MAX_SIZE && height <= w * CORNER_MAX_SIZE
-                    && cx >= w * CORNER_MIN_X && cx < w
-                    && cy <= h * CORNER_MAX_Y && cy >= 0
-                    && area < bestArea[0]) {
-                best[0] = node;
-                bestArea[0] = area;
-            }
-        }
-        int n = node.childCount();
-        for (int i = 0; i < n; i++) {
-            collectCorner(node.child(i), w, h, depth + 1, visited, best, bestArea);
-        }
     }
 
     /** {@link #countAbove}：数字离标签最远能有多远（px），再远就是别的东西了。 */

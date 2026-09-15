@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  只在 debug 构建里合并进来的一个组件：账号灌库用的广播接收器。
+  只在 debug 构建里合并进来的 ADB 调试入口。第一个接收器用于账号灌库。
 
   为什么需要它：用户手指动不了，账号页那个「添加账号」对话框他自己填不了 8 遍。
   而密码必须经 KeyStoreBox（AndroidKeyStore）加密后才能落库，那件事只能在 App 进程里做，
@@ -9,15 +9,19 @@
   用 **stdin 重定向** 写进 App 私有目录 —— 密码不出现在 am／ps 的命令行里，也不进 logcat。
   这个广播只带一个动作名、不带任何数据，导入完成后接收器立刻删掉种子文件。
 
-  exported=true 是 adb shell 发广播的必要条件。它能造成的最坏结果只是「重新导入一次那个文件」，
-  而那个文件在我们自己的私有目录里，别的 App 写不进去；release 构建里这整段都不存在。
+  exported=true 是 adb shell 发广播的必要条件，但普通 App 也能向导出组件发显式广播。
+  这些入口可以切号、启动真实订阅和修改账本，因此全部要求发送者持有系统 DUMP 权限。
+  ADB shell 持有该权限，现有 am broadcast 调用保持可用；普通 App 不会自动获得它。
+  这里限制的是广播发送者，不需要给本 App 新增 uses-permission；同 UID 的内部调用仍可用。
+  release 构建里这整段都不存在。
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application>
         <receiver
             android:name="com.example.blb.debug.AccountSeedReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.SEED_ACCOUNTS" />
             </intent-filter>
@@ -30,7 +34,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.BalanceProbeReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.READ_BALANCE" />
             </intent-filter>
@@ -50,7 +55,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.SubscribeProbeReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.LEDGER" />
                 <action android:name="com.example.blb.debug.RUN_SUBSCRIBE" />
@@ -68,7 +74,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.SearchProbeReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.PROBE_SEARCH" />
             </intent-filter>
@@ -81,7 +88,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.ChapterStateProbeReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.PROBE_CHAPTER" />
             </intent-filter>
@@ -95,7 +103,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.VoucherLedgerProbeReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.PROBE_VOUCHER_LEDGER" />
                 <action android:name="com.example.blb.debug.PROBE_SUBSCRIBED_DETAIL" />
@@ -113,7 +122,8 @@
         -->
         <receiver
             android:name="com.example.blb.debug.LedgerAuditReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.RECONCILE" />
             </intent-filter>
@@ -121,31 +131,32 @@
         <!--
           第八个 debug 组件：不用碰屏幕的总控（ControlReceiver）。
           上面七个都是「验一件事」的探针，这一个是这个 App 平时真正被开动的方式。
-          「每日自动签到」是设置页上一颗开关、「跑今天的流程」是首页一颗按钮 ——
-          用户手指动不了，这两样他都按不了，所以在有它之前这个 App 只能靠旁人替他按才跑得起来。
+          用户手指动不了，需要广播来开关定时、查看日志或单独签到。
 
           STATUS 只读，一条命令念出「准备好了吗、今天做了什么、下一步买哪章」；
+          CAPTURE_CATALOG_ROWS 只读当前菠萝包目录窗口，逐行保留标题、祖先、状态标记和原始树；
+          同时写入私有 files/catalog-row-evidence.txt，不能把其他前台应用或旧快照当成现场。
           SCHEDULE 开关每日定时并改时间，走的是设置页那同一份状态和 DailyScheduler.apply；
-          DAILY_NOW／CHECKIN_NOW 不等定时立刻跑一趟，跟首页那颗按钮完全同一条路；
-          SHOW_PAGE 把某一个二级页面（日志／今日状态／各账号累计／已登记章节／会替你按什么）
-          拉到前台 —— 那五页原来是一级页面上五处「信息多、窗口小」的地方，现在各占一整屏，
+          CHECKIN_NOW 不等定时立刻只签到，跟签到页那颗按钮完全同一条路；
+          SHOW_PAGE 把某一个二级页面（日志／今日状态／各账号累计／已登记章节）
+          拉到前台 —— 这些页面原来是一级页面上「信息多、窗口小」的地方，现在各占一整屏，
           可它们都要点一下才进得去，而用户点不了。他看得见、只是按不动，所以这一条最实用。
           SWITCH_TO 退出现在登着的号、登入指定的号（按账号 id，或者按账本里某一章的买家）——
           和章节列表点一下那一行是同一条路，而那一行他也点不了。具体命令行写在 ControlReceiver
           的类注释里（XML 注释里放不了 adb 那两个连字符的参数名）。
           它只切号，不买任何东西；免费章那种记录没有买家，绝不拿它瞎切一个号。
 
-          它一条购买记录都不写，最坏结果是「多跑一趟队列」或「多开一次定时」，
-          而花钱仍然被「只花代券、代券不够就换号、结果不明整趟停下」那套护栏卡着；
-          release 构建里没有它。
+          总控广播自身不写购买记录，但可以启动真实流程和修改定时状态，
+          因此同样要求发送者持有系统 DUMP 权限；release 构建里没有它。
         -->
         <receiver
             android:name="com.example.blb.debug.ControlReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:permission="android.permission.DUMP">
             <intent-filter>
                 <action android:name="com.example.blb.debug.STATUS" />
+                <action android:name="com.example.blb.debug.CAPTURE_CATALOG_ROWS" />
                 <action android:name="com.example.blb.debug.SCHEDULE" />
-                <action android:name="com.example.blb.debug.DAILY_NOW" />
                 <action android:name="com.example.blb.debug.CHECKIN_NOW" />
                 <action android:name="com.example.blb.debug.SHOW_PAGE" />
                 <action android:name="com.example.blb.debug.SWITCH_TO" />

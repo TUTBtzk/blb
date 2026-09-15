@@ -11,6 +11,7 @@ import com.example.blb.data.CheckInLog;
 import com.example.blb.data.Db;
 import com.example.blb.data.Novel;
 import com.example.blb.data.SubscriptionDao;
+import com.example.blb.ui.LedgerEdits;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
@@ -18,19 +19,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 每天的整套流程。按账号顺序（sort_order）把一个号的三件事全做完，再换下一个号：
+ * 每天的整套流程。按账号顺序（sort_order）完成切号 → 签到 → 订阅，再换下一个号：
  * <ol>
  *   <li>切到这个号 → 签到；</li>
- *   <li>紧接着把今天还剩的广告一个个看完 —— 默认由脚本替你按键、视频照真实时长播完，
- *       设置页关掉「替我点广告」就变成每个都停下等你自己点；</li>
  *   <li>券够就顺手订阅目标小说 —— 从你设的起始章开始，只买还没有任何号买过的章。</li>
  * </ol>
  *
- * <p>三件事塞进同一趟是有意的：签到和广告发的代券当场就能用，等整队签完再回头订阅，
- * 就得把每个号重登一遍，而重登才是最招验证码的动作。
+ * <p>2026-09-14 真机反馈要求只保留签到页的整套入口；同一个号签完立刻读余额并订阅，
+ * 才能当场使用签到所得代券，避免整队签完后再逐号重登。
  *
- * <p>单个账号出问题只影响它自己，队列继续。第 3 步的选择器没配好、或者没设目标小说，
- * 只关掉第 3 步，签到和广告照跑。
+ * <p>单个账号出问题只影响它自己，队列继续；金额不明仍整趟停止。
+ * 没设目标小说或订阅选择器未配齐时只签到，已有目标却没有目录时仍整趟停止。
  */
 public final class DailyQueue {
 
@@ -40,16 +39,16 @@ public final class DailyQueue {
         public int alreadySigned;
         public int checkInFailed;
         public int skipped;
-        /** 这一趟你新看完的广告数（不含今天之前已经记下的）。 */
-        public int adsWatched;
         public int bought;
         public int ownedAlready;
         public int subscribeFailed;
         public int spent;
-        /** 第 3 步跑了没有；没跑的原因在 subscribeNote 里。 */
+        /** 订阅跑了没有；没跑的原因在 subscribeNote 里。 */
         public boolean subscribing;
         public String subscribeNote;
         public String abortReason;
+        public String catalogNote;
+        public String nextChapterNote;
         /**
          * 整本现在<b>停在第几章</b>（{@link SubscribeRun#stuckNote}）；没卡住就是 null。
          *
@@ -83,19 +82,6 @@ public final class DailyQueue {
     }
 
     public static Summary run(Context context, StepRunner.Host host) {
-        return run(context, host, true);
-    }
-
-    /**
-     * @param attended 你人在跟前吗。定时任务里是 false —— 那时候即使开着「替我点广告」也不替你点：
-     *                 广告是给你看的，没人看的时候播完只是骗曝光。不看的那几个会记成没领，
-     *                 等你回 App 点「跑今天的流程」再补。
-     */
-    public static Summary run(Context context, StepRunner.Host host, boolean attended) {
-        return runOnce(context, host, attended);
-    }
-
-    private static Summary runOnce(Context context, StepRunner.Host host, boolean attended) {
         AppDatabase db = Db.get(context);
         AccountDao accountDao = db.accountDao();
         CheckInDao checkInDao = db.checkInDao();
@@ -118,68 +104,101 @@ public final class DailyQueue {
             return summary;
         }
 
-        SubscribeRun.Plan plan = planSubscribe(context, subs, selectors, summary, host);
+        SubscribeRun.Plan plan;
+        try {
+            plan = planSubscribe(context, subs, selectors, summary, host);
+        } catch (StepRunner.StepFailure failure) {
+            summary.abortReason = failure.getMessage();
+            summary.subscribeNote = failure.getMessage();
+            host.log(summary.abortReason);
+            return summary;
+        } catch (RuntimeException failure) {
+            summary.abortReason = "订阅账本预检失败，整趟停止：" + failure.getMessage();
+            host.log(summary.abortReason);
+            return summary;
+        }
         SubscribeRun.Tally tally = new SubscribeRun.Tally(summary.notes);
         StepRunner runner = new StepRunner(context, selectors, host);
         String ymd = Texts.todayYmd();
-        int quota = Prefs.adsPerAccount(context);
-        // 跳转键只在「你人在屏幕前 + 你自己开过这个开关」时才按，定时任务里恒为 false。
-        AdWatchTask.Mode adMode = new AdWatchTask.Mode(
-                attended && Prefs.isAdAssist(context), attended && Prefs.isAdJump(context));
         SubscribeRun.Settled settled = new SubscribeRun.Settled();
         CheckInQueue.LoggedIn loggedIn = new CheckInQueue.LoggedIn();
 
-        for (int i = 0; i < accounts.size(); i++) {
-            if (host.isCancelled()) {
-                summary.abortReason = "已取消";
-                break;
-            }
-            Account account = accounts.get(i);
-            host.log("[" + (i + 1) + "/" + accounts.size() + "] " + account.displayName()
-                    + "（" + account.loginKindLabel() + "）");
-            if (nothingLeftToday(checkInDao, account, ymd, plan)) {
-                summary.alreadySigned++;
-                host.log("  今天这个号已经签完、广告也没剩，跳过（不必为它再退登重登一次）");
-                CheckInQueue.refreshBalanceIfCurrent(runner, accountDao, account, host, loggedIn);
-                continue;
-            }
-            try {
-                AccountSwitcher.ensureLoggedIn(runner, account, accountDao,
-                        accounts.size() == 1);
-                loggedIn.nowIs(account);
-                Texts.Balance balance = checkInAndAds(runner, host, checkInDao, accountDao,
-                        account, ymd, quota, adMode, summary);
-                if (plan != null) {
-                    SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                            balance, settled, tally);
+        try {
+            for (int i = 0; i < accounts.size(); i++) {
+                if (host.isCancelled()) {
+                    summary.abortReason = "已取消";
+                    break;
                 }
-            } catch (StepRunner.StepFailure e) {
-                if (e.kind == StepRunner.Kind.MONEY_UNCLEAR) {
-                    // 订阅那一步「点了立即下载但结果不明」。签到和广告这个号明明做完了，
-                    // 不能把它记成签到失败（那会让今天再退登重登一次去签一遍）。整趟停下。
+                Account account = accounts.get(i);
+                host.log("[" + (i + 1) + "/" + accounts.size() + "] " + account.displayName()
+                        + "（" + account.loginKindLabel() + "）");
+                if (nothingLeftToday(checkInDao, account, ymd, plan)) {
+                    summary.alreadySigned++;
+                    host.log("  今天这个号已经签完，这一趟没有订阅任务，跳过（不必再退登重登一次）");
+                    CheckInQueue.refreshBalanceIfCurrent(runner, accountDao, account, host, loggedIn);
+                    continue;
+                }
+                try {
+                    AccountSwitcher.ensureLoggedIn(runner, account, accountDao,
+                            accounts.size() == 1);
+                    loggedIn.nowIs(account);
+                    Texts.Balance balance = checkInAndReadBalance(runner, host, checkInDao,
+                            accountDao, account, ymd, summary);
+                    if (plan != null) {
+                        plan = CatalogQueue.syncIfExpired(runner, host, subs, plan, account, i);
+                        summary.catalogNote = CatalogStatus.runNote(plan.novel,
+                                System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+                        SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
+                                balance, settled, tally);
+                    }
+                } catch (StepRunner.StepFailure e) {
+                    if (CheckInQueue.isGlobal(e.kind)) summary.abortReason = e.getMessage();
+                    if (e.kind == StepRunner.Kind.MONEY_UNCLEAR) {
+                        // 订阅那一步「点了立即下载但结果不明」。这个号的签到已经做完了，
+                        // 不能把它记成签到失败（那会让今天再退登重登一次去签一遍）。整趟停下。
+                        host.log("  " + e.getMessage());
+                        summary.abortReason = e.getMessage();
+                        break;
+                    }
+                    noteFailure(checkInDao, account, ymd, CheckInQueue.statusFor(e.kind),
+                            e.getMessage(), summary);
                     host.log("  " + e.getMessage());
-                    summary.abortReason = e.getMessage();
-                    break;
+                    if (CheckInQueue.isGlobal(e.kind)) {
+                        summary.abortReason = e.getMessage();
+                        break;
+                    }
+                } catch (Exception e) {
+                    noteFailure(checkInDao, account, ymd, CheckInLog.FAILED, String.valueOf(e), summary);
+                    host.log("  意外错误：" + e);
                 }
-                noteFailure(checkInDao, account, ymd, CheckInQueue.statusFor(e.kind),
-                        e.getMessage(), summary);
-                host.log("  " + e.getMessage());
-                if (CheckInQueue.isGlobal(e.kind)) {
-                    summary.abortReason = e.getMessage();
-                    break;
-                }
-            } catch (Exception e) {
-                noteFailure(checkInDao, account, ymd, CheckInLog.FAILED, String.valueOf(e), summary);
-                host.log("  意外错误：" + e);
             }
+        } catch (RuntimeException failure) {
+            String note = "流程或失败记录保存异常，整趟停止：" + failure.getMessage();
+            if (summary.abortReason == null) summary.abortReason = note;
+            else summary.notes.add(note);
+        } finally {
+            // 后续账号记失败也可能抛错；已经买到的章和花掉的券必须留在同一份结论里。
+            summary.bought = tally.bought;
+            summary.ownedAlready = tally.ownedAlready;
+            summary.subscribeFailed = tally.failed;
+            summary.spent = tally.spent;
         }
-        summary.bought = tally.bought;
-        summary.ownedAlready = tally.ownedAlready;
-        summary.subscribeFailed = tally.failed;
-        summary.spent = tally.spent;
         if (plan != null) {
-            summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
-            summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
+            try {
+                Novel latest = subs.novelById(plan.novel.id);
+                summary.catalogNote = CatalogStatus.runNote(latest == null ? plan.novel : latest,
+                        System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+                summary.stuckNote = SubscribeRun.stuckNote(subs, plan, tally);
+                summary.gapNote = SubscribeRun.gapNote(subs, plan, tally);
+                summary.nextChapterNote = SubscribeRun.currentNextChapterNote(subs, plan.novel);
+                host.log(summary.catalogNote);
+                host.log(summary.nextChapterNote);
+            } catch (RuntimeException failure) {
+                summary.nextChapterNote = "下一章：账本读取失败，不能继续购买";
+                if (summary.abortReason == null) {
+                    summary.abortReason = "收尾核对账本失败：" + failure.getMessage();
+                }
+            }
         }
         return summary;
     }
@@ -187,7 +206,7 @@ public final class DailyQueue {
     /**
      * 这个号今天还有事可做吗。
      *
-     * <p>签到已经成功（或本来就是已签到）、广告也没剩、这一轮又不订阅 —— 那就没有任何理由
+     * <p>签到已经成功（或本来就是已签到）、这一轮又不订阅 —— 那就没有任何理由
      * 再切到它：切号意味着退登重登，而重登是最招验证码的动作。
      *
      * <p>这条规则还顺手把「被系统杀掉之后自动接着跑」变得便宜又安全：MIUI 会把整个进程杀掉
@@ -198,7 +217,7 @@ public final class DailyQueue {
                                             SubscribeRun.Plan plan) {
         if (plan != null) return false;
         CheckInLog today = dao.find(account.id, ymd);
-        return today != null && today.isSuccess() && !today.adAvailable;
+        return today != null && today.isSuccess();
     }
 
     /**
@@ -207,31 +226,41 @@ public final class DailyQueue {
      */
     private static void noteFailure(CheckInDao dao, Account account, String ymd,
                                     String status, String message, Summary summary) {
-        CheckInLog today = dao.find(account.id, ymd);
-        if (today != null && today.isSuccess()) {
-            summary.notes.add(account.displayName() + "：" + message);
-        } else {
-            CheckInQueue.record(dao, account.id, ymd, status, false, 0, -1, message);
-        }
-        if (CheckInLog.SKIPPED.equals(status)) summary.skipped++;
-        else {
-            summary.checkInFailed++;
-            summary.failedNames.add(account.displayName());
+        try {
+            CheckInLog today = dao.find(account.id, ymd);
+            if (today != null && today.isSuccess()) {
+                summary.notes.add(account.displayName() + "：" + message);
+            } else {
+                CheckInQueue.record(dao, account.id, ymd, status, message);
+            }
+            if (CheckInLog.SKIPPED.equals(status)) summary.skipped++;
+            else {
+                summary.checkInFailed++;
+                summary.failedNames.add(account.displayName());
+            }
+        } catch (RuntimeException failure) {
+            throw new IllegalStateException(account.displayName() + "：" + message
+                    + "；失败状态未能保存：" + failure.getMessage(), failure);
         }
     }
 
-    /** 决定第 3 步跑不跑。任何一个前提不满足就只跑签到和广告，不是整队失败。 */
+    /** 没有目标仍可只签到；已有目标却没目录必须整队停，不能再把空表说成订阅已完成。 */
     private static SubscribeRun.Plan planSubscribe(Context context, SubscriptionDao subs,
                                                    SelectorSet selectors, Summary summary,
-                                                   StepRunner.Host host) {
+                                                   StepRunner.Host host) throws StepRunner.StepFailure {
         String note = null;
-        Novel novel = SubscribeRun.resolveTarget(subs, host);
-        if (novel == null) note = "还没设定集中订阅的目标小说，这轮只签到和看广告";
+        Novel novel = LedgerEdits.duringRun(host, () -> SubscribeRun.resolveTarget(subs, host));
+        if (novel == null) note = "还没设定集中订阅的目标小说，这轮只签到";
         if (note == null) {
+            summary.catalogNote = CatalogStatus.runNote(novel,
+                    System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
+            summary.nextChapterNote = SubscribeRun.currentNextChapterNote(subs, novel);
+            host.log(summary.catalogNote);
+            SubscribeRun.requireCatalog(subs, novel);
             List<String> missing = selectors.missing(Keys.REQUIRED_FOR_SUBSCRIBE);
             if (!missing.isEmpty()) {
                 note = "selectors.json 缺少订阅必需的 key："
-                        + TextUtils.join("、", missing) + "，这轮只签到和看广告";
+                        + TextUtils.join("、", missing) + "，这轮只签到";
             }
         }
         if (note != null) {
@@ -246,23 +275,18 @@ public final class DailyQueue {
         return plan;
     }
 
-    // ---------- 第 1、2 步：签到，紧接着广告 ----------
+    // ---------- 签到后读取余额 ----------
 
     /**
-     * 签到 + 广告。返回这一趟读到的余额，给第 3 步判断「券够不够」用；读不到就是 -1/-1，
-     * 由调用方退回账号库里记的值。
+     * 返回这一趟签到后读到的余额，给订阅判断「券够不够」用；读不到就是 -1/-1。
      *
      * <p>今天已经签过也照样走一遍 {@link CheckInTask}：它认出「已签到」就不会再点，
-     * 顺带把我们带回签到页——广告入口和余额都在那一页上。
+     * 因为当天本地记录不能代替本次服务器界面的签到状态。
      */
-    private static Texts.Balance checkInAndAds(StepRunner r, StepRunner.Host host,
-                                               CheckInDao checkInDao, AccountDao accountDao,
-                                               Account account, String ymd, int quota,
-                                               AdWatchTask.Mode adMode, Summary summary)
+    private static Texts.Balance checkInAndReadBalance(StepRunner r, StepRunner.Host host,
+                                                      CheckInDao checkInDao, AccountDao accountDao,
+                                                      Account account, String ymd, Summary summary)
             throws StepRunner.StepFailure {
-        CheckInLog today = checkInDao.find(account.id, ymd);
-        int watchedBefore = today == null ? 0 : Math.max(0, today.adsWatched);
-
         CheckInTask.Result checkIn = CheckInTask.run(r);
         if (CheckInLog.OK.equals(checkIn.status)) {
             summary.checkedIn++;
@@ -276,22 +300,11 @@ public final class DailyQueue {
             host.log("  签到没走通：" + checkIn.message);
         }
 
-        AdWatchTask.Result ads = AdWatchTask.run(r, quota, watchedBefore,
-                account.displayName(), adMode);
-        summary.adsWatched += Math.max(0, ads.watched - watchedBefore);
-        host.log("  " + ads.message);
-        if (ads.skipped) summary.notes.add(account.displayName() + " 的广告没看完");
-        if (ads.promoBlocked) {
-            summary.notes.add(account.displayName()
-                    + " 撞上「必须点进落地页才给奖励」的广告，已放弃（要领这种得开跳转开关）");
-        }
-
         // 余额只在「我的」页上读得到：签到面板是独立窗口，上面一个余额数字都没有。
         // 这一趟必读 —— 2026-08-23 用户报的「所有账号都无法识别有多少代券」就是因为
-        // 以前只在签到面板上就地读，永远读不到。看完广告后余额会变（签到和广告发的都是代券），
-        // 所以放在广告之后读。
+        // 以前只在签到面板上就地读，永远读不到。签到发的代券可能改变余额，因此在签到之后读。
         Texts.Balance balance = Texts.balance(checkIn.coupons, checkIn.vouchers);
-        if (!balance.known() || ads.watched > watchedBefore) {
+        if (!balance.known()) {
             Texts.Balance mine = r.readBalanceFromMine();
             if (mine.known()) balance = mine;
         }
@@ -305,16 +318,8 @@ public final class DailyQueue {
             accountDao.setLastCheckInAt(account.id, System.currentTimeMillis());
         }
 
-        boolean adPending = ads.remaining != 0 && checkIn.adAvailable;
-        CheckInQueue.record(checkInDao, account.id, ymd, checkIn.status, adPending,
-                ads.watched, ads.remaining, join(checkIn.message, ads.message));
+        CheckInQueue.record(checkInDao, account.id, ymd, checkIn.status, checkIn.message);
         return balance;
-    }
-
-    private static String join(String a, String b) {
-        if (Texts.isBlank(a)) return b;
-        if (Texts.isBlank(b)) return a;
-        return a + "；" + b;
     }
 
     public static String describe(Summary s) {
@@ -324,7 +329,6 @@ public final class DailyQueue {
                 .append("，已签 ").append(s.alreadySigned)
                 .append("，失败 ").append(s.checkInFailed);
         if (s.skipped > 0) sb.append("，跳过 ").append(s.skipped);
-        sb.append("；广告 ").append(s.adsWatched).append(" 个");
         if (s.subscribing) {
             sb.append("；订阅 ").append(s.bought).append(" 章");
             if (s.spent > 0) sb.append("（花 ").append(s.spent).append(" 代券）");

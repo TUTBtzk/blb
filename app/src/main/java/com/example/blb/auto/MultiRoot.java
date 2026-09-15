@@ -6,10 +6,8 @@ import java.util.List;
 /**
  * 把多个窗口的根节点拼成一棵假树，让 {@link NodeMatcher} 一次搜完。
  *
- * <p>为什么需要它：{@code getRootInActiveWindow()} 只给<b>活动</b>窗口那一层。广告播放页实测
- * 会同时挂好几个窗口（视频/试玩那层是 {@code android.webkit.WebView}，抓下来 21 个节点、
- * 一个字都没有；促销卡是另一层），这时候活动窗口里根本没有那颗「我要直接拿奖励」，
- * 任何选择器都不可能找到它。
+ * <p>{@code getRootInActiveWindow()} 只给活动窗口那一层；需要查询其它窗口时，
+ * 用同一个节点匹配器逐层搜索，避免复制一套匹配规则。
  *
  * <p>子节点顺序 = 传进来的顺序，调用方按 z 序<b>从下往上</b>给，这样 DFS 里靠后的仍然是
  * 画在上层的那个，{@link Selector#topmost} 的语义不变。

@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.example.blb.data.Chapter;
+import com.example.blb.data.Purchase;
 import com.example.blb.data.PurchaseRow;
 
 import org.junit.Test;
@@ -21,9 +23,8 @@ import java.util.Map;
 /**
  * 「订阅明细」页的解析与<b>逐章</b>对账，按 2026-08-25 真机 dump 造树钉住。
  *
- * <p>为什么逐章这一层非要有：用户那两条硬约束都是逐章的 —— 「每一章只能有一个账号订阅」、
- * 「8 个号最后能拼出完整一本」。清单那一层是按书聚合的，只答得出「总数差了几章」，
- * 答不出差在哪一章；而 2026-08-25 第49章被误挂成两个号那件事，只有逐章比对才能指着说是第49章。
+ * <p>2026-09-14 用户确认多号订同章是真实历史；测试锁定各号账本与各号明细相等，
+ * 跨号真实记录不再当成错误。聚合只答得出总数，逐章比对才能指出究竟漏记哪一笔。
  *
  * <p>入口也是用户 2026-08-25 纠正的：要点清单里那<b>一整行</b>（他圈的行右上角那个「&gt;」
  * 实测是空文本、没 id、不可点的装饰），<b>不是</b>「查看目录」——「查看目录」进去是整本书的
@@ -72,6 +73,38 @@ public class SubscribedDetailTest {
         assertEquals("滤镜破碎，总裁秘书", e.title);
     }
 
+    /** 滚动重叠只去掉完整相同的 UI 行，同章但交易事实不同的两行必须交给恢复层拒绝。 */
+    @Test
+    public void detailIdentityIncludesEveryTransactionFact() {
+        SubscribedDetail.Entry sameA = SubscribedDetail.parseRow(
+                ROW_50, "20", "代券", "2026-08-25");
+        SubscribedDetail.Entry sameB = SubscribedDetail.parseRow(
+                ROW_50, "20", "代券", "2026-08-25");
+        SubscribedDetail.Entry differentAmount = SubscribedDetail.parseRow(
+                ROW_50, "40", "代券", "2026-08-25");
+        SubscribedDetail.Entry differentDate = SubscribedDetail.parseRow(
+                ROW_50, "20", "代券", "2026-08-24");
+
+        assertEquals("完整相同的滚动重叠应去重", sameA.key(), sameB.key());
+        assertFalse("同章不同金额不能被吞", sameA.key().equals(differentAmount.key()));
+        assertFalse("同章不同日期不能被吞", sameA.key().equals(differentDate.key()));
+    }
+
+    @Test
+    public void parsesChineseOrdinalRowsFromTheRealPage() {
+        SubscribedDetail.Entry secondVolume = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        assertEquals(6, secondVolume.chapterNo);
+        assertEquals("星彩", secondVolume.volume);
+        assertEquals("薯片", secondVolume.title);
+
+        SubscribedDetail.Entry firstVolume = SubscribedDetail.parseRow(
+                "铃兰花 第65章薄暮", "12", "代券", "2026-09-08");
+        assertEquals(65, firstVolume.chapterNo);
+        assertEquals("铃兰花", firstVolume.volume);
+        assertEquals("薄暮", firstVolume.title);
+    }
+
     /** 没有卷名的书（章号就在最前面）也得认得出来。 */
     @Test
     public void aRowWithoutAVolumeStillParses() {
@@ -116,6 +149,72 @@ public class SubscribedDetailTest {
         assertEquals("订婚事宜", e.title);
     }
 
+    @Test
+    public void explicitNumberWinsOverAnOrdinalInsideTheVolumeName() {
+        SubscribedDetail.Entry e = SubscribedDetail.parseRow(
+                "2023年第6章纪念 番外 50 真正标题", "20", "代券", null);
+        assertEquals(50, e.chapterNo);
+        assertEquals("2023年第6章纪念 番外", e.volume);
+        assertEquals("真正标题", e.title);
+    }
+
+    @Test
+    public void spacedChineseOrdinalRowsStillParse() {
+        SubscribedDetail.Entry compact = SubscribedDetail.parseRow(
+                "铃兰花 第65 章 薄暮", "12", "代券", "2026-09-08");
+        SubscribedDetail.Entry spaced = SubscribedDetail.parseRow(
+                "铃兰花 第 65 章 薄暮", "12", "代券", "2026-09-08");
+        assertEquals(65, compact.chapterNo);
+        assertEquals("薄暮", compact.title);
+        assertEquals(65, spaced.chapterNo);
+        assertEquals("薄暮", spaced.title);
+    }
+
+    @Test
+    public void bodyNumbersCannotOverrideAnEarlierOrdinalChapterMarker() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "铃兰花 第83章 最后 2026", "11", "代券", "2026-09-12");
+        assertEquals(83, entry.chapterNo);
+        assertEquals("铃兰花", entry.volume);
+        assertEquals("最后 2026", entry.title);
+    }
+
+    @Test
+    public void aChapterReferenceInsideTheBodyCannotOverrideTheRealHeading() {
+        for (String desc : new String[]{"铃兰花 第83章 回顾 第2章", "铃兰花 83 回顾 第2章"}) {
+            SubscribedDetail.Entry entry = SubscribedDetail.parseRow(desc, "11", "代券", "2026-09-12");
+            assertEquals(desc, 83, entry.chapterNo);
+            assertEquals(desc, "回顾 第2章", entry.title);
+        }
+    }
+
+    @Test
+    public void missingAndMistypedMarkersFromTheRealCatalogStillParseAndMatch() {
+        SubscribedDetail.Entry missing = SubscribedDetail.parseRow(
+                "铃兰花 第68 投影", "12", "代券", "2026-09-12");
+        assertEquals(68, missing.chapterNo);
+        assertEquals("铃兰花", missing.volume);
+        assertEquals("投影", missing.title);
+        assertTrue(SubscribedDetail.sameChapter("第68 投影", missing.title));
+        assertTrue(SubscribedDetail.sameChapter("第68章 投影", missing.title));
+
+        SubscribedDetail.Entry typo = SubscribedDetail.parseRow(
+                "红莲 第30张 红温", "12", "代券", "2026-09-12");
+        assertEquals(30, typo.chapterNo);
+        assertEquals("红莲", typo.volume);
+        assertEquals("红温", typo.title);
+        assertTrue(SubscribedDetail.sameChapter("第30张 红温", typo.title));
+        assertTrue(SubscribedDetail.sameChapter("30 红温", typo.title));
+    }
+
+    @Test
+    public void volumeMarkersCannotFallBackToAnOrdinaryNumericChapter() {
+        for (String desc : new String[]{"第68卷", "第68 卷", "第 68 卷", "第 68卷",
+                "第68部", "第68 部", "第68册", "第68 册"}) {
+            assertFalse(desc, SubscribedDetail.parseRow(desc, "12", "代券", "2026-09-12").known());
+        }
+    }
+
     /**
      * 认不出章号就说认不出，<b>绝不</b>猜一个出来。
      *
@@ -141,6 +240,7 @@ public class SubscribedDetailTest {
                                    int vouchers, int fire, long at, String who) {
         PurchaseRow p = new PurchaseRow();
         p.accountId = accountId;
+        p.chapterId = chapterNo * 10L;
         p.chapterNo = chapterNo;
         p.chapterTitle = title;
         p.costVouchers = vouchers;
@@ -183,8 +283,27 @@ public class SubscribedDetailTest {
     @Test
     public void aLeadingChapterNumberInTheLedgerTitleStillMatches() {
         assertTrue(SubscribedDetail.sameChapter("50   订婚事宜，梦玲失踪", "订婚事宜，梦玲失踪"));
+        assertTrue(SubscribedDetail.sameChapter("第50章 订婚事宜，梦玲失踪", "订婚事宜，梦玲失踪"));
         assertTrue("没登记标题谈不上对不上", SubscribedDetail.sameChapter(null, "订婚事宜"));
         assertFalse(SubscribedDetail.sameChapter("50   周日工作", "订婚事宜，梦玲失踪"));
+    }
+
+    @Test
+    public void anAlreadyParsedTitleKeepsItsLeadingNumbersAndChapterReferences() {
+        assertTrue(SubscribedDetail.sameChapter("第83章100天后", "100天后"));
+        assertTrue(SubscribedDetail.sameChapter("83 100天后", "100天后"));
+        assertTrue(SubscribedDetail.sameChapter("第83章 第2章的秘密", "第2章的秘密"));
+        assertTrue(SubscribedDetail.sameChapter("第68 第2章的秘密", "第2章的秘密"));
+        assertTrue(SubscribedDetail.sameChapter("100天后", "100天后"));
+        assertFalse(SubscribedDetail.sameChapter("第83章100天后", "200天后"));
+        assertFalse(SubscribedDetail.sameChapter("100天后", "200天后"));
+    }
+
+    @Test
+    public void aPartialTitleCannotStandInForADifferentCompleteTitle() {
+        assertFalse(SubscribedDetail.sameChapter("第83章 最后", "最后的约定"));
+        assertFalse(SubscribedDetail.sameChapter("第83章 最后的约定", "最后"));
+        assertFalse(SubscribedDetail.sameChapter("83 最后", "最后的约定"));
     }
 
     /**
@@ -202,17 +321,17 @@ public class SubscribedDetailTest {
     }
 
     /**
-     * 菠萝包说这一章是这个号买的、账本却记在<b>另一个号</b>名下 —— 这就是「一章两个号」，
-     * 2026-08-25 第49章那件事的形状。必须指名道姓地报出来。
+     * 2026-09-14 的真实多号订阅：其他号已有记录不能替代当前号的记录；先明确本号漏记再补。
      */
     @Test
-    public void aChapterOwnedByAnotherAccountInTheLedgerStopsTheRun() {
+    public void anotherAccountsRecordDoesNotHideTheCurrentAccountsMissingFact() {
         VoucherLedger.Audit a = audit(Arrays.asList(ui(ROW_50, "20")),
                 Arrays.asList(row(OTHER, 50, "50   订婚事宜，梦玲失踪", 20, 0,
                         NOW - 86_400_000L, "皓平")));
         assertFalse(a.message, a.ok);
         assertTrue(a.message, a.message.contains("皓平"));
         assertTrue(a.message, a.message.contains("第50章"));
+        assertTrue(a.message, a.message.contains("本号账本漏记"));
     }
 
     /**
@@ -285,6 +404,17 @@ public class SubscribedDetailTest {
         assertTrue(a.message, a.message.contains("火券"));
     }
 
+    @Test
+    public void anExplicitFireCurrencyStopsEvenWhenTheAmountIsUnreadable() {
+        SubscribedDetail.Entry fire = SubscribedDetail.parseRow(
+                ROW_50, null, "火券", "2026-08-25");
+        assertTrue(fire.fireSpent());
+        VoucherLedger.Audit audit = audit(Arrays.asList(fire),
+                Arrays.asList(mine(50, "50   订婚事宜，梦玲失踪")));
+        assertFalse(audit.message, audit.ok);
+        assertTrue(audit.message, audit.message.contains("火券"));
+    }
+
     /** 账本自己记着这一章花了火券 —— 有一边记错了。 */
     @Test
     public void fireCoinsInTheLedgerStopTheRun() {
@@ -349,6 +479,547 @@ public class SubscribedDetailTest {
         assertTrue(a.message, a.message.contains("作品相关"));
     }
 
+    private static Chapter chapter(long id, int no, String title) {
+        Chapter c = new Chapter();
+        c.id = id;
+        c.novelId = 1;
+        c.chapterNo = no;
+        c.title = title;
+        return c;
+    }
+
+    /** 聚合 2 对 0 时，完整逐章明细能精确生成两条历史补账，不会猜「前两章」。 */
+    @Test
+    public void completeRemoteDetailsCanPlanARecovery() {
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 2,
+                Arrays.asList(ui(ROW_50, "20"), ui(ROW_48, "40")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪"),
+                        chapter(480, 48, "48   滤镜破碎，总裁秘书")),
+                new ArrayList<PurchaseRow>());
+
+        assertTrue(p.message, p.ok);
+        assertEquals(2, p.purchases.size());
+        assertEquals(500, p.purchases.get(0).chapterId);
+        assertEquals(20, p.purchases.get(0).costVouchers);
+        assertEquals(Purchase.SRC_REMOTE_DETAIL, p.purchases.get(0).source);
+        assertTrue("购买日期来自远端，不能算成补账当天",
+                p.purchases.get(0).purchasedAt < System.currentTimeMillis() - 86_400_000L);
+    }
+
+    /** 聚合数、逐章数、目录标题有任何一处不能互证，就保持停机，不写半本账。 */
+    @Test
+    public void incompleteOrDriftedRemoteDetailsCannotPlanARecovery() {
+        RemoteLedgerRecovery.Plan incomplete = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 2,
+                Arrays.asList(ui(ROW_50, "20")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪")),
+                new ArrayList<PurchaseRow>());
+        assertFalse(incomplete.message, incomplete.ok);
+        assertTrue(incomplete.purchases.isEmpty());
+
+        RemoteLedgerRecovery.Plan drifted = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(ui(ROW_50, "20")),
+                Arrays.asList(chapter(500, 50, "50   完全是另一章")),
+                new ArrayList<PurchaseRow>());
+        assertFalse(drifted.message, drifted.ok);
+        assertTrue(drifted.message, drifted.message.contains("标题对不上"));
+    }
+
+    /** 同章出现两条不同的远端事实必须拒绝，不能挑第一条补账后掩盖异常扣费。 */
+    @Test
+    public void conflictingDuplicateRemoteDetailsCannotPlanARecovery() {
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(ui(ROW_50, "20"), ui(ROW_50, "40")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪")),
+                new ArrayList<PurchaseRow>());
+        assertFalse(p.message, p.ok);
+        assertTrue(p.message, p.message.contains("重复出现"));
+        assertTrue(p.purchases.isEmpty());
+    }
+
+    /** 分卷后卷内标号仍可凭标题唯一对应到正确的全书行。 */
+    @Test
+    public void aResetVolumeNumberResolvesByPrintedNumberAndTitle() {
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(SubscribedDetail.parseRow(
+                        "番外卷 第1章 番外一", "20", "代券", "2026-08-25")),
+                Arrays.asList(chapter(613, 613, "1 番外一")),
+                new ArrayList<PurchaseRow>());
+
+        assertTrue(p.message, p.ok);
+        assertEquals(613, p.purchases.get(0).chapterId);
+        assertEquals(613, p.resolved.get(0).chapter.chapterNo);
+    }
+
+    @Test
+    public void realMultiVolumeRowsResolveToGlobalChapterIds() {
+        SubscribedDetail.Entry beach = SubscribedDetail.parseRow(
+                "铃兰花 第81章 沙滩", "12", "代券", "2026-04-03");
+        SubscribedDetail.Entry chips = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 2,
+                Arrays.asList(beach, chips),
+                Arrays.asList(chapter(810, 81, "81 心脏"),
+                        chapter(820, 82, "81 沙滩"),
+                        chapter(60, 6, "6 和流浪汉见个面"),
+                        chapter(990, 99, "6 薯片")),
+                new ArrayList<PurchaseRow>());
+
+        assertTrue(p.message, p.ok);
+        assertEquals(82, p.resolved.get(0).chapter.chapterNo);
+        assertEquals(99, p.resolved.get(1).chapter.chapterNo);
+        assertEquals(820, p.purchases.get(0).chapterId);
+        assertEquals(990, p.purchases.get(1).chapterId);
+    }
+
+    @Test
+    public void resolvedAuditUsesGlobalChapterId() {
+        SubscribedDetail.Entry chips = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        Chapter global99 = chapter(990, 99, "6 薯片");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(chips), Arrays.asList(global99));
+        PurchaseRow paid = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        paid.chapterId = 990;
+
+        VoucherLedger.Audit audit = RemoteLedgerRecovery.auditResolved(WHO, BOOK, ME,
+                resolved.resolved, Arrays.asList(paid), NOW);
+        assertTrue(audit.message, audit.ok);
+        assertTrue(audit.message, audit.checked);
+        assertTrue(audit.message, audit.message.contains("第99章"));
+    }
+
+    @Test
+    public void allSevenRealTransactionsResolveToTheirGlobalChapters() {
+        List<SubscribedDetail.Entry> entries = Arrays.asList(
+                SubscribedDetail.parseRow("铃兰花 第83章 最后", "11", "代券", "2026-09-12"),
+                SubscribedDetail.parseRow("星彩 第6章 薯片", "10", "代券", "2026-09-08"),
+                SubscribedDetail.parseRow("铃兰花 第65章 薄暮", "12", "代券", "2026-09-08"),
+                SubscribedDetail.parseRow("铃兰花 第92章 初次见面", "12", "代券", "2026-09-08"),
+                SubscribedDetail.parseRow("铃兰花 第91章 花叶", "11", "代券", "2026-04-05"),
+                SubscribedDetail.parseRow("铃兰花 第81章 沙滩", "12", "代券", "2026-04-03"),
+                SubscribedDetail.parseRow("铃兰花 第71章 前夜", "10", "代券", "2026-03-30"));
+        List<Chapter> catalog = Arrays.asList(
+                chapter(650, 65, "65 薄暮"), chapter(710, 71, "71 前夜"),
+                chapter(810, 81, "81 心脏"), chapter(820, 82, "81 沙滩"),
+                chapter(830, 83, "83 最后"),
+                chapter(910, 91, "91 花叶"), chapter(920, 92, "92 初次见面"),
+                chapter(60, 6, "6 和流浪汉见个面"), chapter(990, 99, "6 薯片"));
+
+        for (boolean ordinal : new boolean[]{false, true}) {
+            if (ordinal) {
+                for (Chapter chapter : catalog) {
+                    int separator = chapter.title.indexOf(' ');
+                    chapter.title = "第" + chapter.title.substring(0, separator)
+                            + "章" + chapter.title.substring(separator);
+                }
+            }
+            RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(
+                    WHO, BOOK, ME, 7, entries, catalog, new ArrayList<PurchaseRow>());
+
+            assertTrue(plan.message, plan.ok);
+            assertEquals(7, plan.purchases.size());
+            List<Integer> global = new ArrayList<>();
+            int vouchers = 0;
+            for (RemoteLedgerRecovery.Resolved item : plan.resolved) {
+                global.add(item.chapter.chapterNo);
+            }
+            for (Purchase purchase : plan.purchases) vouchers += purchase.costVouchers;
+            java.util.Collections.sort(global);
+            assertEquals(Arrays.asList(65, 71, 82, 83, 91, 92, 99), global);
+            assertEquals(78, vouchers);
+        }
+    }
+
+    @Test
+    public void recoveryPreservesNumbersInsideAnOrdinalChapterTitle() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "铃兰花 第83章 100天后的最后 2026", "11", "代券", "2026-09-12");
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry),
+                Arrays.asList(chapter(830, 83, "第83章 100天后的最后 2026")),
+                new ArrayList<PurchaseRow>());
+
+        assertTrue(plan.message, plan.ok);
+        assertEquals(830, plan.purchases.get(0).chapterId);
+        assertEquals(11, plan.purchases.get(0).costVouchers);
+    }
+
+    @Test
+    public void resolvedAuditRejectsIncompleteMoneyAndDates() {
+        Chapter global99 = chapter(990, 99, "6 薯片");
+        PurchaseRow paid = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        paid.chapterId = 990;
+
+        String[] amounts = {null, "10", "10", "10"};
+        String[] currencies = {"代券", null, "代券", "代券"};
+        String[] dates = {"2026-09-08", "2026-09-08", null, "2026-09-07"};
+        for (int i = 0; i < amounts.length; i++) {
+            SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                    "星彩 第6章 薯片", amounts[i], currencies[i], dates[i]);
+            RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                    Arrays.asList(entry), Arrays.asList(global99));
+            VoucherLedger.Audit audit = RemoteLedgerRecovery.auditResolved(
+                    WHO, BOOK, ME, resolved.resolved, Arrays.asList(paid), NOW);
+            assertFalse(audit.message, audit.ok);
+        }
+    }
+
+    @Test
+    public void resolvedNormalAuditOnlyWarnsAboutUnreadableRowsAndFacts() {
+        Chapter global99 = chapter(990, 99, "6 薯片");
+        PurchaseRow paid = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        paid.chapterId = 990;
+        SubscribedDetail.Entry incomplete = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", null, null, null);
+        SubscribedDetail.Entry unknown = SubscribedDetail.parseRow(
+                "作品相关", "10", "代券", "2026-09-08");
+
+        VoucherLedger.Audit audit = SubscribedDetail.reconcile(WHO, ME, BOOK,
+                Arrays.asList(incomplete, unknown), Arrays.asList(global99),
+                Arrays.asList(paid), NOW);
+
+        assertTrue(audit.message, audit.ok);
+        assertFalse(audit.message, audit.checked);
+        assertTrue(audit.message, audit.message.contains("读不到"));
+        assertTrue(audit.message, audit.message.contains("作品相关"));
+    }
+
+    @Test
+    public void resolvedNormalAuditDoesNotRejectAValidPurchaseInAnotherTimezoneDay() {
+        Chapter global99 = chapter(990, 99, "6 薯片");
+        PurchaseRow paid = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-07"), WHO);
+        paid.chapterId = 990;
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+
+        VoucherLedger.Audit audit = SubscribedDetail.reconcile(WHO, ME, BOOK,
+                Arrays.asList(entry), Arrays.asList(global99), Arrays.asList(paid), NOW);
+
+        assertTrue(audit.message, audit.ok);
+        assertTrue(audit.message, audit.checked);
+    }
+
+    @Test
+    public void resolvedRecoveryAuditDoesNotUseTheFreshSyncGracePeriod() {
+        SubscribedDetail.Entry chips = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(chips), Arrays.asList(chapter(990, 99, "6 薯片")));
+        PurchaseRow unexpected = row(ME, 100, "7 下一章", 10, 0,
+                NOW - 2 * 60_000L, WHO);
+        unexpected.chapterId = 1000;
+
+        VoucherLedger.Audit audit = RemoteLedgerRecovery.auditResolved(
+                WHO, BOOK, ME, resolved.resolved, Arrays.asList(unexpected), NOW);
+
+        assertFalse(audit.message, audit.ok);
+        assertTrue(audit.message, audit.message.contains("第100章"));
+        assertFalse(audit.message, audit.message.contains("先放过"));
+    }
+
+    @Test
+    public void currentAndForeignPaidOwnersAreValidWhenCurrentRemoteFactsMatch() {
+        SubscribedDetail.Entry chips = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(chips), Arrays.asList(chapter(990, 99, "6 薯片")));
+        PurchaseRow mine = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        PurchaseRow foreign = row(OTHER, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), "皓平");
+        mine.chapterId = 990;
+        foreign.chapterId = 990;
+
+        VoucherLedger.Audit audit = RemoteLedgerRecovery.auditResolved(
+                WHO, BOOK, ME, resolved.resolved, Arrays.asList(mine, foreign), NOW);
+
+        assertTrue(audit.message, audit.ok);
+        assertTrue(audit.message, audit.checked);
+        assertTrue(audit.message, audit.message.contains("逐章都对上了"));
+    }
+
+    @Test
+    public void multipleForeignOwnersStillLeaveTheCurrentAccountToBeBackfilled() {
+        SubscribedDetail.Entry chips = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(chips), Arrays.asList(chapter(990, 99, "6 薯片")));
+        PurchaseRow first = row(OTHER, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), "皓平");
+        PurchaseRow second = row(OTHER + 1, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), "另一个号");
+        first.chapterId = 990;
+        second.chapterId = 990;
+
+        VoucherLedger.Audit audit = RemoteLedgerRecovery.auditResolved(
+                WHO, BOOK, ME, resolved.resolved, Arrays.asList(first, second), NOW);
+        assertFalse(audit.message, audit.ok);
+        assertTrue(audit.message, audit.message.contains("本号账本漏记"));
+        assertFalse(audit.message, audit.message.contains("多个其他账号"));
+    }
+
+    @Test
+    public void plannerNamesMultipleForeignPaidOwners() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        PurchaseRow first = row(OTHER, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), "甲");
+        first.chapterId = 990;
+        PurchaseRow second = row(OTHER + 1, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), "乙");
+        second.chapterId = 990;
+
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry), Arrays.asList(chapter(990, 99, "6 薯片")),
+                Arrays.asList(first, second));
+
+        assertTrue(plan.message, plan.ok);
+        assertEquals(1, plan.purchases.size());
+        assertEquals(Purchase.SRC_REMOTE_DETAIL, plan.purchases.get(0).source);
+        String note = plan.backfillNotes.get(990L);
+        assertTrue(note, note.contains("甲"));
+        assertTrue(note, note.contains("乙"));
+        assertTrue(note, note.contains("已照实补记"));
+
+        PurchaseRow restored = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        restored.source = Purchase.SRC_REMOTE_DETAIL;
+        VoucherLedger.Audit checked = RemoteLedgerRecovery.auditResolved(WHO, BOOK, ME,
+                plan.resolved, Arrays.asList(first, second, restored), NOW);
+        assertTrue(checked.message, checked.ok);
+        assertTrue(checked.message, checked.checked);
+    }
+
+    @Test
+    public void ambiguousCatalogMappingOnlyWarnsDuringRoutineAudit() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        PurchaseRow paid = row(ME, 99, "6 薯片", 10, 0,
+                RemoteLedgerRecovery.date("2026-09-08"), WHO);
+        paid.chapterId = 990;
+
+        VoucherLedger.Audit audit = SubscribedDetail.reconcile(WHO, ME, BOOK,
+                Arrays.asList(entry),
+                Arrays.asList(chapter(60, 6, "6 薯片"), chapter(990, 99, "第6章 薯片")),
+                Arrays.asList(paid), NOW);
+
+        assertTrue(audit.message, audit.ok);
+        assertFalse(audit.message, audit.checked);
+        assertTrue(audit.message, audit.message.contains("没能逐章核对"));
+    }
+
+    @Test
+    public void aLongerDistinctTitleDoesNotMakeAnExactCandidateAmbiguous() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry),
+                Arrays.asList(chapter(60, 6, "6 薯片"),
+                        chapter(990, 99, "6 薯片与可乐")),
+                new ArrayList<PurchaseRow>());
+
+        assertTrue(plan.message, plan.ok);
+        assertEquals(1, plan.purchases.size());
+        assertEquals(60, plan.purchases.get(0).chapterId);
+    }
+
+    @Test
+    public void aLongerDistinctTitleAloneCannotBeRecoveredAsTheShorterTitle() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry), Arrays.asList(chapter(990, 99, "第6章 薯片与可乐")),
+                new ArrayList<PurchaseRow>());
+
+        assertFalse(plan.message, plan.ok);
+        assertTrue(plan.purchases.isEmpty());
+    }
+
+    @Test
+    public void numberAndTitlePointingToDifferentRowsIsDiagnosed() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry), Arrays.asList(chapter(70, 7, "7 薯片")),
+                new ArrayList<PurchaseRow>());
+
+        assertFalse(plan.message, plan.ok);
+        assertTrue(plan.message, plan.message.contains("分别指向不同目录行"));
+        assertTrue(plan.purchases.isEmpty());
+    }
+
+    @Test
+    public void ambiguousPrintedNumberAndTitleCannotRecover() {
+        SubscribedDetail.Entry duplicate = SubscribedDetail.parseRow(
+                "未知卷 第6章 薯片", "10", "代券", "2026-09-08");
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(duplicate),
+                Arrays.asList(chapter(60, 6, "6 薯片"), chapter(990, 99, "6 薯片")),
+                new ArrayList<PurchaseRow>());
+
+        assertFalse(p.message, p.ok);
+        assertTrue(p.message, p.message.contains("标题对不上") || p.message.contains("不能唯一"));
+        assertTrue(p.purchases.isEmpty());
+    }
+
+    /** 严格日期格式还不够：未来日期不是已经发生的购买，不能写账或占用未来每日额度。 */
+    @Test
+    public void aFutureRemoteDateCannotPlanARecovery() {
+        java.text.SimpleDateFormat f = new java.text.SimpleDateFormat(
+                "yyyy-MM-dd", java.util.Locale.ROOT);
+        java.util.Calendar future = java.util.Calendar.getInstance();
+        future.add(java.util.Calendar.DAY_OF_YEAR, 2);
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                ROW_50, "20", "代券", f.format(future.getTime()));
+
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(entry),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪")),
+                new ArrayList<PurchaseRow>());
+
+        assertFalse(p.message, p.ok);
+        assertTrue(p.message, p.message.contains("在今天之后"));
+        assertTrue(p.purchases.isEmpty());
+    }
+
+    /** 已有账的金额和标题即使相同，日期对不上也不能把它当成同一笔历史购买。 */
+    @Test
+    public void anExistingPurchaseWithAnotherDateBlocksRecovery() {
+        PurchaseRow existing = row(ME, 50, "50   订婚事宜，梦玲失踪",
+                20, 0, NOW - 86_400_000L, WHO);
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 2,
+                Arrays.asList(ui(ROW_50, "20"), ui(ROW_48, "20")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪"),
+                        chapter(480, 48, "48   滤镜破碎，总裁秘书")),
+                Arrays.asList(existing));
+
+        assertFalse(p.message, p.ok);
+        assertTrue(p.message, p.message.contains("金额或日期"));
+        assertTrue(p.purchases.isEmpty());
+    }
+
+    /** 2026-09-14 用户确认两个号都真买过；完整明细必须补上本号，不能把历史事实拦成存疑。 */
+    @Test
+    public void anotherAccountsOwnershipAllowsRemoteRecoveryWithANeutralNote() {
+        RemoteLedgerRecovery.Plan p = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(ui(ROW_50, "20")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪")),
+                Arrays.asList(row(OTHER, 50, "50   订婚事宜，梦玲失踪", 20, 0,
+                        NOW - 86_400_000L, "皓平")));
+        assertTrue(p.message, p.ok);
+        assertEquals(1, p.purchases.size());
+        assertEquals(ME, p.purchases.get(0).accountId);
+        assertEquals(500, p.purchases.get(0).chapterId);
+        String note = p.backfillNotes.get(500L);
+        assertTrue(note, note.contains("皓平"));
+        assertTrue(note, note.contains("已照实补记"));
+        assertFalse(note, note.contains("存疑"));
+    }
+
+    @Test
+    public void aDuplicateFactForTheSameAccountStillCannotPlanRecovery() {
+        PurchaseRow duplicated = row(OTHER, 50, "50   订婚事宜，梦玲失踪", 20, 0,
+                RemoteLedgerRecovery.date("2026-08-25"), "皓平");
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                Arrays.asList(ui(ROW_50, "20")),
+                Arrays.asList(chapter(500, 50, "50   订婚事宜，梦玲失踪")),
+                Arrays.asList(duplicated, duplicated));
+        assertFalse(plan.message, plan.ok);
+        assertTrue(plan.message, plan.message.contains("同一账号有重复"));
+        assertTrue(plan.purchases.isEmpty());
+    }
+
+    private static final String EXTRA_TITLE = "藏在地下室的恶鬼（上）";
+
+    private static Chapter extra(long id, int position, String volume) {
+        Chapter chapter = chapter(id, position, EXTRA_TITLE);
+        chapter.volumeTitle = volume;
+        return chapter;
+    }
+
+    /** 标题取自2026-09-14用户节点；卷名前缀是明细格式的纯判据输入，不冒充已购番外明细 dump。 */
+    @Test
+    public void unnumberedExtraUsesTheExplicitVolumeAndFullTitleWithoutInventingANumber() {
+        Chapter extra = extra(6120, 612, "【番外】");
+        for (String volume : new String[]{"番外", "【番外】"}) {
+            SubscribedDetail.Entry raw = SubscribedDetail.parseRow(volume + " " + EXTRA_TITLE,
+                    "12", "代券", "2026-09-08");
+            assertFalse(raw.known());
+            RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                    Arrays.asList(raw), Arrays.asList(extra), new ArrayList<PurchaseRow>());
+            assertTrue(plan.message, plan.ok);
+            assertEquals(6120L, plan.purchases.get(0).chapterId);
+            assertEquals(612, plan.resolved.get(0).chapter.chapterNo);
+            assertEquals(-1, plan.resolved.get(0).entry.chapterNo);
+            assertEquals(EXTRA_TITLE, plan.resolved.get(0).entry.title);
+            assertEquals(raw.raw, plan.resolved.get(0).entry.raw);
+
+            PurchaseRow purchased = row(ME, 612, EXTRA_TITLE, 12, 0,
+                    RemoteLedgerRecovery.date("2026-09-08"), WHO);
+            VoucherLedger.Audit audit = SubscribedDetail.reconcile(WHO, ME, BOOK,
+                    Arrays.asList(raw), Arrays.asList(extra), Arrays.asList(purchased), NOW);
+            assertTrue(audit.message, audit.ok);
+            assertTrue(audit.message, audit.checked);
+            assertTrue(audit.message, audit.message.contains("第612章"));
+        }
+    }
+
+    @Test
+    public void unnumberedEntriesNeedVolumeEvidenceOnBothSidesEvenWithAUniqueTitle() {
+        SubscribedDetail.Entry withVolume = SubscribedDetail.parseRow("番外 " + EXTRA_TITLE,
+                "12", "代券", "2026-09-08");
+        SubscribedDetail.Entry withoutVolume = SubscribedDetail.parseRow(EXTRA_TITLE,
+                "12", "代券", "2026-09-08");
+        assertFalse(RemoteLedgerRecovery.resolveAll("", Arrays.asList(withoutVolume),
+                Arrays.asList(extra(6120, 612, "番外"))).ok);
+        assertFalse(RemoteLedgerRecovery.resolveAll("", Arrays.asList(withVolume),
+                Arrays.asList(extra(6120, 612, null))).ok);
+        assertFalse(RemoteLedgerRecovery.resolveAll("", Arrays.asList(withVolume),
+                Arrays.asList(extra(6120, 612, "另一卷"))).ok);
+    }
+
+    @Test
+    public void unnumberedTitlesAreMatchedByVolumeAndRemainAmbiguousWithinTheSameVolume() {
+        SubscribedDetail.Entry entry = new SubscribedDetail.Entry(-1, "番外", EXTRA_TITLE,
+                12, "代券", "2026-09-08", "番外 " + EXTRA_TITLE);
+        List<Chapter> differentVolumes = Arrays.asList(extra(6120, 612, "番外"),
+                extra(6130, 613, "另一卷"));
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(entry), differentVolumes);
+        assertTrue(resolved.message, resolved.ok);
+        assertEquals(6120L, resolved.resolved.get(0).chapter.id);
+        List<Chapter> sameVolume = Arrays.asList(extra(6120, 612, "番外"),
+                extra(6130, 613, "【番外】"));
+        RemoteLedgerRecovery.Resolution ambiguous = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(entry), sameVolume);
+        assertFalse(ambiguous.message, ambiguous.ok);
+        assertTrue(ambiguous.message, ambiguous.message.contains("2 条同卷同标题候选"));
+
+        VoucherLedger.Audit audit = SubscribedDetail.reconcile(WHO, ME, BOOK,
+                Arrays.asList(entry), sameVolume, Arrays.asList(row(ME, 612, EXTRA_TITLE, 12, 0,
+                        RemoteLedgerRecovery.date("2026-09-08"), WHO)), NOW);
+        assertTrue(audit.message, audit.ok);
+        assertFalse(audit.message, audit.checked);
+        assertTrue(audit.message, audit.message.contains("不能判断是否缺席"));
+    }
+
+    @Test
+    public void anExtraWithUncertainMoneyStillCannotBeBackfilled() {
+        for (String amount : new String[]{null, "", "读不到", "0"}) {
+            RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                    Arrays.asList(SubscribedDetail.parseRow("番外 " + EXTRA_TITLE,
+                            amount, "代券", "2026-09-08")),
+                    Arrays.asList(extra(6120, 612, "番外")), new ArrayList<PurchaseRow>());
+            assertFalse(plan.message, plan.ok);
+            assertTrue(plan.purchases.isEmpty());
+        }
+    }
+
     /** 免费章不算「花过券」，不参与逐章比对（口径和 countPaidPurchases 一致）。 */
     @Test
     public void freeChaptersAreNotCounted() {
@@ -361,6 +1032,648 @@ public class SubscribedDetailTest {
     }
 
     // ---------- 造树：明细页 ----------
+
+    private static final class PageReader implements SubscribedDetail.DetailReader {
+        private final Map<String, List<Selector>> selectors;
+        private final List<FakeNode> pages;
+        private int page;
+        private long now;
+
+        PageReader(Map<String, List<Selector>> selectors, FakeNode... pages) {
+            this.selectors = selectors;
+            this.pages = Arrays.asList(pages);
+        }
+
+        FakeNode currentRoot() {
+            return pages.get(page);
+        }
+
+        Map<String, List<Selector>> selectors() {
+            return selectors;
+        }
+
+        @Override public NodeView root() {
+            return currentRoot();
+        }
+
+        @Override public List<NodeView> findAllIn(NodeView subtree, String key) {
+            List<NodeView> out = new ArrayList<>();
+            for (Selector selector : selectors.get(key)) {
+                out.addAll(NodeMatcher.findAll(subtree, selector));
+                if (!out.isEmpty()) break;
+            }
+            return out;
+        }
+
+        @Override public boolean scrollForward() {
+            if (page + 1 >= pages.size()) return false;
+            page++;
+            return true;
+        }
+
+        @Override public void waitMillis(long millis) {
+            now += millis;
+        }
+
+        @Override public long now() {
+            return now;
+        }
+    }
+
+    private static final class SettlingReader implements SubscribedDetail.DetailReader {
+        private final Map<String, List<Selector>> selectors;
+        private final List<FakeNode> roots;
+        private int capture;
+        private long now;
+
+        SettlingReader(Map<String, List<Selector>> selectors, FakeNode... roots) {
+            this.selectors = selectors;
+            this.roots = Arrays.asList(roots);
+        }
+
+        @Override public NodeView root() {
+            FakeNode root = roots.get(Math.min(capture, roots.size() - 1));
+            capture++;
+            return root;
+        }
+
+        @Override public List<NodeView> findAllIn(NodeView subtree, String key) {
+            List<NodeView> out = new ArrayList<>();
+            for (Selector selector : selectors.get(key)) {
+                out.addAll(NodeMatcher.findAll(subtree, selector));
+                if (!out.isEmpty()) break;
+            }
+            return out;
+        }
+
+        @Override public boolean scrollForward() {
+            return false;
+        }
+
+        @Override public void waitMillis(long millis) {
+            now += millis;
+        }
+
+        @Override public long now() {
+            return now;
+        }
+    }
+
+    private static final class RepeatingScrollReader implements SubscribedDetail.DetailReader {
+        private final PageReader delegate;
+
+        RepeatingScrollReader(Map<String, List<Selector>> selectors, FakeNode root) {
+            delegate = new PageReader(selectors, root);
+        }
+
+        @Override public NodeView root() {
+            return delegate.root();
+        }
+
+        @Override public List<NodeView> findAllIn(NodeView subtree, String key) {
+            return delegate.findAllIn(subtree, key);
+        }
+
+        @Override public boolean scrollForward() {
+            return true;
+        }
+
+        @Override public void waitMillis(long millis) {
+            delegate.waitMillis(millis);
+        }
+
+        @Override public long now() {
+            return delegate.now();
+        }
+    }
+
+    private static final class DelayedScrollReader implements SubscribedDetail.DetailReader {
+        private final Map<String, List<Selector>> selectors;
+        private final FakeNode oldRoot;
+        private final FakeNode newRoot;
+        private int capturesAfterScroll;
+        private boolean scrolled;
+        private long now;
+
+        DelayedScrollReader(Map<String, List<Selector>> selectors,
+                            FakeNode oldRoot, FakeNode newRoot) {
+            this.selectors = selectors;
+            this.oldRoot = oldRoot;
+            this.newRoot = newRoot;
+        }
+
+        @Override public NodeView root() {
+            if (!scrolled || capturesAfterScroll++ < 3) return oldRoot;
+            return newRoot;
+        }
+
+        @Override public List<NodeView> findAllIn(NodeView subtree, String key) {
+            List<NodeView> out = new ArrayList<>();
+            for (Selector selector : selectors.get(key)) {
+                out.addAll(NodeMatcher.findAll(subtree, selector));
+                if (!out.isEmpty()) break;
+            }
+            return out;
+        }
+
+        @Override public boolean scrollForward() {
+            if (scrolled) return false;
+            scrolled = true;
+            return true;
+        }
+
+        @Override public void waitMillis(long millis) {
+            now += millis;
+        }
+
+        @Override public long now() {
+            return now;
+        }
+    }
+
+    private static FakeNode transaction(String desc, String amount, int top) {
+        return FakeNode.node().withBounds(0, top, 1080, top + 220).add(
+                FakeNode.text(desc).withId("com.sfacg:id/tvDesc")
+                        .withBounds(110, top + 20, 650, top + 130),
+                FakeNode.text(amount).withBounds(803, top + 30, 917, top + 90),
+                FakeNode.text("代券").withBounds(803, top + 100, 917, top + 160));
+    }
+
+    private static FakeNode date(String value, int top) {
+        return FakeNode.text(value).withId("com.sfacg:id/tvTime")
+                .withBounds(425, top, 655, top + 45);
+    }
+
+    @Test
+    public void waitsForTwoMatchingCompleteSnapshots() throws Exception {
+        FakeNode transientPage = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260));
+        FakeNode settled = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new SettlingReader(bundled(), transientPage, settled, settled, settled));
+
+        assertEquals(2, entries.size());
+        assertEquals(6, entries.get(0).chapterNo);
+        assertEquals(65, entries.get(1).chapterNo);
+        assertEquals("2026-09-08", entries.get(1).date);
+    }
+
+    @Test
+    public void settlingTimeoutRejectsAnUnstableRoot() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260));
+        List<FakeNode> roots = new ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            roots.add(FakeNode.node().add(date(String.format(java.util.Locale.ROOT,
+                            "2026-09-%02d", i + 1), 200),
+                    transaction("铃兰花 第" + (65 + i) + "章 临时", "12", 500)));
+        }
+        try {
+            FakeNode[] snapshots = new FakeNode[roots.size() + 1];
+            snapshots[0] = first;
+            for (int i = 0; i < roots.size(); i++) snapshots[i + 1] = roots.get(i);
+            SubscribedDetail.collect(new SettlingReader(bundled(), snapshots));
+        } catch (StepRunner.StepFailure e) {
+            assertEquals(StepRunner.Kind.TIMEOUT, e.kind);
+            return;
+        }
+        throw new AssertionError("从未稳定的明细屏不能作为补账事实");
+    }
+
+    @Test
+    public void aStableEmptyRootIsNotAcceptedAsACompleteLedger() throws Exception {
+        FakeNode empty = FakeNode.node();
+        FakeNode loaded = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new SettlingReader(bundled(), empty, empty, empty, loaded, loaded, loaded));
+
+        assertEquals(1, entries.size());
+        assertEquals(6, entries.get(0).chapterNo);
+    }
+
+    @Test
+    public void postScrollWaitsUntilTheAccessibilityTreeLeavesTheOldScreen() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300),
+                transaction("铃兰花 第65章 薄暮", "12", 600));
+        FakeNode second = FakeNode.node().add(date("2026-04-05", 100),
+                transaction("铃兰花 第91章 花叶", "11", 300));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new DelayedScrollReader(bundled(), first, second));
+
+        assertEquals(3, entries.size());
+        assertEquals(91, entries.get(2).chapterNo);
+        assertEquals("2026-04-05", entries.get(2).date);
+    }
+
+    @Test
+    public void unchangedPostScrollScreenAddsNoDuplicateRows() throws Exception {
+        FakeNode page = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300),
+                transaction("铃兰花 第65章 薄暮", "12", 600));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new RepeatingScrollReader(bundled(), page));
+
+        assertEquals(2, entries.size());
+    }
+
+    @Test
+    public void groupedDateAppliesToEveryFollowingCard() throws Exception {
+        FakeNode page = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500),
+                transaction("铃兰花 第92章 初次见面", "12", 740),
+                date("2026-04-05", 980),
+                transaction("铃兰花 第91章 花叶", "11", 1040));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), page));
+
+        assertEquals(4, entries.size());
+        assertEquals("2026-09-08", entries.get(0).date);
+        assertEquals("2026-09-08", entries.get(1).date);
+        assertEquals("2026-09-08", entries.get(2).date);
+        assertEquals("2026-04-05", entries.get(3).date);
+    }
+
+    @Test
+    public void groupedDatesUseCoordinatesNotTreeOrder() throws Exception {
+        FakeNode page = FakeNode.node().add(
+                transaction("铃兰花 第91章 花叶", "11", 1040),
+                transaction("星彩 第6章 薯片", "10", 260),
+                date("2026-04-05", 980),
+                date("2026-09-08", 200));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), page));
+
+        assertEquals(2, entries.size());
+        assertEquals(6, entries.get(0).chapterNo);
+        assertEquals("2026-09-08", entries.get(0).date);
+        assertEquals(91, entries.get(1).chapterNo);
+        assertEquals("2026-04-05", entries.get(1).date);
+    }
+
+    @Test
+    public void anInvisibleDateCannotAuthorizeARecovery() throws Exception {
+        FakeNode page = FakeNode.node().add(
+                date("2026-09-08", 0).withBounds(0, 0, 0, 0),
+                transaction("星彩 第6章 薯片", "10", 260));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), page));
+
+        assertEquals(1, entries.size());
+        assertNull(entries.get(0).date);
+    }
+
+    @Test
+    public void anInvisibleNonzeroDateCannotAuthorizeARecovery() throws Exception {
+        FakeNode page = FakeNode.node().add(
+                date("2026-09-08", 100).visible(false),
+                transaction("星彩 第6章 薯片", "10", 260));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), page));
+
+        assertEquals(1, entries.size());
+        assertNull(entries.get(0).date);
+    }
+
+    @Test
+    public void conflictingCrossScreenDatesRemainTwoFacts() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260));
+        FakeNode second = FakeNode.node().add(date("2026-09-07", 120),
+                transaction("星彩 第6章 薯片", "10", 260));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(2, entries.size());
+        RemoteLedgerRecovery.Plan plan = RemoteLedgerRecovery.plan(WHO, BOOK, ME, 1,
+                entries, Arrays.asList(chapter(990, 99, "6 薯片")),
+                new ArrayList<PurchaseRow>());
+        assertFalse(plan.message, plan.ok);
+        assertTrue(plan.message, plan.message.contains("重复出现"));
+    }
+
+    @Test
+    public void identicalCardAtTheSamePositionDoesNotProveScrollContinuity() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 200),
+                transaction("星彩 第6章 薯片", "10", 260));
+        FakeNode samePosition = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, samePosition));
+
+        assertEquals(3, entries.size());
+        assertEquals(6, entries.get(0).chapterNo);
+        assertEquals(6, entries.get(1).chapterNo);
+        assertNull("相同位置的同文卡片不能证明列表真的滚动过", entries.get(1).date);
+        assertNull(entries.get(2).date);
+    }
+
+    @Test
+    public void realSevenPlusThreeHeaderlessOverlapsRemainSevenFacts() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-12", 80),
+                transaction("铃兰花 第83章 最后", "11", 140),
+                date("2026-09-08", 380),
+                transaction("星彩 第6章 薯片", "10", 440),
+                transaction("铃兰花 第65章 薄暮", "12", 680),
+                transaction("铃兰花 第92章 初次见面", "12", 920),
+                date("2026-04-05", 1160),
+                transaction("铃兰花 第91章 花叶", "11", 1220),
+                date("2026-04-03", 1460),
+                transaction("铃兰花 第81章 沙滩", "12", 1520),
+                date("2026-03-30", 1760),
+                transaction("铃兰花 第71章 前夜", "10", 1820));
+        FakeNode second = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 180),
+                transaction("铃兰花 第65章 薄暮", "12", 430),
+                transaction("铃兰花 第92章 初次见面", "12", 670));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(7, entries.size());
+        for (SubscribedDetail.Entry entry : entries) assertNotNull(entry.date);
+    }
+
+    @Test
+    public void inheritedDateOnlyAppliesToTheProvenOverlappingRows() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+        FakeNode second = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 200),
+                transaction("铃兰花 第65章 薄暮", "12", 440),
+                transaction("铃兰花 第92章 初次见面", "12", 680));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        SubscribedDetail.Entry newRow = null;
+        for (SubscribedDetail.Entry entry : entries) {
+            if (entry.chapterNo == 92) newRow = entry;
+        }
+        assertNotNull(newRow);
+        assertNull("新出现的卡片没有直接跨屏日期证据，不能继承旧组日期", newRow.date);
+    }
+
+    @Test
+    public void blankVisibleDateHeaderBlocksCrossScreenInheritance() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+        FakeNode second = FakeNode.node().add(
+                FakeNode.text("   ").withId("com.sfacg:id/tvTime")
+                        .withBounds(425, 100, 655, 145),
+                transaction("星彩 第6章 薯片", "10", 200),
+                transaction("铃兰花 第65章 薄暮", "12", 440));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(4, entries.size());
+        assertNull("可见但读不出文字的日期标题不能继承上一屏日期", entries.get(2).date);
+        assertNull(entries.get(3).date);
+    }
+
+    @Test
+    public void carriedDateNeedsTwoStableOverlappingTransactions() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+        FakeNode overlap = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 200),
+                transaction("铃兰花 第65章 薄暮", "12", 440),
+                transaction("铃兰花 第92章 初次见面", "12", 680));
+        List<SubscribedDetail.Entry> continuous = SubscribedDetail.collect(
+                new PageReader(bundled(), first, overlap));
+        assertEquals(3, continuous.size());
+        assertEquals(92, continuous.get(2).chapterNo);
+        assertNull(continuous.get(2).date);
+
+        FakeNode onlyOneAnchor = FakeNode.node().add(
+                transaction("铃兰花 第65章 薄暮", "12", 440),
+                transaction("铃兰花 第92章 初次见面", "12", 680));
+        List<SubscribedDetail.Entry> uncertain = SubscribedDetail.collect(
+                new PageReader(bundled(), first, onlyOneAnchor));
+        assertEquals(4, uncertain.size());
+        assertNull("只有一条同文卡片不能证明它就是上一屏同一笔交易", uncertain.get(2).date);
+        assertNull(uncertain.get(3).date);
+    }
+
+    @Test
+    public void twoOrderedAnchorsMayMoveBySlightlyDifferentDistances() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300),
+                transaction("铃兰花 第65章 薄暮", "12", 600));
+        FakeNode second = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 180),
+                transaction("铃兰花 第65章 薄暮", "12", 470));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(2, entries.size());
+        assertEquals("2026-09-08", entries.get(0).date);
+        assertEquals("2026-09-08", entries.get(1).date);
+    }
+
+    @Test
+    public void repeatedIdentityCannotProveCrossScreenContinuity() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("星彩 第6章 薯片", "10", 500),
+                transaction("铃兰花 第65章 薄暮", "12", 740));
+        FakeNode second = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 200),
+                transaction("铃兰花 第65章 薄暮", "12", 440));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(5, entries.size());
+        assertNull(entries.get(3).date);
+        assertNull(entries.get(4).date);
+    }
+
+    @Test
+    public void reversedRowsCannotProveCrossScreenContinuity() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300),
+                transaction("铃兰花 第65章 薄暮", "12", 600));
+        FakeNode second = FakeNode.node().add(
+                transaction("铃兰花 第65章 薄暮", "12", 180),
+                transaction("星彩 第6章 薯片", "10", 470));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(4, entries.size());
+        assertNull(entries.get(2).date);
+        assertNull(entries.get(3).date);
+    }
+
+    @Test
+    public void overlapUsesOnlyTheActuallyMatchedPrefix() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 80),
+                transaction("A卷 第1章 A", "10", 300),
+                transaction("A卷 第2章 B", "10", 600),
+                transaction("A卷 第3章 C", "10", 900),
+                date("2026-04-05", 1160),
+                transaction("A卷 第4章 D", "10", 1220));
+        FakeNode second = FakeNode.node().add(
+                transaction("A卷 第2章 B", "10", 180),
+                transaction("A卷 第3章 C", "10", 470),
+                transaction("A卷 第5章 X", "10", 760));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(5, entries.size());
+        SubscribedDetail.Entry x = null;
+        for (SubscribedDetail.Entry entry : entries) if (entry.chapterNo == 5) x = entry;
+        assertNotNull(x);
+        assertNull("只匹配 B/C；新卡 X 不能冒充旧卡 D 并继承其日期", x.date);
+    }
+
+    @Test
+    public void inheritedDatesDoNotRelayToANewRowOnTheNextScreen() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("A卷 第1章 A", "10", 260),
+                transaction("A卷 第2章 B", "10", 500));
+        FakeNode second = FakeNode.node().add(
+                transaction("A卷 第1章 A", "10", 200),
+                transaction("A卷 第2章 B", "10", 440),
+                transaction("A卷 第3章 X", "10", 680));
+        FakeNode third = FakeNode.node().add(
+                transaction("A卷 第2章 B", "10", 180),
+                transaction("A卷 第3章 X", "10", 420));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second, third));
+
+        SubscribedDetail.Entry x = null;
+        for (SubscribedDetail.Entry entry : entries) if (entry.chapterNo == 3) x = entry;
+        assertNotNull(x);
+        assertNull("X 首次出现时没有日期；下一屏也不能借 B 的旧日期污染它", x.date);
+    }
+
+    @Test
+    public void directHeaderSurvivesTheOverlapBoundaryForNewRows() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 80),
+                transaction("A卷 第1章 A", "10", 300),
+                transaction("A卷 第2章 B", "10", 600));
+        FakeNode second = FakeNode.node().add(date("2026-04-05", 100),
+                transaction("A卷 第1章 A", "10", 200),
+                transaction("A卷 第2章 B", "10", 440),
+                transaction("A卷 第3章 C", "10", 680));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(5, entries.size());
+        assertEquals("2026-04-05", entries.get(4).date);
+    }
+
+    @Test
+    public void aHeaderInsideTheOverlapPreservesConflictingFacts() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("A卷 第1章 A", "10", 300),
+                transaction("A卷 第2章 B", "10", 600),
+                transaction("A卷 第3章 C", "10", 900));
+        FakeNode second = FakeNode.node().add(
+                transaction("A卷 第1章 A", "10", 180),
+                date("2026-04-05", 400),
+                transaction("A卷 第2章 B", "10", 470),
+                transaction("A卷 第3章 C", "10", 760));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(5, entries.size());
+        assertEquals("2026-04-05", entries.get(3).date);
+        assertEquals("2026-04-05", entries.get(4).date);
+    }
+
+    @Test
+    public void repeatedCurrentHeaderStillDeduplicatesTheSameMovedCards() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("A卷 第1章 A", "10", 300),
+                transaction("A卷 第2章 B", "10", 600));
+        FakeNode second = FakeNode.node().add(date("2026-09-08", 80),
+                transaction("A卷 第1章 A", "10", 180),
+                transaction("A卷 第2章 B", "10", 470));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second));
+
+        assertEquals(2, entries.size());
+    }
+
+    @Test
+    public void identicalFactsOnTheSameScreenAreNotCollapsed() throws Exception {
+        FakeNode page = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("星彩 第6章 薯片", "10", 500));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), page));
+
+        assertEquals(2, entries.size());
+    }
+
+    @Test
+    public void inheritedEvidenceMayFollowOnlyTheSameProvenCard() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 300),
+                transaction("铃兰花 第65章 薄暮", "12", 600),
+                transaction("铃兰花 第92章 初次见面", "12", 900));
+        FakeNode second = FakeNode.node().add(
+                transaction("铃兰花 第65章 薄暮", "12", 300),
+                transaction("铃兰花 第92章 初次见面", "12", 600));
+        FakeNode third = FakeNode.node().add(
+                transaction("铃兰花 第65章 薄暮", "12", 180),
+                transaction("铃兰花 第92章 初次见面", "12", 470));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second, third));
+
+        assertEquals(3, entries.size());
+        assertEquals("2026-09-08", entries.get(1).date);
+        assertEquals("2026-09-08", entries.get(2).date);
+    }
+
+    @Test
+    public void newRowsStillCannotReceiveAProvenDateAcrossTwoScreens() throws Exception {
+        FakeNode first = FakeNode.node().add(date("2026-09-08", 100),
+                transaction("星彩 第6章 薯片", "10", 260),
+                transaction("铃兰花 第65章 薄暮", "12", 500));
+        FakeNode second = FakeNode.node().add(
+                transaction("星彩 第6章 薯片", "10", 200),
+                transaction("铃兰花 第65章 薄暮", "12", 440),
+                transaction("铃兰花 第92章 初次见面", "12", 680));
+        FakeNode third = FakeNode.node().add(
+                transaction("铃兰花 第65章 薄暮", "12", 200),
+                transaction("铃兰花 第92章 初次见面", "12", 440),
+                transaction("铃兰花 第91章 花叶", "11", 680));
+
+        List<SubscribedDetail.Entry> entries = SubscribedDetail.collect(
+                new PageReader(bundled(), first, second, third));
+
+        SubscribedDetail.Entry flower = null;
+        for (SubscribedDetail.Entry entry : entries) {
+            if (entry.chapterNo == 91) flower = entry;
+        }
+        assertNotNull(flower);
+        assertNull("新出现的卡片不是重叠段的一部分，不能获得中继日期", flower.date);
+    }
 
     /** 明细里的一条，按 2026-08-25 真机 dump：tvTime 日期、tvDesc 正文、右侧无 id 的金额与币种。 */
     private static FakeNode detailRow(String date, String desc, String amount, int top) {

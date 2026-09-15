@@ -5,9 +5,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
 
+import com.example.blb.auto.AccessibilityAccess;
 import com.example.blb.auto.AutomationBus;
 import com.example.blb.auto.AutomationService;
 import com.example.blb.auto.BlbAccessibilityService;
+import com.example.blb.auto.InspectorCapture;
 import com.example.blb.auto.Keys;
 import com.example.blb.auto.SelectorSet;
 import com.example.blb.auto.SubscribeRun;
@@ -24,35 +26,41 @@ import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 import com.example.blb.work.DailyScheduler;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * 不用碰屏幕的总控（<b>只存在于 debug 构建</b>）：开关每日定时、当场跑一趟、
+ * 不用碰屏幕的总控（<b>只存在于 debug 构建</b>）：开关每日定时、当场只签到、
  * 一条命令问出「现在到底怎么样了」。
  *
  * <p>为什么它是这个 App 的必需件而不是调试玩具：使用者是渐冻症患者，手指动不了。
- * 「每日自动签到」是设置页上一颗开关、「跑今天的流程」是首页一颗按钮 —— 这两样他都按不了。
- * 也就是说在有这个接收器之前，这个 App 只能靠旁人替他按才跑得起来。adb 广播是他唯一按得动的按钮。
+ * 开关定时、查看日志和单独签到都需要点按，adb 广播为这些操作提供可用入口。
+ * 2026-09-14 反馈要求整套流程只留签到页和定时任务，所以这里不再另开整套入口。
  *
- * <p>它<b>不碰账本</b>：只写 SharedPreferences（开关）和启动队列，一条购买记录都不动。
+ * <p>它<b>不直接写账本</b>：开关写 SharedPreferences、运行入口启动队列；只读取证另存私有文本。
  *
  * <pre>
  * # 现在怎么样了（只读，什么都不改）
  * adb shell am broadcast -a com.example.blb.debug.STATUS -p com.example.blb
+ *
+ * # 菠萝包停在目标目录页时，只读抓取当前页全部行结构；不会翻页或购买
+ * adb shell am broadcast -a com.example.blb.debug.CAPTURE_CATALOG_ROWS -p com.example.blb
+ * adb exec-out run-as com.example.blb cat files/catalog-row-evidence.txt
  *
  * # 每日定时：开、关、改时间（跟设置页那颗开关是同一份状态）
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on true
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on true --ei hour 9
  * adb shell am broadcast -a com.example.blb.debug.SCHEDULE -p com.example.blb --ez on false
  *
- * # 立刻跑一趟（不等定时）：整套流程／只签到
- * adb shell am broadcast -a com.example.blb.debug.DAILY_NOW -p com.example.blb
+ * # 立刻只签到（不等定时）
  * adb shell am broadcast -a com.example.blb.debug.CHECKIN_NOW -p com.example.blb
  * adb logcat -s BlbControl:* BlbAuto:*
  *
  * # 把某一个二级页面拉到前台看（他看得见、只是按不动）
  * adb shell am broadcast -a com.example.blb.debug.SHOW_PAGE -p com.example.blb --es page log
- * #   page = notice｜today｜log｜stats｜chapters，不带就默认 log
+ * #   page = today｜log｜stats｜chapters，不带就默认 log
  *
  * # 切到某个号（＝章节列表点一下那一行）：按 id，或者「买过目标书第 N 章的那个号」
  * adb shell am broadcast -a com.example.blb.debug.SWITCH_TO -p com.example.blb --el id 3
@@ -65,10 +73,10 @@ public class ControlReceiver extends BroadcastReceiver {
 
     private static final String ACTION_STATUS = "com.example.blb.debug.STATUS";
     private static final String ACTION_SCHEDULE = "com.example.blb.debug.SCHEDULE";
-    private static final String ACTION_DAILY_NOW = "com.example.blb.debug.DAILY_NOW";
     private static final String ACTION_CHECKIN_NOW = "com.example.blb.debug.CHECKIN_NOW";
     private static final String ACTION_SHOW_PAGE = "com.example.blb.debug.SHOW_PAGE";
     private static final String ACTION_SWITCH_TO = "com.example.blb.debug.SWITCH_TO";
+    private static final String ACTION_CAPTURE_CATALOG_ROWS = "com.example.blb.debug.CAPTURE_CATALOG_ROWS";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -80,10 +88,10 @@ public class ControlReceiver extends BroadcastReceiver {
             try {
                 if (ACTION_STATUS.equals(action)) status(app);
                 else if (ACTION_SCHEDULE.equals(action)) schedule(app, intent);
-                else if (ACTION_DAILY_NOW.equals(action)) runNow(app, true);
-                else if (ACTION_CHECKIN_NOW.equals(action)) runNow(app, false);
+                else if (ACTION_CHECKIN_NOW.equals(action)) runCheckInNow(app);
                 else if (ACTION_SHOW_PAGE.equals(action)) showPage(app, intent);
                 else if (ACTION_SWITCH_TO.equals(action)) switchTo(app, intent);
+                else if (ACTION_CAPTURE_CATALOG_ROWS.equals(action)) captureCatalogRows(app);
                 else Log.w(TAG, "不认识的动作：" + action);
             } catch (Throwable t) {
                 Log.e(TAG, "总控失败", t);
@@ -93,13 +101,52 @@ public class ControlReceiver extends BroadcastReceiver {
         }, "blb-control").start();
     }
 
+    /**
+     * 2026-09-14 只有总章数/跳过行数不足以判定番外与卷名；保留现场原文供并排比对。
+     * 这里只读当前菠萝包窗口，不恢复授权、不切页、不滚动、不碰数据库。
+     */
+    private void captureCatalogRows(Context app) throws IOException {
+        String content;
+        try {
+            InspectorCapture.Snapshot snapshot = InspectorCapture.captureNow(app);
+            if (snapshot == null) {
+                content = "采集时间（Unix 毫秒）=" + System.currentTimeMillis()
+                        + "\n目录行结构取证未成功。当前页已读到行数=-1。\n"
+                        + "无障碍未连接、菠萝包不在前台或根节点未读取；本次没有目录节点证据。\n";
+            } else {
+                content = snapshot.content;
+            }
+        } catch (RuntimeException failure) {
+            content = "采集时间（Unix 毫秒）=" + System.currentTimeMillis()
+                    + "\n目录行结构取证未成功。当前页已读到行数=-1。\n读取失败："
+                    + failure.getClass().getSimpleName() + "\n";
+        }
+        // 失败也覆盖为明确的失败记录，避免上一次的成功文件被误认为这次现场。
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        try (OutputStream out = app.openFileOutput("catalog-row-evidence.txt", Context.MODE_PRIVATE)) {
+            out.write(bytes);
+        }
+        Log.i(TAG, "目录行取证已保存 files/catalog-row-evidence.txt，UTF-8 字节数=" + bytes.length);
+        logVerbatimChunks(content);
+    }
+
+    private static void logVerbatimChunks(String text) {
+        // 长中文标题按 800 个 UTF-16 字符分段，单段 UTF-8 不超过日志容量；不 trim、不截断原文。
+        for (int start = 0; start < text.length();) {
+            int end = Math.min(text.length(), start + 800);
+            if (end < text.length() && Character.isHighSurrogate(text.charAt(end - 1))) end--;
+            Log.i(TAG, "目录证据字符范围 [" + start + ", " + end + ")\n" + text.substring(start, end));
+            start = end;
+        }
+    }
+
     // ---------- 把某一页拉到前台 ----------
 
     /**
      * 打开一个二级页面。
      *
-     * <p>为什么这条命令是必需的：今日状态、运行日志、各账号累计、已登记章节、辅助点击说明
-     * 这五样各占一整屏（原来它们在一级页面上被挤成两行／半屏／120dp），可要看得点一下 ——
+     * <p>为什么这条命令是必需的：今日状态、运行日志、各账号累计、已登记章节
+     * 各占一整屏（原来它们在一级页面上被挤成两行／半屏／120dp），可要看得点一下 ——
      * 用户手指动不了，点不了。他看得见屏幕，所以「替他把某一页打开」正好补上这一环。
      */
     private void showPage(Context app, Intent intent) {
@@ -142,8 +189,10 @@ public class ControlReceiver extends BroadcastReceiver {
             Log.w(TAG, "没有 id=" + id + " 这个账号（用 STATUS 看现有的 id）");
             return;
         }
-        if (!BlbAccessibilityService.isReady()) {
-            Log.w(TAG, "无障碍服务没连上，切不了号（重装会把它踢掉，要用 adb 重新打开）");
+        if (AccessibilityAccess.state(app) == AccessibilityAccess.State.DISABLED
+                && AccessibilityAccess.restoreIfAuthorized(app)
+                == AccessibilityAccess.RestoreResult.NOT_AUTHORIZED) {
+            Log.w(TAG, "系统无障碍开关已关闭且没有托管恢复权限，切不了号");
             return;
         }
         if (AutomationBus.isRunning()) {
@@ -178,7 +227,7 @@ public class ControlReceiver extends BroadcastReceiver {
             if (Purchase.SRC_OWNED.equals(p.source)) devices++;
             else if (found == 0) found = p.accountId;
             else {
-                Log.w(TAG, "第" + chapterNo + "章有多个号买过（账本里是要修的错），"
+                Log.w(TAG, "第" + chapterNo + "章有多个号买过，"
                         + "这条命令不替你猜；用 --el id 指名要切哪个");
                 return 0;
             }
@@ -208,9 +257,9 @@ public class ControlReceiver extends BroadcastReceiver {
         }
         DailyScheduler.apply(app);
         Log.i(TAG, describeSchedule(app));
-        if (Prefs.isDailyEnabled(app) && !BlbAccessibilityService.isReady()) {
-            Log.w(TAG, "但无障碍服务现在没连上 —— 到点也跑不了。"
-                    + "重装 App 会把它踢掉，必须用 adb 重新打开并确认 Bound。");
+        if (Prefs.isDailyEnabled(app)
+                && AccessibilityAccess.state(app) != AccessibilityAccess.State.CONNECTED) {
+            Log.w(TAG, "无障碍服务现在没连上；系统开关和托管权限状态见 STATUS。");
         }
     }
 
@@ -231,26 +280,20 @@ public class ControlReceiver extends BroadcastReceiver {
      * <p>走的是 {@link AutomationService}，和首页那颗按钮完全同一条路 —— 包括整趟点着屏幕
      * （无障碍的点击只对亮着的屏幕有效）和被系统杀掉后自动接着跑的那套。
      */
-    private void runNow(Context app, boolean daily) {
-        if (!BlbAccessibilityService.isReady()) {
-            Log.w(TAG, "无障碍服务没连上，跑不了。用 adb 重新打开它（重装会把它踢掉）：\n"
-                    + "  adb shell settings put secure enabled_accessibility_services "
-                    + "com.example.blb/com.example.blb.auto.BlbAccessibilityService\n"
-                    + "  adb shell settings put secure accessibility_enabled 1");
+    private void runCheckInNow(Context app) {
+        if (AccessibilityAccess.state(app) == AccessibilityAccess.State.DISABLED
+                && AccessibilityAccess.restoreIfAuthorized(app)
+                == AccessibilityAccess.RestoreResult.NOT_AUTHORIZED) {
+            Log.w(TAG, "系统无障碍开关已关闭，且没有托管恢复权限。照护者执行一次：\n"
+                    + "  adb shell pm grant com.example.blb android.permission.WRITE_SECURE_SETTINGS");
             return;
         }
         if (AutomationBus.isRunning()) {
             Log.w(TAG, "已经有一趟在跑了，这次什么都不做（免得两趟互相抢界面）");
             return;
         }
-        if (daily) {
-            Log.i(TAG, "开始跑整套流程（签到 → 广告 → 券够就订阅）。"
-                    + "屏幕要亮着且已解锁；进度看 adb logcat -s BlbAuto");
-            AutomationService.startDaily(app);
-        } else {
-            Log.i(TAG, "开始跑签到队列（只签到，不看广告不订阅）");
-            AutomationService.startCheckIn(app);
-        }
+        Log.i(TAG, "开始跑签到队列（只签到，不订阅）");
+        AutomationService.startCheckIn(app);
     }
 
     // ---------- 现在怎么样了 ----------
@@ -258,8 +301,11 @@ public class ControlReceiver extends BroadcastReceiver {
     /** 一条命令回答「这个 App 现在准备好了吗、今天做了什么、下一步会做什么」。只读。 */
     private void status(Context app) {
         Log.i(TAG, "===== 现在的状态（" + Texts.todayYmd() + "）=====");
-        Log.i(TAG, "无障碍服务：" + (BlbAccessibilityService.isReady()
-                ? "已连上（能读能点）" : "没连上 —— 什么都跑不了，要用 adb 重新打开"));
+        AccessibilityAccess.State a11y = AccessibilityAccess.state(app);
+        Log.i(TAG, "无障碍服务：系统开关="
+                + (a11y == AccessibilityAccess.State.DISABLED ? "关" : "开")
+                + "，当前连接=" + BlbAccessibilityService.isConnected()
+                + "，托管恢复权限=" + AccessibilityAccess.canRestore(app));
         Log.i(TAG, describeSchedule(app));
         Log.i(TAG, "队列：" + (AutomationBus.isRunning() ? "正在跑" : "空闲"));
 
@@ -273,10 +319,6 @@ public class ControlReceiver extends BroadcastReceiver {
                 + "不限章数（实付里出现火券一律当买不起，绝不替你花火券）");
         Log.i(TAG, "每号每日代券上限：" + (Prefs.dailySpendCap(app) == 0
                 ? "不限" : Prefs.dailySpendCap(app) + " 代券"));
-        Log.i(TAG, "广告：每号每天 " + Prefs.adsPerAccount(app) + " 个"
-                + (Prefs.isAdAssist(app) ? "，按键由脚本替你按（视频照原速播给你看）"
-                : "，只提醒、每个都等你自己点")
-                + (Prefs.isAdJump(app) ? "；跳转键也替你按" : "；跳转键不按"));
 
         statusAccounts(app);
         statusNovel(app);
@@ -299,9 +341,7 @@ public class ControlReceiver extends BroadcastReceiver {
             if (a.enabled && a.lastKnownVouchers > 0) vouchers += a.lastKnownVouchers;
             Log.i(TAG, "  id=" + a.id + (a.enabled ? " [启用] " : " [停用] ") + a.displayName()
                     + " " + a.balanceText()
-                    + "｜今天：" + (today == null ? "还没跑" : today.status)
-                    + "，广告已看 " + (today == null ? 0 : today.adsWatched)
-                    + (today != null && today.adAvailable ? "（还有没领的）" : ""));
+                    + "｜今天：" + (today == null ? "还没跑" : today.status));
         }
         Log.i(TAG, "  今天已签到 " + signed + "/" + enabled + " 个号；"
                 + "启用账号手上一共约 " + vouchers + " 代券（上次读到的数）");

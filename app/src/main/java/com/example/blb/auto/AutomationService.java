@@ -9,9 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
-import android.os.PowerManager;
-import android.text.TextUtils;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -33,6 +33,8 @@ public class AutomationService extends Service implements StepRunner.Host {
 
     public static final String ACTION_RUN_CHECKIN = "com.example.blb.action.RUN_CHECKIN";
     public static final String ACTION_RUN_SUBSCRIBE = "com.example.blb.action.RUN_SUBSCRIBE";
+    public static final String ACTION_RUN_CATALOG = "com.example.blb.action.RUN_CATALOG";
+    public static final String ACTION_RUN_AUDIT = "com.example.blb.action.RUN_AUDIT";
     public static final String ACTION_RUN_DAILY = "com.example.blb.action.RUN_DAILY";
     /** 只切号，什么都不买，见 {@link SwitchAccountQueue}。 */
     public static final String ACTION_SWITCH_ACCOUNT = "com.example.blb.action.SWITCH_ACCOUNT";
@@ -55,8 +57,6 @@ public class AutomationService extends Service implements StepRunner.Host {
     public static final String CHANNEL_ID = "blb_auto";
     private static final int NOTIF_ID = 1001;
     private static final String TAG = "BlbAuto";
-    /** 屏幕锁的保险丝：一趟 8 个号最多也就十几分钟，两小时是防「忘了放」用的。 */
-    private static final long SCREEN_LOCK_LIMIT_MS = 2 * 60 * 60 * 1000L;
     /**
      * 开跑前等无障碍服务连上来的时间。系统把被杀掉的无障碍服务排在 30 s 后重启
      * （{@code … BlbAccessibilityService in 30000ms for connection}），而队列自己 10 s 就回来了，
@@ -68,7 +68,8 @@ public class AutomationService extends Service implements StepRunner.Host {
 
     /** 队列类型。通知标题和收尾文案都跟着它走，别让订阅跑完弹「签到任务结束」。 */
     private enum Mode {
-        CHECK_IN("签到"), SUBSCRIBE("集中订阅"), DAILY("每日流程"), SWITCH("切换账号");
+        CHECK_IN("签到"), SUBSCRIBE("集中订阅"), CATALOG("同步目录"), AUDIT("核对清单"),
+        DAILY("每日流程"), SWITCH("切换账号");
 
         final String label;
 
@@ -80,10 +81,8 @@ public class AutomationService extends Service implements StepRunner.Host {
     private Thread worker;
     private String lastLine = "准备中…";
     private Mode mode = Mode.CHECK_IN;
-    /** 这一趟要切到哪个号（只有 {@link Mode#SWITCH} 用得上）。 */
-    private long switchAccountId;
-    /** 整趟任务期间点着屏幕的那把锁，见 {@link #acquireScreenLock}。 */
-    private PowerManager.WakeLock screenLock;
+    private volatile boolean destroyed;
+    private ScreenAwake screenLock;
 
     public static void startCheckIn(Context context) {
         Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_CHECKIN)
@@ -97,7 +96,21 @@ public class AutomationService extends Service implements StepRunner.Host {
         context.startService(intent);
     }
 
-    /** 签到 → 广告 → 订阅，一个号一趟走完。 */
+    /** 目录扫描单独占用队列，免得它和逐章购买同时操作同一个页面。 */
+    public static void startCatalog(Context context) {
+        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_CATALOG)
+                .putExtra(EXTRA_FROM_UI, true);
+        context.startService(intent);
+    }
+
+    /** 核账也会逐号登录，必须与购买共用运行占用，不能让两个入口同时切换屏幕。 */
+    public static void startAudit(Context context) {
+        Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_AUDIT)
+                .putExtra(EXTRA_FROM_UI, true);
+        context.startService(intent);
+    }
+
+    /** 切号 → 签到 → 订阅，一个号一趟走完。 */
     public static void startDaily(Context context) {
         Intent intent = new Intent(context, AutomationService.class).setAction(ACTION_RUN_DAILY)
                 .putExtra(EXTRA_FROM_UI, true);
@@ -143,22 +156,31 @@ public class AutomationService extends Service implements StepRunner.Host {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent == null ? null : intent.getAction();
-        if (action == null) return START_NOT_STICKY;
+        if (action == null) {
+            stopSelf(startId);
+            return START_NOT_STICKY;
+        }
         boolean fromUi = intent.getBooleanExtra(EXTRA_FROM_UI, false);
 
         switch (action) {
             case ACTION_RUN_CHECKIN:
-                startQueue(Mode.CHECK_IN, fromUi);
+                startQueue(Mode.CHECK_IN, fromUi, 0);
                 break;
             case ACTION_RUN_SUBSCRIBE:
-                startQueue(Mode.SUBSCRIBE, fromUi);
+                startQueue(Mode.SUBSCRIBE, fromUi, 0);
+                break;
+            case ACTION_RUN_CATALOG:
+                startQueue(Mode.CATALOG, fromUi, 0);
+                break;
+            case ACTION_RUN_AUDIT:
+                startQueue(Mode.AUDIT, fromUi, 0);
                 break;
             case ACTION_RUN_DAILY:
-                startQueue(Mode.DAILY, fromUi);
+                startQueue(Mode.DAILY, fromUi, 0);
                 break;
             case ACTION_SWITCH_ACCOUNT:
-                switchAccountId = intent.getLongExtra(EXTRA_ACCOUNT_ID, 0);
-                startQueue(Mode.SWITCH, fromUi);
+                startQueue(Mode.SWITCH, fromUi,
+                        intent.getLongExtra(EXTRA_ACCOUNT_ID, 0));
                 break;
             case ACTION_CONTINUE:
                 AutomationBus.submitDecision(StepRunner.Decision.CONTINUE);
@@ -172,30 +194,38 @@ public class AutomationService extends Service implements StepRunner.Host {
             default:
                 break;
         }
+        if (worker == null || !worker.isAlive()) stopSelf(startId);
         return START_NOT_STICKY;
     }
 
-    private void startQueue(Mode next, boolean fromUi) {
+    private void startQueue(Mode next, boolean fromUi, long accountId) {
         if (worker != null && worker.isAlive()) {
             AutomationBus.append("已经有任务在跑了");
             return;
         }
-        String ymd = Texts.todayYmd();
-        if (fromUi) Prefs.clearAutoResumes(this, ymd);
-        else if (!allowAutoResume(ymd)) return;
-
-        mode = next;
-        // 上一趟那个结论弹窗还开着的话先收掉：它不会自己消失（他可能过一会儿才看），
-        // 但绝不能挡着这一趟要操作的界面。
-        DoneDialogActivity.dismissOpen();
-        startForegroundSafely(buildNotification(next.label + "队列启动中…", false));
-        // 系统重发的那趟不清日志：上一趟被杀之前那几行是唯一的现场记录。
-        if (fromUi) AutomationBus.clearLog();
-        AutomationBus.setRunning(true);
-        AutomationBus.setStatus("运行中");
-
-        worker = new Thread(() -> runQueue(next), "blb-automation");
-        worker.start();
+        Context app = getApplicationContext();
+        if (!AutomationBus.tryStartRun(this, () -> ReturnWatchdog.disarm(app))) {
+            AutomationBus.append("已有任务运行中，请等它结束后再启动");
+            return;
+        }
+        boolean started = false;
+        try {
+            String ymd = Texts.todayYmd();
+            if (fromUi) Prefs.clearAutoResumes(this, ymd);
+            else if (!allowAutoResume(ymd)) return;
+            mode = next;
+            destroyed = false;
+            DoneDialogActivity.dismissOpen();
+            startForegroundSafely(buildNotification(next.label + "队列启动中…", false));
+            if (fromUi) AutomationBus.clearLog();
+            AutomationBus.setStatus("运行中");
+            // 将账号与这一次启动绑定；后来被拒绝的切号请求不能改掉正在等待的账号。
+            worker = new Thread(() -> runQueue(next, accountId), "blb-automation");
+            worker.start();
+            started = true;
+        } finally {
+            if (!started) AutomationBus.finishRun(this);
+        }
     }
 
     /**
@@ -216,11 +246,11 @@ public class AutomationService extends Service implements StepRunner.Host {
         }
         Prefs.noteAutoResume(this, ymd);
         AutomationBus.append("上一趟被系统杀掉了（MIUI 的 SwipeUpClean），自动接着跑（第 "
-                + (done + 1) + " 次）；今天已经签完、广告也没剩的号会直接跳过。");
+                + (done + 1) + " 次）；今天已签到的状态会保留，订阅仍重新核对账本。");
         return true;
     }
 
-    private void runQueue(Mode current) {
+    private void runQueue(Mode current, long accountId) {
         String text = current.label + "任务异常终止";
         // 弹窗要的是「结论」，通知和状态栏要的是「全文」，所以两份并行攒着：
         // text 那一串包含对账细节（22 章已下载但无归属…），一屏放不下，不能拿去弹。
@@ -228,7 +258,11 @@ public class AutomationService extends Service implements StepRunner.Host {
         acquireScreenLock(current);
         try {
             if (!awaitAccessibility()) {
-                text = "无障碍服务没连上，先去系统设置里打开「blb自动签到」";
+                AccessibilityAccess.State state = AccessibilityAccess.state(this);
+                text = isCancelled() ? "已取消，这趟没有运行"
+                        : state == AccessibilityAccess.State.DISABLED
+                        ? "系统无障碍开关已关闭，且设备尚未完成托管恢复授权"
+                        : "无障碍服务等待连接超时，这趟没有运行";
                 report = RunReport.failed(current.label, text);
                 return;
             }
@@ -239,18 +273,31 @@ public class AutomationService extends Service implements StepRunner.Host {
                     report = RunReport.ofSubscribe(s);
                     break;
                 }
+                case CATALOG: {
+                    CatalogQueue.Summary s = CatalogQueue.run(this, this);
+                    text = CatalogQueue.describe(s);
+                    report = RunReport.ofCatalog(s);
+                    break;
+                }
+                case AUDIT: {
+                    SubscriptionAuditQueue.Summary s = SubscriptionAuditQueue.run(this, this);
+                    text = SubscriptionAuditQueue.describe(s);
+                    report = RunReport.ofAudit(s);
+                    break;
+                }
                 case DAILY: {
-                    // 每日整套流程是「签到 → 广告 → 订阅」一条龙：签到和广告挣回来的代券
-                    // 当场就拿去订阅，一个号买到代券不够再换下一个号。
+                    // 2026-09-14 真机反馈要求逐号签完即订，避免签完整队再逐号登录。
                     DailyQueue.Summary s = DailyQueue.run(this, this);
                     text = DailyQueue.describe(s);
                     report = RunReport.ofDaily(s);
                     break;
                 }
-                case SWITCH:
-                    text = SwitchAccountQueue.run(this, this, switchAccountId);
-                    report = RunReport.ofSwitch(text);
+                case SWITCH: {
+                    SwitchAccountQueue.Result s = SwitchAccountQueue.run(this, this, accountId);
+                    text = s.message;
+                    report = RunReport.ofSwitch(s);
                     break;
+                }
                 default: {
                     CheckInQueue.Summary s = CheckInQueue.run(this, this);
                     text = describe(s);
@@ -263,17 +310,37 @@ public class AutomationService extends Service implements StepRunner.Host {
             AutomationBus.append("队列异常终止：" + t);
             report = RunReport.failed(current.label, "队列异常终止：" + t);
         } finally {
-            releaseScreenLock();
-            AutomationBus.setRunning(false);
-            AutomationBus.setStatus(text);
-            notifyFinished(current, text);
-            // 结论盖到屏幕上。使用者手指动不了：通知栏他拉不开，这个频道又是 IMPORTANCE_LOW
-            // （进度每几秒刷一行，不能每次都弹横幅），只发通知等于这条结论他永远读不到。
-            DoneDialogActivity.show(this,
-                    report != null ? report : RunReport.failed(current.label, text));
-            ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
-            stopSelf();
+            try {
+                ReturnWatchdog.disarm(this);
+                releaseScreenLock();
+                AutomationBus.setStatus(text);
+                notifyFinished(current, text);
+                if (!destroyed) {
+                    DoneDialogActivity.show(this,
+                            report != null ? report : RunReport.failed(current.label, text));
+                }
+            } finally {
+                try {
+                    ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
+                } finally {
+                    // 与 onStartCommand 串行收尾，避免被拒绝的新 startId 让空服务留下，
+                    // 或旧线程的 stopSelf 停掉紧接着开始的新任务。
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        worker = null;
+                        stopSelf();
+                        AutomationBus.finishRun(this);
+                    });
+                }
+            }
         }
+    }
+
+    @Override
+    public void onDestroy() {
+        destroyed = true;
+        AutomationBus.cancelRun(this);
+        releaseScreenLock();
+        super.onDestroy();
     }
 
     /**
@@ -284,14 +351,37 @@ public class AutomationService extends Service implements StepRunner.Host {
      * 把整队掐死的，其实再等十几秒它自己就回来了。
      */
     private boolean awaitAccessibility() {
-        if (BlbAccessibilityService.isReady()) return true;
-        AutomationBus.append("无障碍服务还没连上，等它回来（最多 " + (A11Y_WAIT_MS / 1000) + " 秒）…");
-        if (BlbAccessibilityService.awaitReady(A11Y_WAIT_MS)) {
+        if (isCancelled()) return false;
+        AccessibilityAccess.State state = AccessibilityAccess.state(this);
+        if (state == AccessibilityAccess.State.CONNECTED) return true;
+        if (state == AccessibilityAccess.State.DISABLED) {
+            AccessibilityAccess.RestoreResult restored =
+                    AccessibilityAccess.restoreIfAuthorized(this);
+            if (restored == AccessibilityAccess.RestoreResult.NOT_AUTHORIZED) {
+                AutomationBus.append("系统无障碍开关已关闭；设备尚未完成一次性托管授权，不能自动补回");
+                return false;
+            }
+            if (restored == AccessibilityAccess.RestoreResult.FAILED) {
+                AutomationBus.append("系统无障碍开关已关闭，自动补回失败");
+                return false;
+            }
+            AutomationBus.append("系统清理了无障碍开关，已自动补回，等待系统连接…");
+        } else {
+            AutomationBus.append("系统无障碍开关仍开着，等待服务连接（最多 "
+                    + (A11Y_WAIT_MS / 1000) + " 秒）…");
+        }
+        long deadline = android.os.SystemClock.elapsedRealtime() + A11Y_WAIT_MS;
+        while (!BlbAccessibilityService.isConnected() && !isCancelled()
+                && android.os.SystemClock.elapsedRealtime() < deadline) {
+            BlbAccessibilityService.awaitConnected(500);
+        }
+        if (isCancelled()) return false;
+        if (BlbAccessibilityService.isConnected()) {
             AutomationBus.append("无障碍服务连上了，开始跑");
             return true;
         }
         AutomationBus.append("等了 " + (A11Y_WAIT_MS / 1000)
-                + " 秒无障碍服务还是没连上，这趟不跑了（去系统设置里把「blb自动签到」重新打开）");
+                + " 秒无障碍服务还是没连上，这趟不跑了");
         return false;
     }
 
@@ -309,32 +399,15 @@ public class AutomationService extends Service implements StepRunner.Host {
      * 前台时有用，而这趟任务全程都在别人的界面上。{@code ACQUIRE_CAUSES_WAKEUP} 让定时那趟
      * 在息屏时也能把屏幕唤起来——不过<b>屏幕锁屏密码解不开</b>，那种情况仍然要人先解锁。
      */
-    @SuppressWarnings("deprecation")
-    private void acquireScreenLock(Mode current) {
+    private synchronized void acquireScreenLock(Mode current) {
         releaseScreenLock();
-        try {
-            PowerManager pm = getSystemService(PowerManager.class);
-            if (pm == null) return;
-            screenLock = pm.newWakeLock(PowerManager.SCREEN_BRIGHT_WAKE_LOCK
-                    | PowerManager.ACQUIRE_CAUSES_WAKEUP, "blb:" + current.name());
-            screenLock.setReferenceCounted(false);
-            // 上限只是保险丝：正常路径在 finally 里就放了。
-            screenLock.acquire(SCREEN_LOCK_LIMIT_MS);
-        } catch (Exception e) {
-            Log.w(TAG, "点不亮屏幕（拿不到屏幕锁）", e);
-            screenLock = null;
-        }
+        screenLock = ScreenAwake.acquire(this, current.name());
     }
 
-    private void releaseScreenLock() {
-        PowerManager.WakeLock lock = screenLock;
+    private synchronized void releaseScreenLock() {
+        ScreenAwake lock = screenLock;
         screenLock = null;
-        if (lock == null) return;
-        try {
-            if (lock.isHeld()) lock.release();
-        } catch (Exception e) {
-            Log.w(TAG, "放屏幕锁时出错", e);
-        }
+        if (lock != null) lock.close();
     }
 
     private static String describe(CheckInQueue.Summary s) {
@@ -344,9 +417,6 @@ public class AutomationService extends Service implements StepRunner.Host {
                 .append("，已签 ").append(s.already)
                 .append("，失败 ").append(s.failed);
         if (s.skipped > 0) sb.append("，跳过 ").append(s.skipped);
-        if (!s.adPending.isEmpty()) {
-            sb.append("；还有广告没领：").append(TextUtils.join("、", s.adPending));
-        }
         if (s.aborted()) sb.append("（中止：").append(s.abortReason).append('）');
         return sb.toString();
     }
@@ -355,7 +425,7 @@ public class AutomationService extends Service implements StepRunner.Host {
 
     @Override
     public boolean isCancelled() {
-        return AutomationBus.isCancelled();
+        return destroyed || AutomationBus.isCancelled();
     }
 
     @Override

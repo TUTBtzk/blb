@@ -22,15 +22,6 @@ public class CheckInRow {
     /** null 表示今天还没跑过这个账号。 */
     public String status;
 
-    @ColumnInfo(name = "ad_available")
-    public boolean adAvailable;
-
-    @ColumnInfo(name = "ads_watched")
-    public int adsWatched;
-
-    @ColumnInfo(name = "ads_remaining")
-    public int adsRemaining;
-
     public String message;
 
     @ColumnInfo(name = "created_at")
@@ -61,12 +52,4 @@ public class CheckInRow {
         }
     }
 
-    /** 广告进度，界面直接用；今天还没跑或没广告时返回 null。 */
-    public String adsText() {
-        if (adsWatched <= 0 && adsRemaining <= 0 && !adAvailable) return null;
-        StringBuilder sb = new StringBuilder("广告 已看 ").append(Math.max(0, adsWatched));
-        if (adsRemaining >= 0) sb.append("，还剩 ").append(adsRemaining);
-        else if (adAvailable) sb.append("，还有待领的");
-        return sb.toString();
-    }
 }

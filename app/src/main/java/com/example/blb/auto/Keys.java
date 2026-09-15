@@ -32,101 +32,6 @@ public final class Keys {
     public static final String CHECKIN_DIALOG = "checkin_dialog";
     /** 签到成功页上的「+8代券」，只用来把奖励写进日志。 */
     public static final String CHECKIN_REWARD = "checkin_reward";
-    /** 「看小视频领代券」入口。辅助点击模式下由脚本替你按下，视频照常完整播放。 */
-    public static final String AD_REWARD = "ad_reward";
-    /** 「今日还剩 N 次」这类计数。既用来告诉你还差几个，也是「奖励到没到账」的唯一硬证据。 */
-    public static final String AD_REMAINING = "ad_remaining";
-    /**
-     * 「已领完」——今天的广告次数用光了，这是最硬的那条判据。
-     *
-     * <p>2026-08-23 19:19 实测（用户截图）：领完之后签到面板上那颗入口（{@code sign_in_ad_goto}）
-     * <b>整个从树里消失</b>，原地换成一颗灰的 {@code sign_in_ad_finished}=「已领完」，而计数那格
-     * （{@code sign_in_ad_count}）的文案从「今日还剩 N 次」变成了「明日更新次数」—— 一个数字都
-     * 没有。旧写法里 {@link #AD_REMAINING} 第一条候选是纯 id、不看文字，抢先命中「明日更新次数」
-     * 就读出 -1，于是脚本按配置的每日个数去点那个已经没有了的入口，每个号白等 20 秒。
-     *
-     * <p>还有一件必须知道的事（用户 2026-08-23 说明）：那 5 次是<b>所有账号共用</b>的一天配额，
-     * 不是每号 5 次。第一个号看完 5 支，后面 7 个号打开面板就是这张「已领完」—— 所以这一组
-     * 认得准，等于后面每个号都省下一次白等。
-     */
-    public static final String AD_EXHAUSTED = "ad_exhausted";
-    /** 播放页上的「奖励将于 N 秒后发放」。它在＝视频页已经顶上来了，而且奖励还没到手。 */
-    public static final String AD_PENDING = "ad_pending";
-    /**
-     * 播放页上的「恭喜获得奖励」。它在＝这一个已经算看完了，可以放心离开播放页。
-     *
-     * <p>选择器刻意不认「奖励已发放」——签到成功页上那句是「奖励已发放到账号」，说的是签到的
-     * 奖励；认了它，广告还没播就会被当成已经领到。
-     */
-    public static final String AD_EARNED = "ad_earned";
-    /**
-     * 把视频停住、只留「点进落地页浏览 N 秒」这一条领奖路径的那张卡。
-     *
-     * <p>实测两家 SDK 都有：优量汇写「10秒更快拿奖」，穿山甲写「去浏览 15秒 免看此广告 /
-     * 我要加速 / 请勿中断浏览以免任务失败」。共同点是卡上没有「关掉接着看」的键，右上角关闭键
-     * 只弹二次确认，关掉确认后卡还在、画面还停着 —— 挂 6 分钟顶栏文案一个字都不变，等不出奖励。
-     * 所以撞上它时只有两条路：你开了跳转开关就替你按那颗跳转键，没开就放弃这一个广告 ——
-     * 不装作看完，也不把你留在那儿干等。
-     */
-    public static final String AD_PROMO = "ad_promo";
-    /** 上面那张卡里写着的「要浏览几秒」，用来决定在落地页停多久。停不满等于白跳一趟。 */
-    public static final String AD_DWELL_HINT = "ad_dwell_hint";
-    /**
-     * 播放页右上角那颗「跳过」。
-     *
-     * <p><b>只用来放弃、绝不用来领奖。</b>唯一的按它的场合是：我们已经决定不看这一支广告
-     * （撞上 {@link #AD_PROMO} 那张卡而你没开跳转开关），而这个播放页又把返回键吃掉了、
-     * 退不出来。那时候奖励本来就拿不到，按「跳过」只是把它了结掉。正常播放中一律不碰它 ——
-     * 按它领不到奖励，还等于让广告主白付一次曝光。
-     */
-    public static final String AD_SKIP = "ad_skip";
-    /** 奖励没到手时按关闭/返回弹出的「确认要离开吗」。 */
-    public static final String AD_LEAVE_CONFIRM = "ad_leave_confirm";
-    /** 上面那个确认框里的「放弃奖励离开」。只在我们自己决定放弃这个广告时才按。 */
-    public static final String AD_ABANDON = "ad_abandon";
-    /** 视频播完后那颗「领取奖励」（实测菠萝包这边是「开心收下」）。 */
-    public static final String AD_CLAIM = "ad_claim";
-    /**
-     * 菠萝包自己弹的那张代券发放卡：「+3 ／ 开心收下 ／ 已发放到"我的-我的钱包"中」。
-     *
-     * <p>它和 {@link #AD_CLAIM} 的区别是「认得准」：这一组只认这张卡自己的节点
-     * （{@code welfare_container} 里那颗 {@code tvConfirm}＝「开心收下」），所以可以在
-     * <b>任何地方</b>放心地按下去 —— 包括 {@link StepRunner#ensureHome} 的清障环节。
-     *
-     * <p>2026-08-24 09:28 实测的那次事故就靠它兜住：第 3 支广告领完之后菠萝包过几秒才弹这张卡，
-     * 脚本查得太早（查了一次没有就走了），于是这张<b>模态</b>卡一直盖在首页上 ——
-     * 后面 7 个号的 {@code ensureHome} 全部只会按返回（关不掉它），每个号都在「等 mine_tab」
-     * 超时，整趟只有第 1 个号签到成功。按下「开心收下」既是把代券真正收进账号
-     * （不按就不算收完，见 memory 里的 blb-ad-reward-grant-dialog），也是唯一能清掉它的动作。
-     */
-    public static final String REWARD_GRANT = "reward_grant";
-    /**
-     * 广告中途暂停时那颗让视频接着播的键（实测优量汇二次确认里写的是「抓住奖励机会」）。
-     *
-     * <p>这一组只认「让视频接着播」的键。刻意不含「跳转／下载／打开／去看看」那类会跳到别的
-     * App 的按钮 —— 那一下是广告主按点击和安装付费的动作，替你按就变成骗点击了；而且跳出去
-     * 之后本 App 看不见那个界面，手按不动的人会被卡在那儿。遇到那种弹窗走全局返回退回来。
-     */
-    public static final String AD_RESUME = "ad_resume";
-    /**
-     * 广告里那颗会跳到别的 App／落地页的按钮（下载、打开、去看看、立即体验……）。
-     *
-     * <p>默认<b>不</b>按（{@link com.example.blb.util.Prefs#isAdJump}，默认关）。按它是一次
-     * 广告主要另外付费的点击，所以只在你明确开了这个开关、并且你人就在屏幕前看着的时候才按；
-     * 定时任务里永远不按。就算开着，也只在 {@link #AD_PROMO} 那张卡把视频停住、不点就拿不到
-     * 奖励的时候才按 —— 正常播着的广告底部常驻的「立即打开」一律不按。按下去之后会在落地页
-     * 停留一会儿让你看清，再用全局返回把你带回广告页接着播 —— 手按不动的人最怕的是被留在
-     * 别的 App 里出不来。
-     */
-    public static final String AD_JUMP = "ad_jump";
-    /**
-     * 播完之后的关闭键。只在播满最短时长之后才允许点，且不匹配「跳过」。
-     *
-     * <p>实测优量汇播放页右上角那颗既没有 id 也没有文字，选择器认不出来，所以那一家靠全局返回
-     * 离开播放页；这一组留给认得出关闭键的其它 SDK（穿山甲这类）。
-     */
-    public static final String AD_CLOSE = "ad_close";
-
     public static final String CAPTCHA_HINT = "captcha_hint";
 
     public static final String SETTINGS_ENTRY = "settings_entry";
@@ -175,6 +80,10 @@ public final class Keys {
     /** 搜索建议里的「以“…”为关键字进行搜索」那一条 —— 这个 App 没有可见的「搜索」键，点它才提交。 */
     public static final String SEARCH_KEYWORD_ROW = "search_keyword_row";
     public static final String CATALOG_ENTRY = "catalog_entry";
+    /** 2026-09-14 番外与卷名在下载页同形，必须先读取普通目录页的独立分节结构。 */
+    public static final String CATALOG_DIRECTORY_READY = "catalog_directory_ready";
+    public static final String CATALOG_DIRECTORY_LIST = "catalog_directory_list";
+    public static final String CATALOG_PICKER_LIST = "catalog_picker_list";
     /** 目录页的「下载」——批量购买页的入口，也是唯一能读到价格的购买界面。 */
     public static final String DOWNLOAD_ENTRY = "download_entry";
     /**
@@ -182,10 +91,10 @@ public final class Keys {
      *
      * <p>{@link CatalogScanner} 靠它把整本书的章节顺序读出来。行文本是「67   周日工作」这种
      * 「标号 + 标题」合在一个节点里的写法，标号是阿拉伯数字、空格数不固定。
-     * 卷标题行用的也是这个 id，靠「行首没有标号」区分（见 {@link com.example.blb.util.Texts#rowChapterNo}）。
+     * 2026-09-14 用户的番外节点证实卷名与无标号章共用此 id；身份必须由普通目录逐行对照，不能按标号猜。
      */
     public static final String CHAPTER_ROW_TITLE = "chapter_row_title";
-    /** 选择章节页右下角那颗「回到顶部」（{@code goto_top}），用来在扫完之后一步回到第一章。 */
+    /** 普通目录与选择章节页均已取证的 {@code goto_top}；只作回顶加速，顶部仍须独立核实。 */
     public static final String CHAPTER_LIST_TOP = "chapter_list_top";
     /**
      * 章节行上的锁标记。它只说明「这是付费章」，<b>不说明买没买</b>。
@@ -291,6 +200,26 @@ public final class Keys {
             SEARCH_ENTRY, SEARCH_FIELD, NOVEL_TITLE_ROW, CATALOG_ENTRY, DOWNLOAD_ENTRY,
             CHAPTER_ROW_TITLE, CHAPTER_LOCKED, CHAPTER_OWNED, CHAPTER_SELECTABLE,
             SELECTED_COUNT, PAY_DETAIL, SUBSCRIBE_BUTTON, INSUFFICIENT_COUPONS};
+
+    public static final String[] REQUIRED_FOR_CATALOG = catalogKeys();
+
+    private static String[] catalogKeys() {
+        java.util.LinkedHashSet<String> keys = new java.util.LinkedHashSet<>();
+        java.util.Collections.addAll(keys, REQUIRED_FOR_SUBSCRIBE);
+        java.util.Collections.addAll(keys, CATALOG_DIRECTORY_READY, CATALOG_DIRECTORY_LIST,
+                CATALOG_PICKER_LIST);
+        return keys.toArray(new String[0]);
+    }
+
+    /** 核对要能读出交易事实；只配正文会把金额未知的旧结论误当成可买凭证。 */
+    public static final String[] REQUIRED_FOR_AUDIT = auditKeys();
+
+    private static String[] auditKeys() {
+        java.util.LinkedHashSet<String> keys = new java.util.LinkedHashSet<>();
+        java.util.Collections.addAll(keys, VoucherLedger.REQUIRED);
+        java.util.Collections.addAll(keys, SubscribedDetail.REQUIRED);
+        return keys.toArray(new String[0]);
+    }
 
     private Keys() {
     }

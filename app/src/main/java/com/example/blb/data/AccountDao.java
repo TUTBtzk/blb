@@ -5,6 +5,7 @@ import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.Query;
+import androidx.room.Transaction;
 import androidx.room.Update;
 
 import java.util.List;
@@ -46,7 +47,20 @@ public interface AccountDao {
     void update(Account account);
 
     @Delete
-    void delete(Account account);
+    void deleteEmptyAccountRow(Account account);
+
+    /** 删除账号会级联清掉它的账，OWNED 也会影响待买章节，因此任何订阅记录都必须拦住。 */
+    @Query("SELECT COUNT(*) FROM purchase WHERE account_id = :accountId")
+    int purchaseCount(long accountId);
+
+    @Transaction
+    default void delete(Account account) {
+        if (account == null || account.id <= 0) throw new IllegalArgumentException("账号记录不明");
+        if (purchaseCount(account.id) > 0) {
+            throw new IllegalStateException("这个账号已有订阅账本，不能删除；可以停用账号并核对订阅清单");
+        }
+        deleteEmptyAccountRow(account);
+    }
 
     @Query("UPDATE account SET nickname = :nickname WHERE id = :id")
     void setNickname(long id, String nickname);

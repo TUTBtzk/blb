@@ -29,7 +29,11 @@ public class Chapter {
     @ColumnInfo(name = "sf_chapter_id")
     public String sfChapterId;
 
-    /** 订阅这一章要花的火券，未知记 0。 */
+    /** 2026-09-14 番外核对仍须区分未知与免费；未读到的价格不能写成零。 */
     @ColumnInfo(name = "price_coupons")
-    public int priceCoupons;
+    public int priceCoupons = -1;
+
+    /** 2026-09-14 无标号番外必须按卷名和完整标题消歧；旧目录未取证时保持 null。 */
+    @ColumnInfo(name = "volume_title")
+    public String volumeTitle;
 }

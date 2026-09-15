@@ -22,11 +22,14 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
 import com.example.blb.R;
+import com.example.blb.auto.AccessibilityAccess;
+import com.example.blb.auto.AutomationBus;
 import com.example.blb.auto.BlbAccessibilityService;
 import com.example.blb.auto.Keys;
 import com.example.blb.auto.SelectorSet;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -39,6 +42,11 @@ public class SettingsFragment extends Fragment {
 
     private TextView a11yStatus;
     private TextView selectorInfo;
+    private EditText catalogMaxAge;
+    private MaterialSwitch catalogAutoSync;
+    private MaterialSwitch alwaysDetailAudit;
+    private boolean bindingSubscriptionSettings;
+    private boolean subscriptionSettingsPending;
 
     @Nullable
     @Override
@@ -67,7 +75,7 @@ public class SettingsFragment extends Fragment {
         daily.setOnCheckedChangeListener((btn, checked) -> {
             Prefs.setDailyEnabled(ctx, checked);
             com.example.blb.work.DailyScheduler.apply(ctx);
-            toast(checked ? "已开启每日自动签到" : "已关闭每日自动签到");
+            toast(checked ? "已开启每日自动签到并订阅" : "已关闭每日自动签到并订阅");
         });
 
         bindInt(v.findViewById(R.id.daily_hour), Prefs.dailyHour(ctx), value -> {
@@ -76,48 +84,132 @@ public class SettingsFragment extends Fragment {
         });
         bindInt(v.findViewById(R.id.spend_cap), Prefs.dailySpendCap(ctx),
                 value -> Prefs.setDailySpendCap(ctx, value));
-        bindInt(v.findViewById(R.id.ads_per_account), Prefs.adsPerAccount(ctx),
-                value -> Prefs.setAdsPerAccount(ctx, value));
 
-        // 替按键不等于替观看：视频照真实时长播完，看的人始终是你。
-        com.google.android.material.materialswitch.MaterialSwitch adAssist =
-                v.findViewById(R.id.ad_assist);
-        adAssist.setChecked(Prefs.isAdAssist(ctx));
-        adAssist.setOnCheckedChangeListener((btn, checked) -> {
-            Prefs.setAdAssist(ctx, checked);
-            toast(checked ? "广告按键交给我，视频照原速播给你看"
-                    : "改成只提醒：每个广告都停下等你自己点");
+        catalogMaxAge = v.findViewById(R.id.catalog_max_age_hours);
+        catalogAutoSync = v.findViewById(R.id.catalog_auto_sync);
+        alwaysDetailAudit = v.findViewById(R.id.always_detail_audit);
+        subscriptionSettingsPending = false;
+        refreshSubscriptionSettings(true);
+        Context app = ctx.getApplicationContext();
+        catalogMaxAge.setOnFocusChangeListener((field, hasFocus) -> {
+            if (hasFocus || bindingSubscriptionSettings) return;
+            int hours;
+            try {
+                hours = Integer.parseInt(catalogMaxAge.getText().toString().trim());
+            } catch (NumberFormatException failure) {
+                hours = -1;
+            }
+            final int requested = hours;
+            if (requested == Prefs.catalogMaxAgeHours(app)) return;
+            saveSubscriptionSettings(() -> Prefs.setCatalogMaxAgeHours(app, requested));
         });
-
-        com.google.android.material.materialswitch.MaterialSwitch adJump =
-                v.findViewById(R.id.ad_jump);
-        adJump.setChecked(Prefs.isAdJump(ctx));
-        adJump.setOnCheckedChangeListener((btn, checked) -> {
-            Prefs.setAdJump(ctx, checked);
-            toast(checked ? "跳转键也替你按，看完 12 秒我按返回带你回来"
-                    : "跳转键不替你按，撞上了按返回退回来");
+        catalogAutoSync.setOnCheckedChangeListener((button, enabled) -> {
+            if (!bindingSubscriptionSettings) {
+                saveSubscriptionSettings(() -> Prefs.setCatalogAutoSync(app, enabled));
+            }
+        });
+        alwaysDetailAudit.setOnCheckedChangeListener((button, enabled) -> {
+            if (!bindingSubscriptionSettings) {
+                saveSubscriptionSettings(() -> Prefs.setAlwaysDetailAudit(app, enabled));
+            }
+        });
+        // 运行已经选好本轮的护栏，不能在它切号或买章时从设置页换掉判据。
+        AutomationBus.busy().observe(getViewLifecycleOwner(), busy -> {
+            if (!Boolean.TRUE.equals(busy)) subscriptionSettingsPending = false;
+            refreshSubscriptionSettings(true);
+            updateSubscriptionSettingsEnabled();
         });
 
         v.<TextView>findViewById(R.id.about).setText(
                 "数据全部存在本机：账号密码用系统密钥库加密，云备份已关闭。\n"
                         + "自动化只操作菠萝包（" + BlbAccessibilityService.TARGET_PACKAGE
-                        + "）的真实界面。广告视频照真实时长完整播放，不快进、不跳过。");
+                        + "）的真实界面，完成逐号签到、目录同步和订阅记账。");
     }
 
     @Override
     public void onResume() {
         super.onResume();
         refreshStatus();
+        refreshSubscriptionSettings(false);
+        updateSubscriptionSettingsEnabled();
+    }
+
+    private void refreshSubscriptionSettings(boolean force) {
+        Context context = getContext();
+        if (context == null || catalogMaxAge == null) return;
+        bindingSubscriptionSettings = true;
+        try {
+            if (force || !catalogMaxAge.hasFocus()) {
+                catalogMaxAge.setText(String.valueOf(Prefs.catalogMaxAgeHours(context)));
+            }
+            catalogAutoSync.setChecked(Prefs.isCatalogAutoSync(context));
+            alwaysDetailAudit.setChecked(Prefs.isAlwaysDetailAudit(context));
+        } finally {
+            bindingSubscriptionSettings = false;
+        }
+    }
+
+    private void updateSubscriptionSettingsEnabled() {
+        if (catalogMaxAge == null) return;
+        boolean enabled = !AutomationBus.isBusy() && !subscriptionSettingsPending;
+        bindingSubscriptionSettings = true;
+        try {
+            catalogMaxAge.setEnabled(enabled);
+            catalogAutoSync.setEnabled(enabled);
+            alwaysDetailAudit.setEnabled(enabled);
+        } finally {
+            bindingSubscriptionSettings = false;
+        }
+    }
+
+    private void saveSubscriptionSettings(Runnable change) {
+        Context context = getContext();
+        View sourceView = getView();
+        if (context == null || sourceView == null) return;
+        if (!LedgerEdits.requireIdle(context)) {
+            refreshSubscriptionSettings(true);
+            updateSubscriptionSettingsEnabled();
+            return;
+        }
+        subscriptionSettingsPending = true;
+        refreshSubscriptionSettings(true);
+        updateSubscriptionSettingsEnabled();
+        LedgerEdits.submit(context, change, () -> {
+            // 页面已重建时不能让旧保存回调改动新输入框。
+            if (getView() != sourceView) return;
+            subscriptionSettingsPending = false;
+            refreshSubscriptionSettings(true);
+            updateSubscriptionSettingsEnabled();
+        });
     }
 
     private void refreshStatus() {
-        boolean ready = BlbAccessibilityService.isReady();
-        a11yStatus.setText(ready ? R.string.settings_a11y_on : R.string.settings_a11y_off);
-        // 这一行是「整个 app 能不能干活」的总闸，所以给它上语义色：开＝绿，没开＝红。
-        a11yStatus.setTextColor(ContextCompat.getColor(requireContext(),
-                ready ? R.color.blb_ok : R.color.blb_fail));
+        AccessibilityAccess.State state = AccessibilityAccess.state(requireContext());
+        int text;
+        int color;
+        if (state == AccessibilityAccess.State.CONNECTED) {
+            text = R.string.settings_a11y_connected;
+            color = R.color.blb_ok;
+        } else if (state == AccessibilityAccess.State.ENABLED_DISCONNECTED) {
+            text = R.string.settings_a11y_connecting;
+            color = R.color.blb_warn;
+        } else if (AccessibilityAccess.canRestore(requireContext())) {
+            text = R.string.settings_a11y_restoring;
+            color = R.color.blb_warn;
+            AccessibilityAccess.restoreIfAuthorized(requireContext());
+        } else {
+            text = R.string.settings_a11y_unmanaged;
+            color = R.color.blb_fail;
+        }
+        a11yStatus.setText(text);
+        a11yStatus.setTextColor(ContextCompat.getColor(requireContext(), color));
         SelectorSet set = SelectorSet.load(requireContext());
-        selectorInfo.setText("选择器来源：" + set.source() + "，共 " + set.keys().size() + " 个 key");
+        StringBuilder info = new StringBuilder("选择器来源：").append(set.source())
+                .append("\n可用 ").append(set.keys().size()).append(" 个 key\n");
+        appendGroup(info, set, "同步目录", Keys.REQUIRED_FOR_CATALOG);
+        appendGroup(info, set, "核对订阅清单", Keys.REQUIRED_FOR_AUDIT);
+        if (set.hasWarnings()) info.append(set.recoveryHint());
+        selectorInfo.setText(info);
     }
 
     /** 焦点离开时保存，避免每敲一个字符就写一次。 */
@@ -145,12 +237,15 @@ public class SettingsFragment extends Fragment {
     private void checkSelectors() {
         SelectorSet set = SelectorSet.load(requireContext());
         StringBuilder sb = new StringBuilder();
-        sb.append("来源：").append(set.source()).append("\n\n");
+        sb.append("来源与校验结果：\n").append(set.diagnostics()).append("\n\n");
         appendGroup(sb, set, "签到", Keys.REQUIRED_FOR_CHECKIN);
         appendGroup(sb, set, "切换账号", Keys.REQUIRED_FOR_SWITCH);
         appendGroup(sb, set, "自动订阅", Keys.REQUIRED_FOR_SUBSCRIBE);
-        sb.append("\n已配置的 key：\n").append(TextUtils.join("、", set.keys()));
-        sb.append("\n\n注意：这里只查「有没有配」，配得对不对要用节点探测器对着真实界面试匹配。");
+        appendGroup(sb, set, "同步目录", Keys.REQUIRED_FOR_CATALOG);
+        appendGroup(sb, set, "核对订阅清单", Keys.REQUIRED_FOR_AUDIT);
+        sb.append("\n内置补齐本地缺少的 key；同名 key 使用整组本地候选，本地无效项不会自动改用内置。\n")
+                .append(set.recoveryHint());
+        sb.append("\n\n这里只检查候选格式和必需项；能否命中真实界面，请用节点探测器验证。");
         new AlertDialog.Builder(requireContext())
                 .setTitle(R.string.settings_selector_check)
                 .setMessage(sb)
@@ -164,7 +259,7 @@ public class SettingsFragment extends Fragment {
         if (missing.isEmpty()) {
             sb.append("全部已配（").append(keys.length).append(" 个）\n");
         } else {
-            sb.append("缺 ").append(TextUtils.join("、", missing)).append('\n');
+            sb.append("缺少可用项 ").append(TextUtils.join("、", missing)).append('\n');
         }
     }
 
@@ -174,10 +269,12 @@ public class SettingsFragment extends Fragment {
         File target = SelectorSet.overrideFile(ctx);
         if (target.isFile()) {
             new AlertDialog.Builder(ctx)
-                    .setMessage("已经存在可编辑的副本：\n" + target.getAbsolutePath()
-                            + "\n\n覆盖会丢掉你改过的内容。")
+                    .setTitle("恢复内置选择器？")
+                    .setMessage("当前本地副本：\n" + target.getAbsolutePath()
+                            + "\n\n将用当前版本的内置选择器覆盖这份文件。"
+                            + "本地选择器修改会被替换，请先备份；账号和账本不会被清空。")
                     .setNegativeButton(R.string.cancel, null)
-                    .setPositiveButton("覆盖", (d, w) -> doExport(target))
+                    .setPositiveButton("覆盖并恢复", (d, w) -> doExport(target))
                     .show();
             return;
         }
@@ -195,9 +292,9 @@ public class SettingsFragment extends Fragment {
             return;
         }
         new AlertDialog.Builder(requireContext())
-                .setMessage("已导出到：\n" + target.getAbsolutePath()
-                        + "\n\n改完直接生效，不用重装。用 adb 拉改推回：\n"
-                        + "adb pull " + target.getAbsolutePath())
+                .setMessage("已将当前版本的内置选择器导出到：\n" + target.getAbsolutePath()
+                        + "\n\n同名 key 使用本地候选，缺少的 key 由内置补齐。"
+                        + "修改后下次开始任务即可生效，不用重装；探测器请重新点「打开菠萝包」。")
                 .setPositiveButton(android.R.string.ok, null)
                 .show();
         refreshStatus();

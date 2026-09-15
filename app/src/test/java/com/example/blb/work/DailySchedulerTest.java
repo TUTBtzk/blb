@@ -6,9 +6,40 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Test;
 
 import java.util.Calendar;
+import java.util.TimeZone;
 
 /** 每日触发时刻的计算：算错就会变成一天不签或者一小时签一次。 */
 public class DailySchedulerTest {
+
+    @Test
+    public void changingHourUsesAbsoluteNextTimeInsteadOfOriginalEnqueueTime() {
+        Calendar now = at("Asia/Shanghai", 2026, Calendar.SEPTEMBER, 13, 11, 30);
+        assertEquals(at("Asia/Shanghai", 2026, Calendar.SEPTEMBER, 13, 20, 5).getTimeInMillis(),
+                DailyScheduler.nextRunAtMillis(now, 20));
+        assertEquals(at("Asia/Shanghai", 2026, Calendar.SEPTEMBER, 14, 9, 5).getTimeInMillis(),
+                DailyScheduler.nextRunAtMillis(now, 9));
+    }
+
+    @Test
+    public void finishingAtScheduledMinuteSchedulesTheFollowingDay() {
+        Calendar now = at("Asia/Shanghai", 2026, Calendar.SEPTEMBER, 13, 9, 5);
+        assertEquals(at("Asia/Shanghai", 2026, Calendar.SEPTEMBER, 14, 9, 5).getTimeInMillis(),
+                DailyScheduler.nextRunAtMillis(now, 9));
+    }
+
+    @Test
+    public void followingRunKeepsLocalClockHourAcrossDaylightSavingChange() {
+        Calendar now = at("America/New_York", 2026, Calendar.OCTOBER, 31, 10, 0);
+        assertEquals(at("America/New_York", 2026, Calendar.NOVEMBER, 1, 9, 5).getTimeInMillis(),
+                DailyScheduler.nextRunAtMillis(now, 9));
+    }
+
+    private static Calendar at(String zone, int year, int month, int day, int hour, int minute) {
+        Calendar time = Calendar.getInstance(TimeZone.getTimeZone(zone));
+        time.clear();
+        time.set(year, month, day, hour, minute, 0);
+        return time;
+    }
 
     @Test
     public void delayIsAlwaysWithinTheNextDayAndNeverZero() {

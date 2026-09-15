@@ -17,6 +17,15 @@ final class FakeNode implements NodeView {
     private boolean enabled = true;
     private boolean checked;
     private boolean scrollable;
+    private boolean heading;
+    private int collectionRows = -1;
+    private int collectionColumns = -1;
+    private int itemRow = -1;
+    private int itemRowSpan = -1;
+    private int itemColumn = -1;
+    private int itemColumnSpan = -1;
+    private boolean forwardAction;
+    private boolean backwardAction;
     /** 默认「看得见、有面积」，这样老用例不受 visibleOnly／topmost 影响。 */
     private boolean visible = true;
     private int[] bounds = {0, 0, 100, 100};
@@ -69,6 +78,25 @@ final class FakeNode implements NodeView {
     FakeNode scrollable(boolean v) {
         this.scrollable = v;
         return this;
+    }
+
+    FakeNode heading(boolean value) { heading = value; return this; }
+
+    FakeNode collection(int rows) { return collection(rows, 1); }
+
+    FakeNode collection(int rows, int columns) {
+        collectionRows = rows; collectionColumns = columns; return this;
+    }
+
+    FakeNode item(int row) { return item(row, 1, 0, 1); }
+
+    FakeNode item(int row, int rowSpan, int column, int columnSpan) {
+        itemRow = row; itemRowSpan = rowSpan;
+        itemColumn = column; itemColumnSpan = columnSpan; return this;
+    }
+
+    FakeNode scrollActions(boolean forward, boolean backward) {
+        forwardAction = forward; backwardAction = backward; return this;
     }
 
     FakeNode visible(boolean v) {
@@ -128,6 +156,16 @@ final class FakeNode implements NodeView {
     public boolean scrollable() {
         return scrollable;
     }
+
+    @Override public boolean heading() { return heading; }
+    @Override public int collectionRowCount() { return collectionRows; }
+    @Override public int collectionColumnCount() { return collectionColumns; }
+    @Override public int collectionRowIndex() { return itemRow; }
+    @Override public int collectionRowSpan() { return itemRowSpan; }
+    @Override public int collectionColumnIndex() { return itemColumn; }
+    @Override public int collectionColumnSpan() { return itemColumnSpan; }
+    @Override public boolean supportsScrollForward() { return forwardAction; }
+    @Override public boolean supportsScrollBackward() { return backwardAction; }
 
     @Override
     public boolean visible() {

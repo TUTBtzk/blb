@@ -25,8 +25,6 @@ public final class CheckInQueue {
         public int already;
         public int failed;
         public int skipped;
-        /** 签到页有广告奖励待手动领取的账号名。 */
-        public final List<String> adPending = new ArrayList<>();
         /**
          * 没签成的账号名（不含「已跳过」——那是我们自己决定不跑的，不该点名）。
          *
@@ -83,7 +81,6 @@ public final class CheckInQueue {
             if (existing != null && existing.isSuccess()) {
                 summary.already++;
                 host.log("  今天已经签过，跳过");
-                if (existing.adAvailable) summary.adPending.add(name);
                 refreshBalanceIfCurrent(runner, accountDao, account, host, loggedIn);
                 continue;
             }
@@ -101,8 +98,7 @@ public final class CheckInQueue {
                     result.vouchers = mine.voucher;
                     host.log("  " + mine.describe());
                 }
-                record(checkInDao, account.id, ymd, result.status, result.adAvailable,
-                        0, -1, result.message);
+                record(checkInDao, account.id, ymd, result.status, result.message);
                 applyAccountUpdates(accountDao, account, result);
 
                 if (CheckInLog.OK.equals(result.status)) {
@@ -116,13 +112,9 @@ public final class CheckInQueue {
                     summary.failedNames.add(name);
                     host.log("  " + result.message);
                 }
-                if (result.adAvailable) {
-                    summary.adPending.add(name);
-                    host.log("  签到页还有广告奖励没领（这一趟只签到，广告在「今天的流程」里跑）");
-                }
             } catch (StepRunner.StepFailure e) {
                 String status = statusFor(e.kind);
-                record(checkInDao, account.id, ymd, status, false, 0, -1, e.getMessage());
+                record(checkInDao, account.id, ymd, status, e.getMessage());
                 if (CheckInLog.SKIPPED.equals(status)) summary.skipped++;
                 else {
                     summary.failed++;
@@ -137,8 +129,7 @@ public final class CheckInQueue {
             } catch (Exception e) {
                 summary.failed++;
                 summary.failedNames.add(name);
-                record(checkInDao, account.id, ymd, CheckInLog.FAILED, false, 0, -1,
-                        String.valueOf(e));
+                record(checkInDao, account.id, ymd, CheckInLog.FAILED, String.valueOf(e));
                 host.log("  意外错误：" + e);
             }
         }
@@ -203,21 +194,12 @@ public final class CheckInQueue {
         }
     }
 
-    /** 写签到日志。ads 两项传 0／-1 表示这次没碰广告，沿用当天已经记下的数，不要清零。 */
     static void record(CheckInDao dao, long accountId, String ymd, String status,
-                       boolean adAvailable, int adsWatched, int adsRemaining, String message) {
+                       String message) {
         CheckInLog log = new CheckInLog();
         log.accountId = accountId;
         log.dateYmd = ymd;
         log.status = status;
-        log.adAvailable = adAvailable;
-        log.adsWatched = Math.max(0, adsWatched);
-        log.adsRemaining = adsRemaining;
-        CheckInLog old = dao.find(accountId, ymd);
-        if (old != null) {
-            if (log.adsWatched == 0) log.adsWatched = Math.max(0, old.adsWatched);
-            if (log.adsRemaining < 0) log.adsRemaining = old.adsRemaining;
-        }
         log.message = message;
         log.createdAt = System.currentTimeMillis();
         dao.upsert(log);

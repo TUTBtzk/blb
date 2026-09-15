@@ -83,30 +83,25 @@ public class RunReportTest {
                 .contains("没有启用的账号"));
     }
 
-    @Test
-    public void pendingAdsAreNamedToo() {
-        CheckInQueue.Summary s = checkIn(8, 0, 0, 8);
-        s.adPending.add("五杯半雪碧");
-        assertTrue(RunReport.ofCheckIn(s).body().contains("还有广告没领：五杯半雪碧"));
-    }
-
     // ---------- 每日流程 ----------
 
     @Test
-    public void aDailyRunReportsCheckInAdsAndSubscription() {
+    public void aDailyRunReportsCheckInAndSubscription() {
         DailyQueue.Summary s = new DailyQueue.Summary();
         s.total = 8;
         s.checkedIn = 8;
-        s.adsWatched = 5;
         s.subscribing = true;
         s.bought = 1;
         s.spent = 20;
+        s.catalogNote = "目录：今天 09:12 扫过 · 612 章";
+        s.nextChapterNote = "下一章：第 83 章「早晨」";
         RunReport r = RunReport.ofDaily(s);
         assertEquals("今天的流程跑完了", r.title);
         assertTrue(r.allGood);
         assertTrue(r.body(), r.body().contains("已签到 8/8 个号"));
-        assertTrue(r.body(), r.body().contains("广告看完 5 个"));
         assertTrue(r.body(), r.body().contains("订到 1 章，花 20 代券"));
+        assertTrue(r.body(), r.body().contains(s.catalogNote));
+        assertTrue(r.body(), r.body().contains(s.nextChapterNote));
     }
 
     /**
@@ -131,7 +126,7 @@ public class RunReportTest {
         DailyQueue.Summary s = new DailyQueue.Summary();
         s.total = 8;
         s.alreadySigned = 8;
-        s.subscribeNote = "还没设定集中订阅的目标小说，这轮只签到和看广告";
+        s.subscribeNote = "还没设定集中订阅的目标小说，这轮只签到";
         String body = RunReport.ofDaily(s).body();
         assertTrue(body, body.contains("这一趟没订阅：还没设定集中订阅的目标小说"));
     }
@@ -207,11 +202,72 @@ public class RunReportTest {
         s.total = 8;
         s.bought = 3;
         s.spent = 60;
+        s.catalogNote = "目录：今天 09:12 扫过 · 612 章";
+        s.nextChapterNote = "下一章：第 86 章「午后」";
         RunReport r = RunReport.ofSubscribe(s);
         assertEquals("订阅完成", r.title);
         assertTrue(r.allGood);
         assertTrue(r.body(), r.body().contains("订到 3 章，花 60 代券"));
         assertTrue(r.body(), r.body().contains("8 个号都试过了"));
+        assertTrue(r.body(), r.body().contains(s.catalogNote));
+        assertTrue(r.body(), r.body().contains(s.nextChapterNote));
+    }
+
+    /** 过期默认只是提醒；不能把遵照设置正常跑完的一趟，凭这句提醒改判成失败。 */
+    @Test
+    public void aStaleCatalogWarningStaysVisibleWithoutClaimingAFailure() {
+        String warning = "目录：26 小时前扫过 · 612 章；作者可能有新章没进账本";
+        DailyQueue.Summary daily = new DailyQueue.Summary();
+        daily.total = 8;
+        daily.checkedIn = 8;
+        daily.subscribing = true;
+        daily.catalogNote = warning;
+        SubscribeQueue.Summary subscribe = new SubscribeQueue.Summary();
+        subscribe.total = 8;
+        subscribe.catalogNote = warning;
+        for (RunReport report : new RunReport[]{RunReport.ofDaily(daily), RunReport.ofSubscribe(subscribe)}) {
+            assertTrue(report.allGood);
+            assertTrue(report.body(), report.body().contains(warning));
+        }
+    }
+
+    @Test
+    public void stoppedRunsStillShowTheKnownCatalogAndNextChapter() {
+        String catalog = "目录：2026-09-13 09:12 扫过 · 612 章";
+        String next = "下一章：第 83 章「早晨」";
+        String reason = "逐章证据不完整，停止购买";
+        DailyQueue.Summary daily = new DailyQueue.Summary();
+        daily.total = 8;
+        daily.checkedIn = 8;
+        daily.subscribing = false;
+        daily.subscribeNote = reason;
+        daily.abortReason = reason;
+        daily.catalogNote = catalog;
+        daily.nextChapterNote = next;
+        SubscribeQueue.Summary subscribe = new SubscribeQueue.Summary();
+        subscribe.total = 8;
+        subscribe.abortReason = reason;
+        subscribe.catalogNote = catalog;
+        subscribe.nextChapterNote = next;
+        for (RunReport report : new RunReport[]{RunReport.ofDaily(daily), RunReport.ofSubscribe(subscribe)}) {
+            assertFalse(report.allGood);
+            assertTrue(report.body(), report.body().contains(catalog));
+            assertTrue(report.body(), report.body().contains(next));
+            assertTrue(report.body(), report.body().contains(reason));
+        }
+    }
+
+    @Test
+    public void missingProgressDoesNotInventCatalogOrNextChapterFacts() {
+        DailyQueue.Summary daily = new DailyQueue.Summary();
+        daily.catalogNote = " ";
+        daily.nextChapterNote = "\n";
+        SubscribeQueue.Summary subscribe = new SubscribeQueue.Summary();
+        for (RunReport report : new RunReport[]{RunReport.ofDaily(daily), RunReport.ofSubscribe(subscribe)}) {
+            assertFalse(report.body(), report.body().contains("目录"));
+            assertFalse(report.body(), report.body().contains("下一章"));
+            assertFalse(report.body(), report.body().contains("\n\n"));
+        }
     }
 
     /** 8 个号都买不起（今天最常见的收工方式）：说「一章都没订到」，不当失败。 */
@@ -252,13 +308,152 @@ public class RunReportTest {
         assertTrue(r.body(), r.body().contains("第83章"));
     }
 
+    @Test
+    public void aCatalogRunReportsItsLedgerChangesWithoutBuying() {
+        CatalogQueue.Summary s = new CatalogQueue.Summary();
+        s.book = "目标书";
+        s.ok = true;
+        s.scanned = 612;
+        s.added = 3;
+        s.realigned = 2;
+        s.free = 4;
+        s.backfilled = 32;
+        s.accounts = 8;
+        s.catalogNote = "目录：今天 09:12 扫过 · 612 章";
+        s.notes.add("目录对齐的逐章排查细节");
+
+        RunReport report = RunReport.ofCatalog(s);
+        assertEquals("同步目录完成", report.title);
+        assertTrue(report.allGood);
+        assertTrue(report.body(), report.body().contains("《目标书》"));
+        assertTrue(report.body(), report.body().contains("目录 612 章"));
+        assertTrue(report.body(), report.body().contains("新登记 3 章 · 重排 2 章"));
+        assertTrue(report.body(), report.body().contains("免费章 4 章 · 补记 32 条（8 个启用账号）"));
+        assertTrue(report.body(), report.body().contains(s.catalogNote));
+        assertTrue(report.body(), report.body().contains("未购买任何章节"));
+        assertFalse(report.body(), report.body().contains("一章都没订到"));
+        assertFalse(report.body(), report.body().contains(s.notes.get(0)));
+    }
+
+    /** 目录已经写入也可能回首页失败；两件事都要说，不能把整趟画成成功或丢掉已扫描结果。 */
+    @Test
+    public void catalogFailuresKeepKnownResultsWithoutInventingZeroChapters() {
+        CatalogQueue.Summary completedScan = new CatalogQueue.Summary();
+        completedScan.ok = true;
+        completedScan.scanned = 612;
+        completedScan.added = 3;
+        completedScan.abortReason = "同步目录结束后未能返回首页：找不到首页";
+        RunReport report = RunReport.ofCatalog(completedScan);
+        assertEquals("同步目录没完成", report.title);
+        assertFalse(report.allGood);
+        assertTrue(report.body(), report.body().contains("目录 612 章"));
+        assertTrue(report.body(), report.body().contains("新登记 3 章"));
+        assertTrue(report.body(), report.body().contains(completedScan.abortReason));
+        assertTrue(report.body(), report.body().contains("未购买任何章节"));
+
+        CatalogQueue.Summary neverScanned = new CatalogQueue.Summary();
+        neverScanned.scanned = -1;
+        neverScanned.abortReason = "先在订阅页选一本目标小说";
+        RunReport blocked = RunReport.ofCatalog(neverScanned);
+        assertFalse(blocked.allGood);
+        assertTrue(blocked.body(), blocked.body().contains(neverScanned.abortReason));
+        assertFalse(blocked.body(), blocked.body().contains("0 章"));
+        assertTrue(blocked.body(), blocked.body().contains("未购买任何章节"));
+        assertFalse(RunReport.ofCatalog(new CatalogQueue.Summary()).allGood);
+    }
+
+    @Test
+    public void anAuditReportsRepairsAndTheFreshNextChapterWithoutBuying() {
+        SubscriptionAuditQueue.Summary s = new SubscriptionAuditQueue.Summary();
+        s.book = "目标书";
+        s.total = 8;
+        s.checked = 8;
+        s.backfilled = 3;
+        s.deleted = 1;
+        s.nextChapterNote = "下一章：第 83 章「早晨」";
+        s.notes.add("某号在目标书上的逐章核对细节");
+
+        RunReport report = RunReport.ofAudit(s);
+        assertEquals("核对订阅清单完成", report.title);
+        assertTrue(report.allGood);
+        assertTrue(report.body(), report.body().contains("《目标书》"));
+        assertTrue(report.body(), report.body().contains("已核对 8/8 个号"));
+        assertTrue(report.body(), report.body().contains("补记 3 章 · 修正 1 条"));
+        assertTrue(report.body(), report.body().contains(s.nextChapterNote));
+        assertTrue(report.body(), report.body().contains("未购买任何章节"));
+        assertFalse(report.body(), report.body().contains("一章都没订到"));
+        assertFalse(report.body(), report.body().contains(s.notes.get(0)));
+    }
+
+    /** 没读到清单不是「没有订阅」；未核对和存疑都必须挡住全成功的标题。 */
+    @Test
+    public void anAuditWithMissingEvidenceDoesNotClaimEverythingMatched() {
+        SubscriptionAuditQueue.Summary s = new SubscriptionAuditQueue.Summary();
+        s.total = 8;
+        s.checked = 7;
+        s.unverified = 1;
+        RunReport missing = RunReport.ofAudit(s);
+        assertEquals("核对订阅清单没全成", missing.title);
+        assertFalse(missing.allGood);
+        assertTrue(missing.body(), missing.body().contains("已核对 7/8 个号"));
+        assertTrue(missing.body(), missing.body().contains("未核对 1 个号"));
+
+        s.checked = 8;
+        s.unverified = 0;
+        s.suspect = 2;
+        RunReport suspect = RunReport.ofAudit(s);
+        assertFalse(suspect.allGood);
+        assertTrue(suspect.body(), suspect.body().contains("存疑 2 个号，相关差异未继续修正"));
+        assertTrue(suspect.body(), suspect.body().contains("修正 0 条"));
+    }
+
+    @Test
+    public void anAbortedAuditKeepsCompletedRepairsAndTheReason() {
+        SubscriptionAuditQueue.Summary s = new SubscriptionAuditQueue.Summary();
+        s.total = 8;
+        s.checked = 2;
+        s.backfilled = 1;
+        s.abortReason = "清单上出现火券支出，停止核对";
+        s.nextChapterNote = "下一章：第 51 章「相遇」";
+        RunReport report = RunReport.ofAudit(s);
+        assertFalse(report.allGood);
+        assertTrue(report.body(), report.body().contains("补记 1 章 · 修正 0 条"));
+        assertTrue(report.body(), report.body().contains("整趟停在这里：" + s.abortReason));
+        assertTrue(report.body(), report.body().contains(s.nextChapterNote));
+    }
+
+    @Test
+    public void anAuditWithoutAccountsOrWithAnUnfinishedCountIsNotComplete() {
+        SubscriptionAuditQueue.Summary s = new SubscriptionAuditQueue.Summary();
+        RunReport none = RunReport.ofAudit(s);
+        assertFalse(none.allGood);
+        assertTrue(none.body(), none.body().contains("没有启用的账号"));
+        assertFalse(none.body(), none.body().contains("下一章"));
+        s.total = 8;
+        s.checked = 7;
+        assertFalse(RunReport.ofAudit(s).allGood);
+    }
+
     // ---------- 切号、跑都没跑起来 ----------
 
     @Test
     public void switchingAccountsShowsTheOneLineItGotBack() {
-        RunReport r = RunReport.ofSwitch("已经登着「五杯半雪碧」了，什么都不用做");
+        RunReport r = RunReport.ofSwitch(new SwitchAccountQueue.Result(true,
+                "已经登着「五杯半雪碧」了，什么都不用做"));
         assertEquals("切号完成", r.title);
         assertEquals("已经登着「五杯半雪碧」了，什么都不用做", r.body());
+        assertTrue(r.allGood);
+    }
+
+    @Test
+    public void switchingFailureIsNotReportedAsCompleted() {
+        for (String message : new String[]{"没切成：密码错误", "账号已经不存在", "缺少登录选择器"}) {
+            RunReport report = RunReport.ofSwitch(new SwitchAccountQueue.Result(false, message));
+            assertEquals("切号没完成", report.title);
+            assertFalse(report.allGood);
+            assertEquals(message, report.body());
+        }
+        assertFalse(RunReport.ofSwitch(null).allGood);
     }
 
     @Test
@@ -273,7 +468,9 @@ public class RunReportTest {
     @Test
     public void aNullSummaryStillProducesSomethingReadable() {
         for (RunReport r : new RunReport[]{RunReport.ofCheckIn(null), RunReport.ofDaily(null),
-                RunReport.ofSubscribe(null), RunReport.ofSwitch(null), RunReport.failed("签到", "")}) {
+                RunReport.ofSubscribe(null), RunReport.ofCatalog(null), RunReport.ofAudit(null),
+                RunReport.ofSwitch(null),
+                RunReport.failed("签到", "")}) {
             assertFalse(r.title.isEmpty());
             assertFalse(r.body().trim().isEmpty());
         }

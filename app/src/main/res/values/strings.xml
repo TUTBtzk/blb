@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">blb自动签到</string>
     <string name="accessibility_label">blb自动签到</string>
-    <string name="accessibility_description">开启后，本 App 才能在你手动触发时读取并点击菠萝包轻小说的界面，用来完成每日签到和订阅记账。它只能访问菠萝包（com.sfacg），不会读其他应用。广告视频照真实时长完整播放，脚本只替你按键，不快进也不跳过。</string>
+    <string name="accessibility_description">开启后，本 App 才能在你手动触发或启用定时任务后读取并点击菠萝包轻小说的界面，用来完成每日签到和订阅记账。它只能访问菠萝包（com.sfacg），不会读其他应用。</string>
 
     <string name="tab_accounts">账号</string>
     <string name="tab_checkin">签到</string>
@@ -15,7 +15,7 @@
     <string name="account_password_hint">密码（留空表示不改）</string>
     <string name="account_nickname_hint">菠萝包昵称（切号后靠它核对登对了没，留空会自动回填）</string>
     <string name="account_coupons_hint">火券余额（可留空，签到时会自动回填）</string>
-    <string name="account_vouchers_hint">代券余额（可留空，签到和看广告发的就是代券）</string>
+    <string name="account_vouchers_hint">代券余额（可留空，签到后会读取）</string>
     <string name="account_enabled">参与自动签到</string>
     <string name="account_kind_label">登录方式</string>
     <string name="account_kind_hint_password">账号密码：全自动。密码加密存在本机，切号时自动填。</string>
@@ -34,11 +34,11 @@
 
     <string name="checkin_run_daily">跑今天的整套流程</string>
     <string name="checkin_run_now">只签到</string>
-    <string name="checkin_run_hint">上面那颗＝一个号一个号走完签到 → 广告 → 订阅；下面那颗只给启用的账号签到，不看广告也不订阅。</string>
+    <string name="checkin_run_hint">上面那颗＝一个号一个号走完签到 → 订阅；下面那颗只给启用的账号签到，不订阅。</string>
+    <string name="checkin_daily_cost">%1$d 个启用账号 · 逐号签到 → 订阅\n会花代券，中途别动屏幕</string>
     <string name="checkin_stop">停止</string>
     <string name="checkin_continue">继续</string>
     <string name="checkin_skip">跳过此账号</string>
-    <string name="checkin_ad_notice">广告由你看，按键交给我：替你点开、暂停了按「继续观看」、播完按「领取奖励」和关闭键，全程不快进、不跳过、播不满不许关。跳到别的软件那类按钮我不按 —— 撞上了就按返回把你退回广告页。有一种广告会弹一张卡把视频停住，只有点进落地页看够它写的秒数才给奖励（实测优量汇写「10秒更快拿奖」、穿山甲写「去浏览15秒免看此广告」，挂着等是等不出奖励的）；跳转开关没开时，这一支我直接放弃并如实记下来，不假装看完。设置页可以关掉辅助点击，改成每个都停下等你自己点。</string>
     <string name="checkin_log_header">运行日志</string>
     <string name="checkin_need_a11y">还没开启无障碍服务，先去设置里打开。</string>
     <string name="checkin_no_account">没有启用中的账号，先在「账号」页添加。</string>
@@ -54,7 +54,7 @@
     <string name="chapter_price_hint">单价火券（可留空）</string>
     <string name="sub_no_target">还没选目标小说。</string>
     <string name="sub_mark_owned">标记为某账号已订阅</string>
-    <string name="sub_unmark">删除这条订阅记录</string>
+    <string name="sub_unmark">核对这条订阅记录</string>
     <string name="sub_cost_prompt">这一章花了多少代券？</string>
 
     <string name="sub_target_novel">集中订阅的目标小说</string>
@@ -64,61 +64,83 @@
     <string name="sub_record_purchase">记一笔订阅</string>
     <string name="sub_export_csv">导出 CSV</string>
     <string name="sub_import_csv">导入 CSV</string>
-    <string name="sub_empty">还没有小说。先添加一本，再登记章节和订阅记录。</string>
-    <string name="sub_no_chapters">这本还没登记章节。用上面的「添加章节」或「导入章节」把要订阅的章号写进来。</string>
-    <string name="sub_suggestion_none">没有待订阅的章节了。</string>
-    <string name="sub_run">开始自动订阅</string>
-    <string name="sub_run_title">开始自动订阅？</string>
-    <string name="sub_need_target">先把一本小说设为「集中订阅目标」（用上面的「选择小说」）。自动订阅只认目标小说，不会去猜。</string>
-    <string name="sub_nothing_to_do">这本书登记的章节都已经有人订阅过了，没有要跑的。先用「添加章节」登记新章。</string>
+    <string name="sub_empty">还没有小说。先添加一本并设为目标，再点「同步目录」。</string>
+    <string name="sub_no_chapters">这本书还没有章节。先点上面的「同步目录」。</string>
+    <string name="sub_suggestion_none">下一章：第 %1$d 章起暂无待订阅章节。作者更新后先同步目录。</string>
+    <string name="sub_suggestion_loading">下一章：正在读取账本</string>
+    <string name="sub_run">只跑订阅</string>
+    <string name="sub_sync_catalog">同步目录\n用当前账号扫描整本目录，中途别动屏幕</string>
+    <string name="sub_catalog_unscanned">目录：还没扫过</string>
+    <string name="sub_audit">核对订阅清单</string>
+    <string name="sub_audit_cost">要 %1$d 个启用账号逐个登录，中途别动屏幕</string>
+    <string name="sub_audit_accounts_loading">正在读取启用账号数</string>
+    <string name="sub_audit_no_accounts">还没有启用账号，先在账号页启用账号</string>
+    <string name="sub_audit_unchecked">最后核对：还没核对过</string>
+    <string name="sub_run_title">只跑订阅？</string>
+    <string name="sub_need_target">先把一本小说设为「集中订阅目标」（用下方的「选择小说」）。自动订阅只认目标小说，不会去猜。</string>
+    <string name="sub_nothing_to_do">已登记的章节都有账号拥有。作者更新后，先点「同步目录」登记新章。</string>
+    <string name="sub_catalog_manual">订阅使用已同步的目录；作者更新后，请先点「同步目录」。</string>
+    <string name="sub_catalog_auto_enabled">已开启目录过期时自动同步：仅由第一个账号扫一次。</string>
     <string name="sub_real_buy_note">这是真实购买：会真的花掉账号里的代券。按队列顺序一章一章往下订，一个号订到代券不够就换下一个号，不限章数。实付里出现火券一律当买不起（不会替你花火券）。选择器一旦错位就可能买错章。</string>
 
     <string name="settings_accessibility">无障碍服务</string>
     <string name="settings_open_accessibility">去系统设置开启／关闭</string>
     <string name="settings_selector_check">检查 selectors.json</string>
     <string name="settings_inspector">节点探测器</string>
-    <string name="settings_export_selectors">把内置选择器导出到可编辑位置</string>
-    <string name="settings_daily">每天自动签到</string>
-    <string name="settings_daily_hour">签到时间（小时，0–23）</string>
+    <string name="settings_export_selectors">导出内置选择器／恢复内置</string>
+    <string name="settings_daily">每天自动签到并订阅</string>
+    <string name="settings_daily_hour">每日流程时间（小时，0–23）</string>
     <string name="settings_battery">电池／自启白名单</string>
-    <string name="settings_ads_per_account">每个账号每天几个广告（界面读不到「还剩几次」时按这个提醒）</string>
-    <string name="settings_ad_assist">替我点广告按钮（视频照真实时长播完，不快进不跳过）</string>
-    <string name="settings_ad_assist_hint">关掉之后回到「只提醒」：脚本只数出还剩几个，每个都停下来等你自己点开和领取。</string>
-    <string name="settings_ad_jump">也替我按广告里的跳转按钮（下载／打开／去看看）</string>
-    <string name="settings_ad_jump_hint">默认关。它和「替我按播放」不是一回事：那一下是广告主另外按点击付费的动作，所以要你自己开一次，而且只在你人在屏幕前的那趟里生效，定时任务永远不按。开着也只在广告把视频停住、不点就拿不到奖励时才按（实测优量汇「10秒更快拿奖」那张卡）；正常播着的广告底部那颗「立即打开」一律不按。按下去后会在落地页停 12 秒让你看清，再按返回把你带回广告页接着播，不会把你留在别的软件里。开关关着时，这种卡只能放弃那一支广告。</string>
     <string name="settings_spend_cap">每账号每日花费上限（0 = 不限）</string>
     <string name="settings_app_details">本应用的系统设置页</string>
-    <string name="settings_battery_hint">小米／红米会杀后台。请在系统设置里给本 App 允许自启动、后台弹出界面，并把省电策略设为「无限制」，否则每日自动签到会被杀掉。</string>
-    <string name="settings_a11y_on">已开启</string>
-    <string name="settings_a11y_off">未开启（自动化不可用）</string>
+    <string name="settings_battery_hint">小米／红米会杀后台。请在系统设置里给本 App 允许自启动、后台弹出界面，并把省电策略设为「无限制」，否则每日流程会被杀掉。</string>
+    <string name="settings_a11y_on">已连接</string>
+    <string name="settings_a11y_off">系统开关已关闭</string>
+    <string name="settings_a11y_connected">已连接，可以自动操作</string>
+    <string name="settings_a11y_connecting">系统开关已开启，正在等待连接</string>
+    <string name="settings_a11y_restoring">系统开关被清除，正在自动恢复</string>
+    <string name="settings_a11y_unmanaged">系统开关已关闭；照护者需一次性执行：adb shell pm grant com.example.blb android.permission.WRITE_SECURE_SETTINGS</string>
     <string name="settings_section_run">运行方式</string>
-    <string name="settings_section_ads">广告辅助点击</string>
+    <string name="settings_section_subscription">目录与订阅核对</string>
+    <string name="settings_catalog_max_age_hours">目录多少小时后算过期</string>
+    <string name="settings_catalog_max_age_hint">默认 24 小时。填写 0 或无效值时恢复为 24 小时；离开输入框后保存。</string>
+    <string name="settings_catalog_auto_sync">目录过期时自动同步一次</string>
+    <string name="settings_catalog_auto_sync_hint">默认关闭。开启后，每趟仅由第一个账号同步一次；关闭时只提醒，日常流程不扫描整本目录。</string>
+    <string name="settings_always_detail_audit">每次都逐章核对</string>
+    <string name="settings_always_detail_audit_hint">默认关闭，可复用今天仍有效的逐章核对。聚合对不上、账本有变化或准备购买时，仍会逐章核对。</string>
     <string name="settings_section_system">系统权限</string>
     <string name="sub_records_header">已登记的章节与订阅情况</string>
-    <string name="checkin_notice_header">这一趟里我会替你按什么</string>
 
     <!--
-      二级页面。签到页和订阅页上五处「信息很多、窗口很小」的东西各搬进一整屏，
+      二级页面。签到页和订阅页上「信息很多、窗口很小」的东西各搬进一整屏，
       原位置只留一行：标题 + 一句摘要 + 箭头。摘要那一句是硬要求 ——
       使用者手指不能动，只有点开才看得到的信息对他等于不存在。
     -->
     <string name="detail_back">返回</string>
-    <string name="detail_notice_sub">广告照真实时长播完：不快进、不跳过、播不满不按关闭。</string>
-    <string name="detail_notice_summary">广告由你看，按键交给我：不快进、不跳过、播不满不许关。点开看全文。</string>
     <string name="detail_log_empty">（还没有日志）</string>
+    <string name="detail_log_export">导出</string>
+    <string name="detail_log_export_failed">导出失败：%1$s</string>
+    <string name="detail_log_exported">已导出 %1$d 行日志</string>
     <string name="detail_log_summary_idle">还没有日志。跑起来之后这里会显示最新那一行。</string>
     <string name="detail_today_summary_empty">还没有账号，先去「账号」页添加。</string>
     <string name="detail_stats_title">各账号累计</string>
     <string name="detail_stats_empty">账本里还没有订阅记录。跑一趟自动订阅，或在章节页手动补录。</string>
     <string name="detail_stats_summary_empty">账本里还没有订阅记录。</string>
+    <string name="detail_suspect_title">核对记录与存疑</string>
+    <string name="detail_suspect_empty">还没有核对记录。核对后的补记、修正和存疑会直接显示在这里。</string>
+    <string name="detail_suspect_no_target">先在订阅页选择目标小说。</string>
+    <string name="detail_audit_undo">撤销</string>
     <string name="sub_ledger_section">这本书的账本</string>
-    <string name="detail_scrollbar_hint">滚动条：在上面点一下就跳到那一处，也可以按住上下拖</string>
+    <string name="detail_scrollbar_hint">快速滚动</string>
+    <string name="detail_scrollbar_next_page">向下滚动一屏</string>
+    <string name="detail_scrollbar_position">第 %1$d 项，共 %2$d 项</string>
 
     <string name="inspector_dump">抓取当前菠萝包界面</string>
     <string name="inspector_save">保存到文件</string>
     <string name="inspector_open_target">打开菠萝包</string>
     <string name="inspector_probe">用现有选择器试匹配</string>
-    <string name="inspector_hint">先把菠萝包切到要抓的页面，再回到这里点抓取。抓到的 id／text 就是填进 selectors.json 的值。</string>
+    <string name="inspector_run_evidence">运行取证</string>
+    <string name="inspector_hint">点「打开菠萝包」，翻到目标页面后切回。自动运行保存的现场在「运行取证」里查看；选好内容后点「保存到文件」导出全文。</string>
 
     <!--
       跑完那个弹窗（ui/DoneDialogActivity）。它会自己盖在屏幕正中 ——

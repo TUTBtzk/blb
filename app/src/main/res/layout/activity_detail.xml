@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?><!--
   二级页面的外壳：返回 + 标题 + 一行副标题 + 一整屏内容。
 
-  内容区里三样东西只显示一样（DetailActivity 按页面种类选）：
-  · detail_scroll   —— 长说明文字（辅助点击说明）
+  内容区里两样东西只显示一样（DetailActivity 按页面种类选）：
   · detail_log_scroll —— 运行日志，等宽深底，跟正文彻底分开
   · detail_list     —— 列表（今日状态 / 各账号累计 / 已登记章节）
 
@@ -50,6 +49,24 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
             android:layout_weight="1" />
+
+        <!--
+          只跟着「运行日志」出现：使用者手指动不了，日志出问题时他能做的只有把这一趟
+          导成文件发出来，手工划屏选中几千行必然截断。
+        -->
+        <TextView
+            android:id="@+id/detail_export"
+            style="@style/Blb.Text.Hint"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:minWidth="64dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/detail_log_export"
+            android:textColor="?attr/colorSecondary"
+            android:visibility="gone" />
     </LinearLayout>
 
     <TextView
@@ -68,22 +85,6 @@
         android:layout_height="0dp"
         android:layout_marginBottom="10dp"
         android:layout_weight="1">
-
-        <ScrollView
-            android:id="@+id/detail_scroll"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:paddingEnd="14dp"
-            android:scrollbars="none"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/detail_text"
-                style="@style/Blb.Text.Body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingBottom="16dp" />
-        </ScrollView>
 
         <ScrollView
             android:id="@+id/detail_log_scroll"

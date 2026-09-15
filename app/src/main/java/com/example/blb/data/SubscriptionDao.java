@@ -40,7 +40,17 @@ public interface SubscriptionDao {
     void updateNovel(Novel novel);
 
     @Delete
-    void deleteNovel(Novel novel);
+    void deleteEmptyNovelRow(Novel novel);
+
+    /** 级联删除小说会把真实购买也抹掉，让它再次进入待买队列；只允许删没有账的空登记。 */
+    @Transaction
+    default void deleteNovel(Novel novel) {
+        if (novel == null || novel.id <= 0) throw new IllegalArgumentException("小说记录不明");
+        if (!loadPurchasesOfNovel(novel.id).isEmpty()) {
+            throw new IllegalStateException("这本书已有订阅账本，不能删除；请先核对订阅清单");
+        }
+        deleteEmptyNovelRow(novel);
+    }
 
     @Query("UPDATE novel SET is_target = 0")
     void clearTarget();
@@ -79,13 +89,33 @@ public interface SubscriptionDao {
     void updateChapter(Chapter chapter);
 
     @Delete
-    void deleteChapter(Chapter chapter);
+    void deleteEmptyChapterRow(Chapter chapter);
+
+    /** 免费回填也决定下一章，不能借删章节绕过核对证据把任何 purchase 级联清掉。 */
+    @Transaction
+    default void deleteChapter(Chapter chapter) {
+        if (chapter == null || chapter.id <= 0) throw new IllegalArgumentException("章节记录不明");
+        if (!loadPurchasesForChapters(java.util.Collections.singletonList(chapter.id)).isEmpty()) {
+            throw new IllegalStateException("这一章已有订阅记录，不能删除；请核对订阅清单");
+        }
+        deleteEmptyChapterRow(chapter);
+    }
 
     @Query("UPDATE chapter SET chapter_no = :chapterNo WHERE id = :id")
     void setChapterNo(long id, int chapterNo);
 
     @Query("DELETE FROM chapter WHERE id = :id")
-    void deleteChapterById(long id);
+    void deleteEmptyChapterById(long id);
+
+    /** 作者删章时也只能移除空登记，目录搬号不能成为另一条无留痕删账通路。 */
+    @Transaction
+    default void deleteChapterById(long id) {
+        if (id <= 0) throw new IllegalArgumentException("章节记录不明");
+        if (!loadPurchasesForChapters(java.util.Collections.singletonList(id)).isEmpty()) {
+            throw new IllegalStateException("作者目录里消失的章节仍有订阅账本，停止重排并核对");
+        }
+        deleteEmptyChapterById(id);
+    }
 
     /**
      * 作者动过目录之后，把账本里的章号整体搬到跟界面一致。
@@ -132,11 +162,243 @@ public interface SubscriptionDao {
 
     // ---------- 购买记录 ----------
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    long upsertPurchase(Purchase purchase);
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    long insertPurchaseOrAbort(Purchase purchase);
 
-    @Delete
-    void deletePurchase(Purchase purchase);
+    /** 手填和自动购买按代码确定的来源写入；REPLACE 会改掉旧金额与主键，不能再当作补录。 */
+    @Transaction
+    default long upsertPurchase(Purchase purchase) {
+        return writePurchase(purchase, false);
+    }
+
+    /** 2026-09-14 的跨号补记例外必须有远端明细；CSV 的原 source 只存作事实，不能充当权限。 */
+    @Transaction
+    default long upsertImportedPurchase(Purchase purchase) {
+        return writePurchase(purchase, true);
+    }
+
+    private long writePurchase(Purchase purchase, boolean imported) {
+        List<Purchase> existing = purchase == null ? null
+                : loadPurchasesForChapters(java.util.Collections.singletonList(purchase.chapterId));
+        LedgerWritePolicy.Decision decision = imported
+                ? LedgerWritePolicy.decideImported(purchase, existing)
+                : LedgerWritePolicy.decide(purchase, existing);
+        if (decision.action == LedgerWritePolicy.Action.REJECT) {
+            throw new IllegalStateException(decision.message);
+        }
+        if (decision.action == LedgerWritePolicy.Action.KEEP) return decision.existingId;
+        return insertPurchaseOrAbort(purchase);
+    }
+
+    /**
+     * 2026-09-14 真实跨号订阅被误拒；远端恢复保留服务器已发生的事实，
+     * 但币种、金额必须明确，同账号仍不能覆盖或重复插入。
+     */
+    @Transaction
+    default long insertRemotePurchase(Purchase purchase) {
+        if (purchase == null || !Purchase.SRC_REMOTE_DETAIL.equals(purchase.source)
+                || purchase.costCoupons != 0 || purchase.costVouchers <= 0) {
+            throw new IllegalArgumentException("远端补账必须有确定的代券购买事实");
+        }
+        return upsertPurchase(purchase);
+    }
+
+    @Query("UPDATE purchase SET cost_coupons = 0, cost_vouchers = :vouchers, "
+            + "purchased_at = :purchasedAt, source = 'REMOTE_DETAIL' "
+            + "WHERE id = :id AND account_id = :accountId AND chapter_id = :chapterId "
+            + "AND cost_coupons = 0 AND cost_vouchers = 0 AND source = 'OWNED'")
+    int promoteOwnedPurchaseRow(long id, long accountId, long chapterId, int vouchers,
+                                long purchasedAt);
+
+    @Transaction
+    default int promoteOwnedPurchase(long id, long accountId, long chapterId, int vouchers,
+                                     long purchasedAt) {
+        List<Purchase> rows = loadPurchasesForChapters(java.util.Collections.singletonList(chapterId));
+        Purchase stored = purchaseOf(rows, accountId);
+        Purchase incoming = new Purchase();
+        incoming.accountId = accountId;
+        incoming.chapterId = chapterId;
+        incoming.costVouchers = vouchers;
+        incoming.purchasedAt = purchasedAt;
+        incoming.source = Purchase.SRC_REMOTE_DETAIL;
+        if (stored == null || stored.id != id || !LedgerWritePolicy.canPromoteOwned(stored, incoming, rows)) {
+            return 0;
+        }
+        return promoteOwnedPurchaseRow(id, accountId, chapterId, vouchers, purchasedAt);
+    }
+
+    /**
+     * 逐章远端明细核实后的历史账一次性补回。恢复专用写入绝不使用 REPLACE：
+     * 已有事实只能原样幂等重放，或把本账号零金额 OWNED 原地提升为远端付费事实。
+     */
+    @Transaction
+    default boolean restoreRemotePurchases(long accountId, long novelId,
+                                           List<Purchase> purchases,
+                                           List<Chapter> plannedChapters,
+                                           List<PurchaseRow> plannedPaidRows) {
+        if (!sameChapterSnapshot(plannedChapters, loadChapters(novelId))
+                || !samePaidSnapshot(plannedPaidRows, loadPaidRowsOfNovel(novelId))) {
+            return false;
+        }
+        return applyRemotePurchases(accountId, novelId, purchases,
+                plannedChapters, loadPurchasesForChapters(chapterIds(purchases)));
+    }
+
+    /** 只供上面的快照校验入口在同一个 Room 事务里调用，不对业务层暴露绕过校验的重载。 */
+    private boolean applyRemotePurchases(long accountId, long novelId,
+                                         List<Purchase> purchases,
+                                         List<Chapter> chapters,
+                                         List<Purchase> affectedPurchases) {
+        if (purchases == null || purchases.isEmpty()) return false;
+        Map<Long, Chapter> chapterById = new java.util.HashMap<>();
+        if (chapters != null) {
+            for (Chapter chapter : chapters) {
+                if (chapter == null || chapterById.put(chapter.id, chapter) != null) return false;
+            }
+        }
+        Map<Long, List<Purchase>> existing = purchasesByChapter(affectedPurchases);
+        java.util.Set<Long> incomingChapters = new java.util.HashSet<>();
+        int expectedVoucherTotal = 0;
+        for (Purchase incoming : purchases) {
+            if (incoming == null || !incomingChapters.add(incoming.chapterId)
+                    || incoming.id != 0 || incoming.accountId != accountId
+                    || incoming.costCoupons != 0 || incoming.costVouchers <= 0
+                    || incoming.purchasedAt <= 0
+                    || !Purchase.SRC_REMOTE_DETAIL.equals(incoming.source)) return false;
+            expectedVoucherTotal += incoming.costVouchers;
+            Chapter chapter = chapterById.get(incoming.chapterId);
+            if (chapter == null || chapter.novelId != novelId) return false;
+            List<Purchase> rows = existing.get(incoming.chapterId);
+            if (rows == null) continue;
+            Purchase mine = null;
+            for (Purchase old : rows) {
+                if (old.accountId != accountId) continue;
+                if (mine != null) return false;
+                mine = old;
+            }
+            if (mine != null && !sameRemoteFact(mine, incoming) && !promotableOwned(mine)) {
+                return false;
+            }
+        }
+        for (Purchase incoming : purchases) {
+            Purchase mine = purchaseOf(existing.get(incoming.chapterId), accountId);
+            if (mine == null) {
+                insertRemotePurchase(incoming);
+            } else if (promotableOwned(mine)) {
+                if (promoteOwnedPurchase(mine.id, accountId, incoming.chapterId,
+                        incoming.costVouchers, incoming.purchasedAt) != 1) {
+                    throw new IllegalStateException("远端补账时 OWNED 状态已变化");
+                }
+            }
+        }
+        Map<Long, List<Purchase>> after = purchasesByChapter(
+                loadPurchasesForChapters(new java.util.ArrayList<>(incomingChapters)));
+        int verified = 0;
+        int verifiedVoucherTotal = 0;
+        for (Purchase incoming : purchases) {
+            Purchase mine = purchaseOf(after.get(incoming.chapterId), accountId);
+            if (mine == null || !sameRemoteFact(mine, incoming)) {
+                throw new IllegalStateException("远端补账提交前复核失败");
+            }
+            verified++;
+            verifiedVoucherTotal += mine.costVouchers;
+        }
+        if (verified != purchases.size() || verifiedVoucherTotal != expectedVoucherTotal) {
+            throw new IllegalStateException("远端补账提交前章数或代券合计复核失败");
+        }
+        return true;
+    }
+
+    private static List<Long> chapterIds(List<Purchase> purchases) {
+        List<Long> ids = new java.util.ArrayList<>();
+        if (purchases != null) {
+            for (Purchase purchase : purchases) {
+                if (purchase != null && !ids.contains(purchase.chapterId)) ids.add(purchase.chapterId);
+            }
+        }
+        return ids;
+    }
+
+    private static Map<Long, List<Purchase>> purchasesByChapter(List<Purchase> purchases) {
+        Map<Long, List<Purchase>> out = new java.util.HashMap<>();
+        if (purchases == null) return out;
+        for (Purchase purchase : purchases) {
+            if (purchase == null) continue;
+            List<Purchase> rows = out.get(purchase.chapterId);
+            if (rows == null) {
+                rows = new java.util.ArrayList<>();
+                out.put(purchase.chapterId, rows);
+            }
+            rows.add(purchase);
+        }
+        return out;
+    }
+
+    static boolean sameChapterSnapshot(List<Chapter> planned, List<Chapter> current) {
+        if (planned == null || current == null || planned.size() != current.size()) return false;
+        Map<Long, Chapter> expected = new java.util.HashMap<>();
+        for (Chapter chapter : planned) {
+            if (chapter == null || expected.put(chapter.id, chapter) != null) return false;
+        }
+        for (Chapter chapter : current) {
+            Chapter old = chapter == null ? null : expected.remove(chapter.id);
+            if (old == null || old.novelId != chapter.novelId
+                    || old.chapterNo != chapter.chapterNo
+                    || !java.util.Objects.equals(old.title, chapter.title)
+                    || !java.util.Objects.equals(old.volumeTitle, chapter.volumeTitle)) return false;
+        }
+        return expected.isEmpty();
+    }
+
+    static boolean samePaidSnapshot(List<PurchaseRow> planned, List<PurchaseRow> current) {
+        if (planned == null || current == null || planned.size() != current.size()) return false;
+        Map<Long, PurchaseRow> expected = new java.util.HashMap<>();
+        for (PurchaseRow row : planned) {
+            if (row == null || expected.put(row.purchaseId, row) != null) return false;
+        }
+        for (PurchaseRow row : current) {
+            PurchaseRow old = row == null ? null : expected.remove(row.purchaseId);
+            if (old == null || old.accountId != row.accountId || old.chapterId != row.chapterId
+                    || old.costCoupons != row.costCoupons || old.costVouchers != row.costVouchers
+                    || old.purchasedAt != row.purchasedAt
+                    || !java.util.Objects.equals(old.source, row.source)) return false;
+        }
+        return expected.isEmpty();
+    }
+
+    static Purchase purchaseOf(List<Purchase> rows, long accountId) {
+        if (rows == null) return null;
+        for (Purchase row : rows) if (row.accountId == accountId) return row;
+        return null;
+    }
+
+    static boolean promotableOwned(Purchase row) {
+        return row != null && row.costCoupons == 0 && row.costVouchers == 0
+                && Purchase.SRC_OWNED.equals(row.source);
+    }
+
+    static boolean sameRemoteFact(Purchase stored, Purchase incoming) {
+        if (stored == null || incoming == null) return false;
+        if (stored.accountId != incoming.accountId || stored.chapterId != incoming.chapterId
+                || stored.costCoupons != 0 || stored.costVouchers != incoming.costVouchers
+                || !Purchase.SRC_REMOTE_DETAIL.equals(stored.source)) return false;
+        java.util.Calendar a = java.util.Calendar.getInstance();
+        java.util.Calendar b = java.util.Calendar.getInstance();
+        a.setTimeInMillis(stored.purchasedAt);
+        b.setTimeInMillis(incoming.purchasedAt);
+        return stored.purchasedAt > 0 && incoming.purchasedAt > 0
+                && a.get(java.util.Calendar.ERA) == b.get(java.util.Calendar.ERA)
+                && a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR)
+                && a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR);
+    }
+
+    /** 删除会让这章重新变成待买；只有 AuditDao 的两次证据校验事务才允许执行。 */
+    default void deletePurchase(Purchase purchase) {
+        throw new IllegalStateException("订阅记录不能直接删除，请用「核对订阅清单」更正并留下可撤销记录");
+    }
+
+    @Query("SELECT * FROM purchase WHERE chapter_id IN (:chapterIds)")
+    List<Purchase> loadPurchasesForChapters(List<Long> chapterIds);
 
     @Query("SELECT * FROM purchase WHERE chapter_id IN "
             + "(SELECT id FROM chapter WHERE novel_id = :novelId)")
@@ -208,9 +470,8 @@ public interface SubscriptionDao {
      * 拿去跟「我的 → 代券 → 订阅清单 →（点整行）→ 订阅明细」那一页<b>逐章</b>对账
      * （见 {@code auto.SubscribedDetail}）。
      *
-     * <p>为什么要连别的号的一起取：明细页只说「这个号买过第 N 章」，而「一章只许一个号」是全队的
-     * 约束 —— 只有同时看得见别的号的记录，才认得出「菠萝包说这一章是甲买的、账本却记在乙名下」
-     * 这种归属错乱（2026-08-25 第49章那件事）。
+     * <p>2026-09-14 用户确认多号订同章是真实历史；全书快照用于防止核对期间事实变化，
+     * 并说明还有哪些号订过。跨号重复本身不是错账，当前号的明细和账本仍须逐章完全对应。
      *
      * <p>筛「花过券」的口径和 {@link #countPaidPurchases} 一致：免费章（{@code OWNED}、
      * 花费 0）不算 —— 明细页只列付费订阅。

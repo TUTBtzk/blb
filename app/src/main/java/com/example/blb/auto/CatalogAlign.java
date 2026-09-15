@@ -10,7 +10,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * 作者更新之后，把账本里的章号重新对到界面上的位置。
@@ -27,9 +26,6 @@ import java.util.regex.Pattern;
  * 顺序被打乱）仍然停下报告 —— 宁可这一轮什么都不买。
  */
 public final class CatalogAlign {
-
-    /** 台账里手工登记的标题可能只有「久违的笑」，界面上是「11   久违的笑」。 */
-    private static final Pattern LEADING_NO = Pattern.compile("^\\d{1,5}\\s*");
 
     /** 该怎么把账本搬到跟界面一致。 */
     public static final class Plan {
@@ -209,7 +205,7 @@ public final class CatalogAlign {
             for (int i = 0; i < rows.size(); i++) {
                 String raw = rows.get(i).title == null ? "" : rows.get(i).title.trim();
                 add(byRaw, raw, i + 1);
-                String stripped = LEADING_NO.matcher(raw).replaceFirst("").trim();
+                String stripped = Texts.chapterTitle(raw);
                 if (!stripped.equals(raw)) add(byStripped, stripped, i + 1);
             }
         }
@@ -218,7 +214,7 @@ public final class CatalogAlign {
          * 账本里这一章现在排在界面第几行（可能有好几行同名）。
          *
          * <p>四步都要试，因为行文本里<b>印着标号</b>：作者往中间插了一章，「67 乙」在界面上
-         * 会变成「68 乙」—— 原样对是对不上的，必须两边都去掉行首标号再对，
+         * 可能变成「第68章 乙」—— 原样对是对不上的，必须两边都只去掉一次行首标号再对，
          * 也就是<b>认名字、不认号</b>。这正是「章号只是它现在排第几」这条规则的落地处。
          */
         List<Integer> find(String ledgerTitle) {
@@ -227,7 +223,7 @@ public final class CatalogAlign {
             if (hit != null) return hit;
             hit = byStripped.get(t);              // 账本里是手工登记的短标题，界面上带标号
             if (hit != null) return hit;
-            String stripped = LEADING_NO.matcher(t).replaceFirst("").trim();
+            String stripped = Texts.chapterTitle(t);
             if (!stripped.equals(t)) {
                 hit = byRaw.get(stripped);        // 界面上那一行本来就没标号
                 if (hit != null) return hit;

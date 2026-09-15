@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?><!--
   签到页从上到下四块：现在在干什么（状态卡）→ 要不要我做决定（暂停卡）→
-  开跑的按钮 → 三行「点进去看全部」的入口。
+  开跑的按钮 → 两行「点进去看全部」的入口。
 
   三处刻意的取舍：
-  · 今日状态、运行日志、辅助点击说明这三样原来都是「信息很多、窗口很小」：列表挤在
-    半屏里、日志锁死 120dp 约八行、说明折成两行后面还有大半段看不见。现在它们各是一行
+  · 今日状态、运行日志原来都是「信息很多、窗口很小」：列表挤在
+    半屏里、日志锁死 120dp 约八行。现在它们各是一行
     EntryRowView（标题 + 一句摘要 + 箭头），完整内容在 DetailActivity 里占一整屏。
   · 每一行都必须带那句摘要：这个 App 的使用者手指不能动，只有点开才看得到的信息对他
     等于不存在。所以不点也答得出「今天成了几个」「最新一行日志是什么」。
@@ -129,6 +129,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:singleLine="false"
             android:text="@string/checkin_run_daily"
             app:icon="@drawable/ic_action_daily" />
 
@@ -167,7 +168,7 @@
             android:layout_marginBottom="14dp"
             android:text="@string/checkin_run_hint" />
 
-        <!-- 三行入口。标题和摘要都在 CheckInFragment 里灌，摘要随数据变。 -->
+        <!-- 两行入口。标题和摘要都在 CheckInFragment 里灌，摘要随数据变。 -->
         <com.example.blb.ui.EntryRowView
             android:id="@+id/entry_today"
             style="@style/Blb.Card.Row"
@@ -180,11 +181,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
-        <com.example.blb.ui.EntryRowView
-            android:id="@+id/entry_notice"
-            style="@style/Blb.Card.Row"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
     </LinearLayout>
 
 </ScrollView>

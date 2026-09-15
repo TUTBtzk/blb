@@ -25,17 +25,34 @@ public interface NodeView {
     /** 是否是可滚动容器（列表/目录页靠它翻页找章节）。 */
     boolean scrollable();
 
-    /**
-     * 用户当前是否真的看得见它。广告卡是一层盖一层的，被盖住的那层文字还在树里
-     * （实测穿山甲的弹卡下面就压着一张含「立即下载」的下载卡），认了它就是空点。
-     */
+    /** 平台明确标为标题才返回 true；false 不代表已经证明这是一章。 */
+    default boolean heading() { return false; }
+
+    /** 2026-09-15 长明细会改变集合元数据；未知必须保留 -1，不能冒充空清单或第零项。 */
+    default int collectionRowCount() { return -1; }
+
+    default int collectionColumnCount() { return -1; }
+
+    default int collectionRowIndex() { return -1; }
+
+    default int collectionRowSpan() { return -1; }
+
+    default int collectionColumnIndex() { return -1; }
+
+    default int collectionColumnSpan() { return -1; }
+
+    /** 仅表示节点公开了该方向动作，不代表动作已经执行或已到边界。 */
+    default boolean supportsScrollForward() { return false; }
+
+    default boolean supportsScrollBackward() { return false; }
+
+    /** 用户当前是否真的看得见它；被弹窗遮住的文字也可能残留在节点树中。 */
     boolean visible();
 
     /**
      * 屏幕坐标 {left, top, right, bottom}，恒返回 4 个元素、不返回 null。
      *
-     * <p>广告播放页整棵树可能没有一个 clickable 节点，只能按 bounds 中心做手势点击，
-     * 所以「有没有面积」是能不能点的前提，也是点不动时唯一能写进日志的线索。
+     * <p>节点中心是手势点击的坐标来源；没有面积就不能由这个节点确定落点。
      */
     int[] boundsInScreen();
 

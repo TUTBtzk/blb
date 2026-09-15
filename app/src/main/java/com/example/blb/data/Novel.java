@@ -34,6 +34,14 @@ public class Novel {
     @ColumnInfo(name = "start_chapter_no")
     public int startChapterNo = 1;
 
+    /** 老账本有章节不等于完整扫过；升级后保留 0，不能替以前的手工登记编一个扫描时间。 */
+    @ColumnInfo(name = "catalog_scanned_at", defaultValue = "0")
+    public long catalogScannedAt;
+
+    /** 和扫描时间一起记录当时的完整目录，后续才看得出作者是否可能又添了章节。 */
+    @ColumnInfo(name = "catalog_chapter_count", defaultValue = "0")
+    public int catalogChapterCount;
+
     /** 至少是 1；库里存了 0 或负数（老数据）也当成从头开始。 */
     public int startFrom() {
         return Math.max(1, startChapterNo);

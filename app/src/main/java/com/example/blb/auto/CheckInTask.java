@@ -3,12 +3,7 @@ package com.example.blb.auto;
 import com.example.blb.data.CheckInLog;
 import com.example.blb.util.Texts;
 
-/**
- * 一个账号的签到流程。
- *
- * <p>广告不自动看：走到签到页时只判断有没有「看广告领奖励」入口，把这件事记进日志、
- * 交给你手动领。激励视频是按真实观看计费的，脚本刷完等于让广告主为没人看的曝光付钱。
- */
+/** 一个账号的签到流程。 */
 public final class CheckInTask {
 
     private static final long NAV_TIMEOUT = 12_000;
@@ -17,7 +12,6 @@ public final class CheckInTask {
 
     public static final class Result {
         public String status = CheckInLog.FAILED;
-        public boolean adAvailable;
         /** 读到的火券余额，-1 表示没读到，不要覆盖已有值。 */
         public int coupons = -1;
         /** 读到的代券余额，-1 表示没读到。签到发的就是代券。 */
@@ -68,7 +62,6 @@ public final class CheckInTask {
             result.message = "签到面板里没有「点击签到」，今天这个号已经签过";
         }
 
-        result.adAvailable = r.findAny(Keys.AD_REWARD) != null;
         // 签到面板上没有任何余额数字（面板是独立窗口，实测 78 个节点里一个都没有），所以这里
         // 只是顺手看一眼当前屏——真正的余额由调用方去「我的」页读（readBalanceFromMine）。
         // 别在这儿等：白等 2.5 秒 × 8 个号。

@@ -245,11 +245,11 @@ public class NodeMatcherTest {
     /** visibleOnly 同时要求有面积：Lynx 树里一堆零高度的占位节点，点中心点等于点在别处。 */
     @Test
     public void visibleOnlySkipsZeroAreaNodes() {
-        Selector s = sel("text", "我要加速");
+        Selector s = sel("text", "确认");
         s.visibleOnly = true;
-        assertFalse("零高度", NodeMatcher.matches(s, text("我要加速").withBounds(0, 111, 1080, 111)));
-        assertFalse("零宽度", NodeMatcher.matches(s, text("我要加速").withBounds(214, 1367, 214, 1535)));
-        assertTrue(NodeMatcher.matches(s, text("我要加速").withBounds(214, 1367, 866, 1535)));
+        assertFalse("零高度", NodeMatcher.matches(s, text("确认").withBounds(0, 111, 1080, 111)));
+        assertFalse("零宽度", NodeMatcher.matches(s, text("确认").withBounds(214, 1367, 214, 1535)));
+        assertTrue(NodeMatcher.matches(s, text("确认").withBounds(214, 1367, 866, 1535)));
 
         assertFalse(NodeMatcher.hasArea(null));
         assertFalse(NodeMatcher.hasArea(text("x").withBounds(0, 0, 0, 0)));
@@ -259,13 +259,13 @@ public class NodeMatcherTest {
     /** requireArea：只问有没有面积，不问 isVisibleToUser —— 自绘树上后者不可靠。 */
     @Test
     public void requireAreaKeepsInvisibleButSizedNodes() {
-        Selector s = sel("text", "我要直接拿奖励");
+        Selector s = sel("text", "确认");
         s.requireArea = true;
-        assertTrue("看不见但有面积的照样要认 —— 广告那种自绘树上 isVisibleToUser 不可信",
-                NodeMatcher.matches(s, text("我要直接拿奖励").visible(false)
+        assertTrue("requireArea只负责几何面积，不能暗中替换成visibleOnly",
+                NodeMatcher.matches(s, text("确认").visible(false)
                         .withBounds(214, 1367, 866, 1535)));
         assertFalse("零面积的占位节点不算",
-                NodeMatcher.matches(s, text("我要直接拿奖励").withBounds(0, 111, 1080, 111)));
+                NodeMatcher.matches(s, text("确认").withBounds(0, 111, 1080, 111)));
     }
 
     /** topmost：多个命中取 DFS 最后一个 ≈ 后画上去、盖在最上层的那个。 */
@@ -306,39 +306,5 @@ public class NodeMatcherTest {
         tooFar.topmost = true;
         tooFar.index = 3;
         assertNull(NodeMatcher.find(root, Collections.singletonList(tooFar)));
-    }
-
-    /**
-     * 右上角那颗关闭 X：照 2026-08-23 14:14 实测的优量汇领奖弹窗顶栏原样搭出来。
-     *
-     * <p>那颗 X 没 text、没 desc、没 id、也不 clickable，选择器一条都认不到，只能按位置认。
-     * 这里钉住三件事：取到的是那个 44×44 的图标本身（不是包着它的 72×72 容器，更不是
-     * 整条顶栏）；顶栏里那句「恭喜获得奖励」在左边，不许被当成关闭键；零面积的占位节点跳过。
-     */
-    @Test
-    public void cornerCloseFindsTheIconItselfInTheTopRight() {
-        FakeNode root = node().withBounds(0, 0, 1080, 2400).add(
-                node().withBounds(0, 111, 1080, 241).add(
-                        text("恭喜获得奖励").withBounds(668, 169, 922, 241),
-                        node().withBounds(950, 169, 1022, 241).add(
-                                node().withBounds(964, 183, 964, 183),
-                                node().withBounds(964, 183, 1008, 227))));
-
-        NodeView x = NodeMatcher.findCornerClose(root, 1080, 2400);
-        assertNotNull("右上角那颗 X 必须找得到，找不到就退不出这张弹窗", x);
-        assertArrayEquals(new int[]{964, 183, 1008, 227}, x.boundsInScreen());
-    }
-
-    /** 右上角什么都没有的时候必须返回 null，让调用方退回按几何位置点。 */
-    @Test
-    public void cornerCloseReturnsNullWhenNothingSitsInTheCorner() {
-        FakeNode root = node().withBounds(0, 0, 1080, 2400).add(
-                // 屏幕正中那张卡：不在右上角。
-                text("我要更快拿奖").withBounds(214, 1367, 866, 1535),
-                // 右上角但铺得太大：这是整条顶栏／半个屏幕，点它中心会点偏。
-                node().withBounds(700, 0, 1080, 400),
-                // 顶栏左边那句文字。
-                text("恭喜获得奖励").withBounds(668, 169, 922, 241));
-        assertNull(NodeMatcher.findCornerClose(root, 1080, 2400));
     }
 }

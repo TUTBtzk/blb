@@ -74,7 +74,7 @@ public class ChapterOwnershipTest {
 
     @Test
     public void twoAccountsOnOneChapterAreBothReportedSoTheUiCanAsk() {
-        // 一章两个号买过是要修的错（钱白花了），但切号不许替他猜 —— 界面得拿到两个人去问。
+        // 2026-09-14 用户确认两个号都真实订过；两个买家都要展示，切号由用户选择。
         ChapterOwnership own = ChapterOwnership.of(
                 Arrays.asList(bought(3, 60), bought(8, 60)), 60);
         assertEquals(Arrays.asList(3L, 8L), own.buyerIds);

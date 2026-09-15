@@ -210,7 +210,7 @@ public final class VoucherLedger {
         return selectors != null && selectors.missing(REQUIRED).isEmpty();
     }
 
-    private static final String[] REQUIRED = {
+    public static final String[] REQUIRED = {
             Keys.MINE_TAB, Keys.VOUCHER_ENTRY, Keys.SUBSCRIBED_LIST_ENTRY,
             Keys.SUBSCRIBED_BOOK_TITLE, Keys.SUBSCRIBED_BOOK_SUMMARY};
 

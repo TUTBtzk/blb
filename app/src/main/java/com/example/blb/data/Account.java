@@ -66,7 +66,7 @@ public class Account {
     @ColumnInfo(name = "last_known_coupons")
     public int lastKnownCoupons = -1;
 
-    /** 代券余额（签到和看广告发的就是这个）。-1 表示还没读到过。 */
+    /** 代券余额。签到后回填；-1 表示还没读到过。 */
     @ColumnInfo(name = "last_known_vouchers")
     public int lastKnownVouchers = -1;
 

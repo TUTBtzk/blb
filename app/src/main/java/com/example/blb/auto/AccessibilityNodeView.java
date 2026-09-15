@@ -1,6 +1,7 @@
 package com.example.blb.auto;
 
 import android.graphics.Rect;
+import android.os.Build;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 /**
@@ -71,6 +72,72 @@ public final class AccessibilityNodeView implements NodeView {
     @Override
     public boolean scrollable() {
         return info.isScrollable();
+    }
+
+    @Override
+    public boolean heading() {
+        if (Build.VERSION.SDK_INT >= 28 && info.isHeading()) return true;
+        AccessibilityNodeInfo.CollectionItemInfo item = info.getCollectionItemInfo();
+        return item != null && item.isHeading();
+    }
+
+    @Override public int collectionRowCount() {
+        try {
+            AccessibilityNodeInfo.CollectionInfo value = info.getCollectionInfo();
+            return value == null ? -1 : value.getRowCount();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public int collectionColumnCount() {
+        try {
+            AccessibilityNodeInfo.CollectionInfo value = info.getCollectionInfo();
+            return value == null ? -1 : value.getColumnCount();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public int collectionRowIndex() {
+        try {
+            AccessibilityNodeInfo.CollectionItemInfo value = info.getCollectionItemInfo();
+            return value == null ? -1 : value.getRowIndex();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public int collectionRowSpan() {
+        try {
+            AccessibilityNodeInfo.CollectionItemInfo value = info.getCollectionItemInfo();
+            return value == null ? -1 : value.getRowSpan();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public int collectionColumnIndex() {
+        try {
+            AccessibilityNodeInfo.CollectionItemInfo value = info.getCollectionItemInfo();
+            return value == null ? -1 : value.getColumnIndex();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public int collectionColumnSpan() {
+        try {
+            AccessibilityNodeInfo.CollectionItemInfo value = info.getCollectionItemInfo();
+            return value == null ? -1 : value.getColumnSpan();
+        } catch (RuntimeException unavailable) { return -1; }
+    }
+
+    @Override public boolean supportsScrollForward() {
+        return supportsAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+    }
+
+    @Override public boolean supportsScrollBackward() {
+        return supportsAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD);
+    }
+
+    private boolean supportsAction(int actionId) {
+        try {
+            for (AccessibilityNodeInfo.AccessibilityAction action : info.getActionList()) {
+                if (action != null && action.getId() == actionId) return true;
+            }
+        } catch (RuntimeException unavailable) { return false; }
+        return false;
     }
 
     @Override

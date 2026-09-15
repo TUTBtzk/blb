@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  设置页按「这些开关管的是同一件事」分成四张卡：无障碍、运行方式、广告辅助、系统权限。
+  设置页把同一类开关放在同一张卡里，目录与核对策略不能埋进系统权限说明。
   原来是一长串裸 Button 和裸 EditText 直接堆在一起，看不出哪几项相关、也看不出边界。
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
@@ -109,6 +109,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
+                    android:labelFor="@id/daily_hour"
                     android:text="@string/settings_daily_hour" />
 
                 <EditText
@@ -125,6 +126,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
+                    android:labelFor="@id/spend_cap"
                     android:text="@string/settings_spend_cap" />
 
                 <EditText
@@ -136,21 +138,6 @@
                     android:importantForAutofill="no"
                     android:inputType="number" />
 
-                <TextView
-                    style="@style/Blb.Text.Hint"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="@string/settings_ads_per_account" />
-
-                <EditText
-                    android:id="@+id/ads_per_account"
-                    style="@style/Blb.Field"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:importantForAutofill="no"
-                    android:inputType="number" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
         <TextView
@@ -159,7 +146,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
             android:layout_marginBottom="8dp"
-            android:text="@string/settings_section_ads" />
+            android:text="@string/settings_section_subscription" />
 
         <com.google.android.material.card.MaterialCardView
             style="@style/Blb.Card"
@@ -171,40 +158,59 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/ad_assist"
+                <TextView
+                    style="@style/Blb.Text.Body"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/settings_ad_assist" />
+                    android:labelFor="@id/catalog_max_age_hours"
+                    android:text="@string/settings_catalog_max_age_hours" />
+
+                <EditText
+                    android:id="@+id/catalog_max_age_hours"
+                    style="@style/Blb.Field"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:importantForAutofill="no"
+                    android:inputType="number" />
 
                 <TextView
                     style="@style/Blb.Text.Hint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="@string/settings_ad_assist_hint" />
+                    android:layout_marginTop="4dp"
+                    android:text="@string/settings_catalog_max_age_hint" />
 
-                <View
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/catalog_auto_sync"
                     android:layout_width="match_parent"
-                    android:layout_height="1dp"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="14dp"
-                    android:layout_marginBottom="14dp"
-                    android:background="?attr/colorOutlineVariant" />
-
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/ad_jump"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/settings_ad_jump" />
+                    android:text="@string/settings_catalog_auto_sync" />
 
                 <TextView
                     style="@style/Blb.Text.Hint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="@string/settings_ad_jump_hint" />
+                    android:text="@string/settings_catalog_auto_sync_hint" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/always_detail_audit"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="@string/settings_always_detail_audit" />
+
+                <TextView
+                    style="@style/Blb.Text.Hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="@string/settings_always_detail_audit_hint" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
         <TextView
             style="@style/Blb.Text.Section"
             android:layout_width="match_parent"

@@ -16,7 +16,7 @@ public enum StatusPalette {
 
     /** 成功了，不用管。 */
     OK(R.color.blb_ok, R.color.blb_ok_container),
-    /** 没失败，但需要人知道（被验证码挡住、还有广告没看）。 */
+    /** 没失败，但需要人知道（被验证码挡住）。 */
     WARN(R.color.blb_warn, R.color.blb_warn_container),
     /** 失败了。 */
     FAIL(R.color.blb_fail, R.color.blb_fail_container),

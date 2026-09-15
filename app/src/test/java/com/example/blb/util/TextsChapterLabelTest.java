@@ -85,4 +85,68 @@ public class TextsChapterLabelTest {
         assertFalse(p.matcher("番外卷 第三章").find());
         assertTrue(p.matcher("第三章 番外").find());
     }
+
+    @Test
+    public void oldAndOrdinalCatalogRowsShareTheirNumberAndTitle() {
+        for (String row : new String[]{"83 最后", "83最后", "第83章 最后",
+                "第83章最后", "第 83 章 最后", " \t第0083章　最后 "}) {
+            assertEquals(row, 83, Texts.rowChapterNo(row));
+            assertEquals(row, "最后", Texts.chapterTitle(row));
+        }
+    }
+
+    @Test
+    public void aMissingChapterCharacterRequiresWhitespaceAndANonemptyTitle() {
+        for (String row : new String[]{"第68 投影", "第 68 投影", "第68　投影"}) {
+            assertEquals(row, 68, Texts.rowChapterNo(row));
+            assertEquals(row, "投影", Texts.chapterTitle(row));
+        }
+        for (String row : new String[]{"第68", "第68   ", "第68投影"}) {
+            assertEquals(row, -1, Texts.rowChapterNo(row));
+        }
+    }
+
+    @Test
+    public void theRealZhangTypoStillNamesASingleChapter() {
+        assertEquals(30, Texts.rowChapterNo("第30张 红温"));
+        assertEquals("红温", Texts.chapterTitle("第30张 红温"));
+        assertEquals(30, Texts.rowChapterNo("第 30 张红温"));
+    }
+
+    @Test
+    public void volumeHeadingsAndNumbersInTheMiddleAreNotChapterPrefixes() {
+        for (String row : new String[]{"铃兰花", "第68卷", "第68 卷", "第 68卷", "第 68 卷",
+                "第68部 正文", "第68 部 正文", "第68册", "第68 册", "第68 集",
+                "第68 篇", "第68 季", "铃兰花 第83章 最后", "谈到第83章",
+                "上架感言", "一卷总结", "第七章 回家"}) {
+            assertEquals(row, -1, Texts.rowChapterNo(row));
+            assertEquals(row, row, Texts.chapterTitle(row));
+        }
+    }
+
+    @Test
+    public void anOverlongNumberCannotBePartlyConsumedAsAPrefix() {
+        for (String row : new String[]{"123456 最后", "第123456章 最后", "第123456 最后"}) {
+            assertEquals(row, -1, Texts.rowChapterNo(row));
+            assertEquals(row, row, Texts.chapterTitle(row));
+        }
+    }
+
+    @Test
+    public void strippingOnePrefixKeepsNumbersAndChapterReferencesInsideTheTitle() {
+        assertEquals("100天后", Texts.chapterTitle("第83章100天后"));
+        assertEquals("100天后", Texts.chapterTitle("83 100天后"));
+        assertEquals("第2章的秘密", Texts.chapterTitle("第83章 第2章的秘密"));
+        assertEquals("第2章的秘密", Texts.chapterTitle("第68 第2章的秘密"));
+        assertEquals("第2张合影", Texts.chapterTitle("第30张 第2张合影"));
+        assertEquals("最后 2026", Texts.chapterTitle("第83章 最后 2026"));
+    }
+
+    @Test
+    public void chapterTitlesOnlyNormalizeWhitespaceAfterThePrefix() {
+        assertEquals("最后 的 约定", Texts.chapterTitle("第83章  最后\t的　约定"));
+        assertEquals("回顾 第83章 最后", Texts.chapterTitle("回顾 第83章 最后"));
+        assertEquals("", Texts.chapterTitle(null));
+        assertEquals(-1, Texts.rowChapterNo(null));
+    }
 }

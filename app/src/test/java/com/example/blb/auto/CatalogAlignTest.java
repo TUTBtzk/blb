@@ -26,6 +26,39 @@ import java.util.Set;
  */
 public class CatalogAlignTest {
 
+    @Test public void appendingAnUnnumberedExtraKeepsEveryExistingPosition() {
+        CatalogAlign.Plan result = plan(Arrays.asList(
+                        chapter(71, 1, "第23章 正文末尾"),
+                        chapter(72, 2, "藏在地下室的恶鬼（上）"),
+                        chapter(73, 3, "藏在地下室的恶鬼（下）")),
+                rows("第23章 正文末尾", "藏在地下室的恶鬼（上）", "藏在地下室的恶鬼（下）", "迷信的可怖后果"));
+        assertNull(result.blocked);
+        assertTrue(result.nothingToDo());
+    }
+
+    @Test public void movingAnUnnumberedExtraUsesItsFullTitleAndKeepsItsId() {
+        CatalogAlign.Plan result = CatalogAlign.plan(Arrays.asList(
+                        chapter(71, 1, "第23章 正文末尾"),
+                        chapter(72, 2, "藏在地下室的恶鬼（上）")),
+                rows("第23章 正文末尾", "新追加在中间的一章", "藏在地下室的恶鬼（上）"),
+                2, bought(72L));
+        assertNull(result.blocked);
+        assertEquals(Integer.valueOf(3), result.renumber.get(72L));
+        assertEquals(3, result.newStartChapterNo);
+        assertTrue(result.dropIds.isEmpty());
+    }
+
+    @Test public void rescanningTheSameUnnumberedCatalogIsIdempotent() {
+        CatalogAlign.Plan result = plan(Arrays.asList(
+                        chapter(71, 1, "第23章 正文末尾"),
+                        chapter(72, 2, "藏在地下室的恶鬼（上）"),
+                        chapter(73, 3, "藏在地下室的恶鬼（下）"),
+                        chapter(74, 4, "迷信的可怖后果")),
+                rows("第23章 正文末尾", "藏在地下室的恶鬼（上）", "藏在地下室的恶鬼（下）", "迷信的可怖后果"));
+        assertNull(result.blocked);
+        assertTrue(result.nothingToDo());
+    }
+
     /** 重排只看行序和标题，这里统一造成「付费、还没买、还能勾」的行。 */
     private static CatalogScanner.Row row(String title) {
         return new CatalogScanner.Row(title, com.example.blb.util.Texts.rowChapterNo(title),
@@ -92,6 +125,123 @@ public class CatalogAlignTest {
         assertNull(p.blocked);
         assertEquals(Integer.valueOf(3), p.renumber.get(7L));
         assertTrue("买过的章一条都不许删", p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void legacyPrintedTitlesMoveToChineseOrdinalRowsWithoutDroppingPaidIds() {
+        for (String oldTitle : Arrays.asList("2 最后", "2最后")) {
+            CatalogAlign.Plan p = CatalogAlign.plan(
+                    Arrays.asList(chapter(7, 2, oldTitle)),
+                    rows("第1章 甲", "第 2 章 插进来的", "第3章最后"), 2, bought(7L));
+
+            assertNull(oldTitle + ": " + p.blocked, p.blocked);
+            assertEquals(Integer.valueOf(3), p.renumber.get(7L));
+            assertEquals(1, p.renumber.size());
+            assertEquals(3, p.newStartChapterNo);
+            assertTrue("同一个已购章节 id 必须保留", p.dropIds.isEmpty());
+        }
+    }
+
+    @Test
+    public void changedChineseOrdinalNumbersStillAlignByTitle() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(11, 1, "第1章 甲"),
+                        chapter(22, 2, "第 2 章最后"), chapter(33, 3, "第3章 尾声")),
+                rows("第1章 甲", "第2章 插进来的", "第3章 最后", "第 4 章尾声"),
+                2, bought(22L, 33L));
+
+        assertNull(p.blocked);
+        assertEquals(2, p.renumber.size());
+        assertEquals(Integer.valueOf(3), p.renumber.get(22L));
+        assertEquals(Integer.valueOf(4), p.renumber.get(33L));
+        assertEquals(3, p.newStartChapterNo);
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void handwrittenTitlesStillMatchChineseOrdinalRows() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(7, 2, "最后")),
+                rows("第1章 甲", "第2章 插进来的", "第 3 章最后"), 1, bought(7L));
+
+        assertNull(p.blocked);
+        assertEquals(Integer.valueOf(3), p.renumber.get(7L));
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void exactChineseOrdinalTextWinsOverOtherRowsWithTheSameBody() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(7, 2, "第3章 最后")),
+                rows("第1章 最后", "第2章 甲", "第3章 最后"), 1, bought(7L));
+
+        assertNull(p.blocked);
+        assertEquals(Integer.valueOf(3), p.renumber.get(7L));
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void ambiguousChineseOrdinalTitlesStillBlockWhenThePositionChanged() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(7, 2, "第7章 最后")),
+                rows("第1章 最后", "第2章 甲", "第3章 最后"), 1, bought(7L));
+
+        assertNotNull(p.blocked);
+        assertTrue(p.blocked, p.blocked.contains("有 2 行"));
+        assertTrue(p.renumber.isEmpty() && p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void numbersAtTheStartOfTheBodyAreNotStrippedAgain() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(11, 1, "1 1984年的夏天"),
+                        chapter(22, 2, "2 1985年的夏天")),
+                rows("第1章 插进来的", "第2章1984年的夏天", "第3章 1985年的夏天"),
+                1, bought(11L, 22L));
+
+        assertNull(p.blocked);
+        assertEquals(2, p.renumber.size());
+        assertEquals(Integer.valueOf(2), p.renumber.get(11L));
+        assertEquals(Integer.valueOf(3), p.renumber.get(22L));
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void ordinalTextInsideTheBodyIsNotStrippedAgain() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(11, 1, "1 第83章的秘密"),
+                        chapter(22, 2, "2 第84章的秘密")),
+                rows("第1章 插进来的", "第2章 第83章的秘密", "第3章 第84章的秘密"),
+                1, bought(11L, 22L));
+
+        assertNull(p.blocked);
+        assertEquals(2, p.renumber.size());
+        assertEquals(Integer.valueOf(2), p.renumber.get(11L));
+        assertEquals(Integer.valueOf(3), p.renumber.get(22L));
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void handwrittenNumericBodiesAreMatchedBeforeInterpretingANumberAsAPrefix() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(7, 2, "1984年的夏天")),
+                rows("第1章 甲", "第2章 年的夏天", "第3章 1984年的夏天"),
+                1, bought(7L));
+
+        assertNull(p.blocked);
+        assertEquals(Integer.valueOf(3), p.renumber.get(7L));
+        assertTrue(p.dropIds.isEmpty());
+    }
+
+    @Test
+    public void aTitleContainedInAnotherChineseOrdinalTitleDoesNotMatch() {
+        CatalogAlign.Plan p = CatalogAlign.plan(
+                Arrays.asList(chapter(7, 2, "第2章 最后")),
+                rows("第1章 甲", "第2章 最后的夏天"), 1, bought(7L));
+
+        assertNotNull(p.blocked);
+        assertTrue(p.blocked, p.blocked.contains("有号买过"));
+        assertTrue(p.renumber.isEmpty() && p.dropIds.isEmpty());
     }
 
     /** 买过的那一章在界面上彻底找不到了（改了名或被删）：停下报告，一章都不买。 */

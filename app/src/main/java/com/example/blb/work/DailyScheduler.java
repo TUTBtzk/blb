@@ -32,14 +32,18 @@ public final class DailyScheduler {
                 .setRequiresBatteryNotLow(true)
                 .build();
 
+        long nextRunAt = nextRunAtMillis(Prefs.dailyHour(context));
         PeriodicWorkRequest request = new PeriodicWorkRequest.Builder(
                 DailyCheckInWorker.class, 24, TimeUnit.HOURS)
-                .setInitialDelay(delayToNextRunMinutes(Prefs.dailyHour(context)), TimeUnit.MINUTES)
+                .setInitialDelay(Math.max(0, nextRunAt - System.currentTimeMillis()),
+                        TimeUnit.MILLISECONDS)
+                .setNextScheduleTimeOverride(nextRunAt)
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.MINUTES)
                 .build();
 
-        // UPDATE 而不是 KEEP：改了签到时间要能立刻生效。
+        // UPDATE 保留正在运行的任务；绝对时间覆盖才会更新下次运行时刻。
+        // 仅改 initialDelay 会继续沿用旧的 enqueue 时间，第二轮起更是完全不读它。
         wm.enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request);
     }
 
@@ -55,15 +59,24 @@ public final class DailyScheduler {
      */
     public static long delayToNextRunMinutes(int hour) {
         Calendar now = Calendar.getInstance();
-        Calendar next = Calendar.getInstance();
-        next.set(Calendar.HOUR_OF_DAY, hour);
+        long remaining = nextRunAtMillis(now, hour) - now.getTimeInMillis();
+        return Math.max(1, (remaining + 59_999L) / 60_000L);
+    }
+
+    public static long nextRunAtMillis(int hour) {
+        return nextRunAtMillis(Calendar.getInstance(), hour);
+    }
+
+    /** 使用同一份当前时间和时区，便于验证修改时间、跨日及夏令时。 */
+    static long nextRunAtMillis(Calendar now, int hour) {
+        Calendar next = (Calendar) now.clone();
+        next.set(Calendar.HOUR_OF_DAY, Math.max(0, Math.min(23, hour)));
         next.set(Calendar.MINUTE, 5);
         next.set(Calendar.SECOND, 0);
         next.set(Calendar.MILLISECOND, 0);
         if (!next.after(now)) {
             next.add(Calendar.DAY_OF_YEAR, 1);
         }
-        long minutes = (next.getTimeInMillis() - now.getTimeInMillis()) / 60_000L;
-        return Math.max(1, minutes);
+        return next.getTimeInMillis();
     }
 }

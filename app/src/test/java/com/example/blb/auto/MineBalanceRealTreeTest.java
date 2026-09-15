@@ -131,7 +131,7 @@ public class MineBalanceRealTreeTest {
     }
 
     /**
-     * 签到面板上一个余额都没有 —— 而且「免费领3代券」这种文案绝不许被当成余额 3。
+     * 签到面板上一个余额都没有，连签天数不许被当成余额。
      * 这是原来那句「所有账号都无法识别有多少代券」背后最危险的邻居。
      */
     @Test
@@ -141,11 +141,7 @@ public class MineBalanceRealTreeTest {
                 FakeNode.text("天").withId("com.sfacg:id/tvSignDayUnit")
                         .withBounds(301, 714, 335, 759),
                 FakeNode.text("7天连签").withId("com.sfacg:id/tvSignGift")
-                        .withBounds(770, 1131, 893, 1176),
-                FakeNode.text("看小视频再领代券").withId("com.sfacg:id/tvAdTitleTips")
-                        .withBounds(300, 1440, 620, 1493),
-                FakeNode.text("免费领3代券").withId("com.sfacg:id/sign_in_ad_goto")
-                        .withBounds(658, 1446, 923, 1539));
+                        .withBounds(770, 1131, 893, 1176));
         Texts.Balance b = read(root);
         assertEquals(-1, b.fire);
         assertEquals(-1, b.voucher);

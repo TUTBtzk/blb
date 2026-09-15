@@ -56,6 +56,12 @@
             android:text="@string/inspector_probe" />
     </LinearLayout>
 
+    <Button
+        android:id="@+id/run_evidence"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/inspector_run_evidence" />
+
     <TextView
         android:id="@+id/info"
         android:layout_width="match_parent"
@@ -63,6 +69,7 @@
         android:textSize="12sp" />
 
     <ScrollView
+        android:id="@+id/inspector_scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_marginTop="8dp"
@@ -78,8 +85,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:fontFamily="monospace"
+                android:saveEnabled="false"
                 android:textIsSelectable="true"
-                android:textSize="10sp" />
+                android:textSize="14sp" />
         </HorizontalScrollView>
     </ScrollView>
 

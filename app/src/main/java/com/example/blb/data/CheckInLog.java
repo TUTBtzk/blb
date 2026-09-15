@@ -38,18 +38,6 @@ public class CheckInLog {
 
     public String status;
 
-    /** 签到页有没有「看广告领奖励」入口待你手动领。 */
-    @ColumnInfo(name = "ad_available")
-    public boolean adAvailable;
-
-    /** 今天这个号已经看完并领取了几个广告奖励（由你在暂停时确认，脚本不自动播放）。 */
-    @ColumnInfo(name = "ads_watched")
-    public int adsWatched;
-
-    /** 界面上读到的「今日还剩几次」。-1 表示读不到。 */
-    @ColumnInfo(name = "ads_remaining")
-    public int adsRemaining = -1;
-
     public String message;
 
     @ColumnInfo(name = "created_at")

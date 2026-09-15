@@ -80,16 +80,6 @@ public class EntrySummaryTest {
     }
 
     @Test
-    public void adsLeftIsSaidOutLoud() {
-        CheckInRow r = row("主号", CheckInLog.OK);
-        r.adsWatched = 3;
-        r.adAvailable = true;
-        String s = CheckInRows.summary(Arrays.asList(r));
-        assertTrue(s, s.contains("广告已看 3 次"));
-        assertTrue(s, s.contains("还有广告没看完"));
-    }
-
-    @Test
     public void noAccountsMeansEmptyStringSoTheCallerCanSayItsOwnThing() {
         assertEquals("", CheckInRows.summary(null));
         assertEquals("", CheckInRows.summary(new ArrayList<>()));
@@ -193,12 +183,12 @@ public class EntrySummaryTest {
 
     @Test
     public void oneChapterBoughtTwiceStillCountsAsOne() {
-        // 一章两个号买过是要修的错（钱白花了），但摘要不能因此报出比登记章数还多的
-        // 「已订」—— 那看着像账本坏了，会把注意力引到错的地方。
+        // 2026-09-14 用户确认旧手动订阅会让一章真实属于两个号；摘要仍按独立章节计数，
+        // 否则「已订」比登记章数还多，会掩盖尚未拥有的章。
         List<Chapter> chapters = Arrays.asList(chapter(1, 1), chapter(2, 2));
         List<Purchase> purchases = Arrays.asList(
-                Purchase.of(10, 1, 0, 15, Purchase.SRC_AUTO),
-                Purchase.of(11, 1, 0, 15, Purchase.SRC_AUTO));
+                Purchase.of(10, 1, 0, 15, Purchase.SRC_REMOTE_DETAIL),
+                Purchase.of(11, 1, 0, 15, Purchase.SRC_REMOTE_DETAIL));
         String s = ChapterLedgerText.summary(chapters, purchases);
         assertTrue(s, s.contains("已订阅 1 章"));
         assertTrue(s, s.contains("还要买 1 章"));

@@ -8,7 +8,8 @@ import androidx.room.PrimaryKey;
 
 /**
  * 「哪个账号订阅了哪一章」的一条记录。(accountId, chapterId) 唯一，
- * 所以自动化重跑或手动补录都不会产生重复账。
+ * 所以同一账号重跑不会重复记账。2026-09-14 用户确认服务器确有多个号买过同章，
+ * 跨号历史只允许由完整订阅明细补回；自动购买仍必须在所有账号都未拥有时才开始。
  */
 @Entity(tableName = "purchase",
         foreignKeys = {
@@ -25,6 +26,11 @@ public class Purchase {
     public static final String SRC_AUTO = "AUTO";
     /** 你自己在 App 里手动补录的。 */
     public static final String SRC_MANUAL = "MANUAL";
+    /**
+     * 菠萝包自己的逐章订阅明细完整核实后，按真实章节、金额和日期恢复的历史账。
+     * 2026-09-14 多号真实重复订阅被拒补后，只有此来源允许保留第二、第三个账号的付费事实。
+     */
+    public static final String SRC_REMOTE_DETAIL = "REMOTE_DETAIL";
     /**
      * 界面证明这个号已经能看这一章（选择章节页那一行写着<b>「已下载」</b>，或者根本没有锁＝免费章），
      * 但花了多少券无从得知。

@@ -11,9 +11,8 @@ import com.example.blb.util.Texts;
  * <p>昵称是判断「现在登的是谁」的唯一依据。登完之后昵称跟登记的对不上就直接失败，
  * 而不是接着往下跑：后面那步是花券买章，用错号买等于把券丢了。
  *
- * <p>反过来，账号页里<b>还没记昵称</b>的时候，「对不上」只说明我们不知道，不说明登错了 ——
- * 那种情况下绝不退登：只启用一个号时就把当前昵称记下来接着跑，多个号时停下来让你先填昵称。
- * 白退一次登再重登一遍，是这里最不必要、也最容易招验证码的动作。
+ * <p>还没记昵称时，当前登录身份未知，必须走一次这个账号指定的登录方式，再记录登录后的昵称。
+ * 本地只启用一个账号不代表菠萝包当前登录的就是它，不能据此把别人的昵称和购买记录归给它。
  *
  * <p>还有一处刻意的顺序：昵称对不上时也不去猜，退登＋重登是<b>唯一</b>纠正手段，
  * 而它的前提是这个号真的登得回来（见下面那条硬规矩）。
@@ -49,13 +48,19 @@ public final class AccountSwitcher {
     private AccountSwitcher() {
     }
 
+    /** 兼容原调用方；启用数量不再用于推断当前登录身份。 */
     public static void ensureLoggedIn(StepRunner r, Account account, AccountDao dao,
                                       boolean soleEnabled) throws StepRunner.StepFailure {
+        ensureLoggedIn(r, account, dao);
+    }
+
+    public static void ensureLoggedIn(StepRunner r, Account account, AccountDao dao)
+            throws StepRunner.StepFailure {
         // 返回键额度按「订阅流程留下的最深处」给：上一个号买完章之后我们站在
         // 选择章节页→目录→详情→搜索 这四层里，退到首页至少要 4 下。以前给 3 下，
         // 2026-08-24 15:26 那趟 8 个号里有 3 个刚好卡在这个临界点上 ——
         // 只留下一句「等 mine_tab 超时」，连登录都没开始。多按几下返回本身没有代价：
-        // 一看到首页就立刻停，广告残局另有 escapeStuckAd 的额度。
+        // 一看到首页就立刻停，避免重复返回把已经找到的导航退掉。
         r.ensureHome(6);
         r.click(Keys.MINE_TAB, NAV_TIMEOUT);
 
@@ -64,22 +69,7 @@ public final class AccountSwitcher {
         if (known && !Texts.isBlank(current) && account.nickname.trim().equals(current.trim())) {
             return;
         }
-        if (!known && !Texts.isBlank(current)) {
-            // 这个号还没记过昵称。此时「昵称对不上」只说明我们不知道，不说明登错了号 ——
-            // 拿它当理由去退登，很可能把本来就登对的号踢下线，白跑一趟重登。
-            if (soleEnabled) {
-                // 只启用了这一个号，那现在登着的就只能是它，记下昵称接着跑。
-                account.nickname = current.trim();
-                if (dao != null) dao.setNickname(account.id, account.nickname);
-                r.log("把当前登录的昵称「" + account.nickname + "」记到「"
-                        + account.displayName() + "」名下了");
-                return;
-            }
-            throw new StepRunner.StepFailure(StepRunner.Kind.LOGIN_FAILED,
-                    "「" + account.displayName() + "」还没记过昵称，而现在登着的是「"
-                            + current.trim() + "」。我不能凭猜测断定这是不是同一个号，"
-                            + "更不会为此退登——请先在账号页把昵称填上（或只启用这一个号跑一次，让我记下来）");
-        }
+        // 昵称未知与不匹配都需要验证登录；login 会在退登前先确认密码可用。
         login(r, account, dao);
     }
 
@@ -253,9 +243,9 @@ public final class AccountSwitcher {
                             + "」登记的是「" + account.nickname.trim()
                             + "」。已停下，请核对账号页里的昵称");
         }
-        if (!trimmed.equals(account.nickname) && dao != null) {
+        if (!trimmed.equals(account.nickname)) {
             account.nickname = trimmed;
-            dao.setNickname(account.id, trimmed);
+            if (dao != null) dao.setNickname(account.id, trimmed);
         }
     }
 

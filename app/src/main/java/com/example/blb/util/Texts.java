@@ -21,18 +21,13 @@ public final class Texts {
             Pattern.compile("^(\\d[\\d,，]*)(?:[.．](\\d+))?\\s*(万)?$");
     private static final Pattern FIRE = Pattern.compile("(\\d[\\d,，]*)\\s*火券");
     private static final Pattern VOUCHER = Pattern.compile("(\\d[\\d,，]*)\\s*代券");
-    private static final Pattern REMAINING = Pattern.compile("还剩\\s*(\\d+)\\s*次");
-    private static final Pattern OUT_OF = Pattern.compile("(\\d+)\\s*/\\s*(\\d+)");
-    /** 选择章节页行首的标号，见 {@link #rowChapterNo}。 */
-    private static final Pattern ROW_NO = Pattern.compile("^(\\d{1,5})(?![\\d])");
-    /**
-     * 今天的广告已经领完了。2026-08-23 14:45 实测：三支都领到之后，签到面板上那句
-     * 「今日还剩 N 次」直接换成了「已领完」（旁边另有一句「明日更新次数」）。
-     * 读不出这一句的话 {@link #parseRemaining} 只能返回 -1，调用方会按配置的每日个数
-     * 再去点那个已经没了的入口。刻意不认「明日更新次数」——它任何时候都在。
-     */
-    private static final Pattern EXHAUSTED = Pattern.compile("已领完|已领取完|今日已领|次数已用完");
-
+    /** 新旧选择章节页共用的行首前缀；缺「章」时必须由空白把章号和正文隔开。 */
+    private static final Pattern CHAPTER_PREFIX = Pattern.compile(
+            "^(?:第\\s*([0-9]{1,5})\\s*[章张]"
+                    + "|第\\s*([0-9]{1,5})\\s+(?=\\S)"
+                    + "|([0-9]{1,5})(?![0-9]))\\s*");
+    /** 缺「章」形式不能把「第 2 卷」这类整卷标题误认成单章。 */
+    private static final Pattern VOLUME_MARKER = Pattern.compile("^[卷部册集篇季]");
     private static final char[] CN_DIGITS = "零一二三四五六七八九".toCharArray();
     private static final char[] CN_UNITS = {0, '十', '百', '千'};
     private static final int[] CN_POW = {1, 10, 100, 1000};
@@ -86,17 +81,45 @@ public final class Texts {
     }
 
     /**
-     * 选择章节页那一行开头印着的标号：「67   周日工作」→ 67，「73」→ 73。
+     * 选择章节页行首标号：「67 周日工作」「第67章 周日工作」→ 67。
      *
      * <p>返回 -1 表示这一行开头没有标号 —— 实测那就是<b>卷标题行</b>
      * （「世界线的变动，学生会长的恋爱」），它同样带 {@code item_cb}，勾下去等于勾整卷，
-     * 所以必须认出来并跳过。这里只认阿拉伯数字：这一页的行文本一律是「NN 标题」，
-     * 空格数不固定（实测「71留宿之夜」一个空格都没有），所以数字后面只要不是数字就算断开。
+     * 所以必须认出来并跳过。保留旧页「71留宿之夜」的无空格格式，也认新页「第 71 章」。
+     * 真机还有错写「张」的「第30张 红温」和漏写「章」的「第68 投影」；后者必须有空白和正文，
+     * 且正文不能以卷/部/册等卷标记开头。
+     * 标号只允许出现在行首，不能从卷名或正文中间寻找数字。
      */
     public static int rowChapterNo(String rowText) {
-        if (rowText == null) return -1;
-        Matcher m = ROW_NO.matcher(rowText.trim());
-        return m.find() ? toInt(m.group(1)) : -1;
+        Matcher prefix = chapterPrefix(normalizeChapterText(rowText));
+        if (prefix == null) return -1;
+        for (int group = 1; group <= prefix.groupCount(); group++) {
+            if (prefix.group(group) != null) return toInt(prefix.group(group));
+        }
+        return -1;
+    }
+
+    /**
+     * 目录行去掉一次已识别的行首标号后的正文；未识别到前缀时只统一空白。
+     *
+     * <p>不能对已经得到的正文再调用一次：正文可能本来就叫「100天后」或「第2章的秘密」。
+     */
+    public static String chapterTitle(String rowText) {
+        String text = normalizeChapterText(rowText);
+        Matcher prefix = chapterPrefix(text);
+        return prefix == null ? text : text.substring(prefix.end()).trim();
+    }
+
+    private static Matcher chapterPrefix(String text) {
+        Matcher prefix = CHAPTER_PREFIX.matcher(text);
+        if (!prefix.find()) return null;
+        if (prefix.group(2) != null
+                && VOLUME_MARKER.matcher(text.substring(prefix.end())).find()) return null;
+        return prefix;
+    }
+
+    private static String normalizeChapterText(String text) {
+        return text == null ? "" : text.replaceAll("[\\s\\u00a0\\u3000]+", " ").trim();
     }
 
     /**
@@ -235,36 +258,6 @@ public final class Texts {
         if (fire < 0 && voucher < 0) return new Payment(-1, -1);
         // 只写了一种券时，另一种就是 0 —— 「实付15代券」= 一张火券都不动。
         return new Payment(Math.max(fire, 0), Math.max(voucher, 0));
-    }
-
-    /**
-     * 从「今日还剩5次」「2/5」这类文案里读出「还能看几个广告」；写着「已领完」的时候返回 0。
-     * 读不到返回 -1 —— 宁可让调用方按配置的每日个数走，也不要当成 0 直接跳过。
-     */
-    public static int parseRemaining(String text) {
-        if (text == null) return -1;
-        Matcher m = REMAINING.matcher(text);
-        if (m.find()) return toInt(m.group(1));
-        m = OUT_OF.matcher(text);
-        if (m.find()) {
-            int done = toInt(m.group(1));
-            int total = toInt(m.group(2));
-            if (done >= 0 && total >= 0 && total >= done) return total - done;
-        }
-        if (EXHAUSTED.matcher(text).find()) return 0;
-        return -1;
-    }
-
-    /**
-     * 取文本里第一个数字，读不到返回 {@code fallback}。
-     * 用来从「去浏览15秒免看此广告」这类文案里读出广告主要求的浏览秒数。
-     */
-    public static int firstInt(String text, int fallback) {
-        if (text == null) return fallback;
-        Matcher m = NUMBER.matcher(text);
-        if (!m.find()) return fallback;
-        int v = toInt(m.group());
-        return v < 0 ? fallback : v;
     }
 
     private static int group1(Pattern p, String text) {

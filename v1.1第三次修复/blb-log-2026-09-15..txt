@@ -1,0 +1,636 @@
+assets/selectors.json + 本地 /data/user/0/com.example.blb/files/selectors.json（本地覆盖 63，内置补齐 0，本地无效 0）
+本地覆盖的 key：balance_fire_label、balance_voucher_label、captcha_hint、catalog_directory_list、catalog_directory_ready、catalog_entry、catalog_picker_list、chapter_list_top、chapter_locked、chapter_owned、chapter_row_title、chapter_selectable、checkin_button、checkin_dialog、checkin_done、checkin_entry、checkin_reward、coupons_value、download_entry、home_ready、insufficient_coupons、library_tab、login_account_field、login_agree_checkbox、login_auth_confirm、login_entry、login_error、login_one_tap、login_password_field、login_qq、login_submit、login_switch_phone、login_switch_to_password、login_wechat、login_weibo、logout_button、logout_confirm、mine_tab、nickname、novel_title_row、pay_detail、price_hint、search_entry、search_field、search_keyword_row、search_submit、selected_count、settings_entry、shelf_tab、subscribe_button、subscribe_confirm、subscribe_done、subscribed_book_date、subscribed_book_summary、subscribed_book_title、subscribed_detail_amount、subscribed_detail_currency、subscribed_detail_desc、subscribed_detail_ready、subscribed_detail_time、subscribed_list_entry、voucher_entry、vouchers_value
+由内置补齐的 key：无
+[1/8] 核对 五杯半雪碧
+当前前台是 com.example.blb，正在把菠萝包拉回来
+点击 mine_tab
+开始切到「五杯半雪碧」（本机号码一键登录）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_agree_checkbox
+点击 login_one_tap
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  五杯半雪碧 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：7 章、火券 0、2026-09-12＝账本 7 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=7；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=7
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-12   铃兰花 第83章 最后 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第83章 最后"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-12"；组头日期未读全=false；本屏连续区间日期="2026-09-12"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="2026-09-08   星彩 第6章 薯片 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第6章 薯片"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第65章 薄暮 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第65章 薄暮"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-04-05   铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-04-03   铃兰花 第81章 沙滩 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 沙滩"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 7，可见位置=[0, 1, 2, 3, 4, 5]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「铃兰花 第83章 最后」，末行「铃兰花 第81章 沙滩」；{0=transaction:铃兰花 第83章 最后:2026-09-12:true:false@232, 1=transaction:星彩 第6章 薯片:2026-09-08:true:false@624, 2=transaction:铃兰花 第65章 薄暮:null:true:false@1016, 3=transaction:铃兰花 第92章 初次见面:null:true:false@1320, 4=transaction:铃兰花 第91章 花叶:2026-04-05:true:false@1624, 5=transaction:铃兰花 第81章 沙滩:2026-04-03:true:false@2016}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113141-875-3528101036553968149.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第83章 最后"，金额=11，币种="代券"，归属日期="2026-09-12"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="星彩 第6章 薯片"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第65章 薄暮"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第81章 沙滩"，金额=12，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=7；位置证据有效=true；可见位置=[1, 2, 3, 4, 5, 6]；已分类位置=[1, 2, 3, 4, 5, 6]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=7
+    snapshot行序=1；UI item index=1；classification=transaction；行原文="星彩 第6章 薯片 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第6章 薯片"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=2；classification=transaction；行原文="铃兰花 第65章 薄暮 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第65章 薄暮"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=3；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=4；classification=transaction；行原文="2026-04-05   铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=5；classification=transaction；行原文="2026-04-03   铃兰花 第81章 沙滩 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 沙滩"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=6；classification=transaction；行原文="2026-03-30   铃兰花 第71章 前夜 10 代券"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第71章 前夜"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 7 → 7，可见位置=[1, 2, 3, 4, 5, 6]，已分类=[1, 2, 3, 4, 5, 6]，交易=6，首行「星彩 第6章 薯片」，末行「铃兰花 第71章 前夜」；{1=transaction:星彩 第6章 薯片:null:true:false@232, 2=transaction:铃兰花 第65章 薄暮:null:true:false@530, 3=transaction:铃兰花 第92章 初次见面:null:true:false@834, 4=transaction:铃兰花 第91章 花叶:2026-04-05:true:false@1138, 5=transaction:铃兰花 第81章 沙滩:2026-04-03:true:false@1530, 6=transaction:铃兰花 第71章 前夜:2026-03-30:true:false@1922}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=1；原文="星彩 第6章 薯片"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=2；原文="铃兰花 第65章 薄暮"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=3；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=4；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=5；原文="铃兰花 第81章 沙滩"，金额=12，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=6；UI item index=6；原文="铃兰花 第71章 前夜"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 3 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=7；位置证据有效=true；可见位置=[1, 2, 3, 4, 5, 6]；已分类位置=[1, 2, 3, 4, 5, 6]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=7
+    snapshot行序=1；UI item index=1；classification=transaction；行原文="星彩 第6章 薯片 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第6章 薯片"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=2；classification=transaction；行原文="铃兰花 第65章 薄暮 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第65章 薄暮"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=3；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=4；classification=transaction；行原文="2026-04-05   铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=5；classification=transaction；行原文="2026-04-03   铃兰花 第81章 沙滩 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 沙滩"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=6；classification=transaction；行原文="2026-03-30   铃兰花 第71章 前夜 10 代券"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第71章 前夜"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 3 屏：集合项数 7 → 7，可见位置=[1, 2, 3, 4, 5, 6]，已分类=[1, 2, 3, 4, 5, 6]，交易=6，首行「星彩 第6章 薯片」，末行「铃兰花 第71章 前夜」；{1=transaction:星彩 第6章 薯片:null:true:false@232, 2=transaction:铃兰花 第65章 薄暮:null:true:false@530, 3=transaction:铃兰花 第92章 初次见面:null:true:false@834, 4=transaction:铃兰花 第91章 花叶:2026-04-05:true:false@1138, 5=transaction:铃兰花 第81章 沙滩:2026-04-03:true:false@1530, 6=transaction:铃兰花 第71章 前夜:2026-03-30:true:false@1922}
+    明细第 3 屏日期归属：snapshot行序=1；UI item index=1；原文="星彩 第6章 薯片"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=2；UI item index=2；原文="铃兰花 第65章 薄暮"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=3；UI item index=3；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=4；UI item index=4；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=5；UI item index=5；原文="铃兰花 第81章 沙滩"，金额=12，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=6；UI item index=6；原文="铃兰花 第71章 前夜"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 7 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=7/7，聚合章数=7，已读屏数=3；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113148-359-6511744390546616234.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：7 章、火券 0、2026-09-12
+  第一次明细证据：明细完整：读到 7 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=7/7，聚合章数=7，已读屏数=3；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：铃兰花 · 卷内第83章「最后」 11代券 2026-09-12 → 全书第 83 章
+    明细：星彩 · 卷内第6章「薯片」 10代券 2026-09-08 → 全书第 99 章
+    明细：铃兰花 · 卷内第65章「薄暮」 12代券 2026-09-08 → 全书第 65 章
+    明细：铃兰花 · 卷内第92章「初次见面」 12代券 2026-09-08 → 全书第 92 章
+    明细：铃兰花 · 卷内第91章「花叶」 11代券 2026-04-05 → 全书第 91 章
+    明细：铃兰花 · 卷内第81章「沙滩」 12代券 2026-04-03 → 全书第 82 章
+    明细：铃兰花 · 卷内第71章「前夜」 10代券 2026-03-30 → 全书第 71 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  五杯半雪碧 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第65章、第71章、第82章、第83章、第91章、第92章、第99章，共 7 章，全是代券）
+[2/8] 核对 皓平
+点击 mine_tab
+开始切到「皓平」（微信）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_agree_checkbox
+点击 login_wechat
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  皓平 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：5 章、火券 0、2026-09-08＝账本 5 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第7章 寻找 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第7章 寻找"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第66章 第四天 11 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第66章 第四天"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第83章 最后 11 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第83章 最后"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-30   铃兰花 第72章 其名为傲慢 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第72章 其名为傲慢"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第7章 寻找」，末行「铃兰花 第72章 其名为傲慢」；{0=transaction:星彩 第7章 寻找:2026-09-08:true:false@232, 1=transaction:铃兰花 第66章 第四天:null:true:false@624, 2=transaction:铃兰花 第92章 初次见面:2026-04-05:true:false@928, 3=transaction:铃兰花 第83章 最后:2026-04-03:true:false@1320, 4=transaction:铃兰花 第72章 其名为傲慢:2026-03-30:true:false@1712}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113215-973-5441553197899088108.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第7章 寻找"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第66章 第四天"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第83章 最后"，金额=11，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第72章 其名为傲慢"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第7章 寻找 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第7章 寻找"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第66章 第四天 11 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第66章 第四天"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第83章 最后 11 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第83章 最后"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-30   铃兰花 第72章 其名为傲慢 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第72章 其名为傲慢"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 5 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第7章 寻找」，末行「铃兰花 第72章 其名为傲慢」；{0=transaction:星彩 第7章 寻找:2026-09-08:true:false@232, 1=transaction:铃兰花 第66章 第四天:null:true:false@624, 2=transaction:铃兰花 第92章 初次见面:2026-04-05:true:false@928, 3=transaction:铃兰花 第83章 最后:2026-04-03:true:false@1320, 4=transaction:铃兰花 第72章 其名为傲慢:2026-03-30:true:false@1712}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第7章 寻找"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第66章 第四天"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第83章 最后"，金额=11，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第72章 其名为傲慢"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113221-184-7804614574064332255.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：5 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：星彩 · 卷内第7章「寻找」 10代券 2026-09-08 → 全书第 100 章
+    明细：铃兰花 · 卷内第66章「第四天」 11代券 2026-09-08 → 全书第 66 章
+    明细：铃兰花 · 卷内第92章「初次见面」 12代券 2026-04-05 → 全书第 92 章
+    明细：铃兰花 · 卷内第83章「最后」 11代券 2026-04-03 → 全书第 83 章
+    明细：铃兰花 · 卷内第72章「其名为傲慢」 10代券 2026-03-30 → 全书第 72 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  皓平 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第66章、第72章、第83章、第92章、第100章，共 5 章，全是代券）
+[3/8] 核对 w9899
+点击 mine_tab
+开始切到「w9899」（QQ）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_agree_checkbox
+点击 login_qq
+在QQ的授权页上按「同意」
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  w9899 在《反派干部今天也在扮魔法少女》上：订阅清单说订了 20 章、账本记着 0 条付费记录 —— 账本漏记了 20 章（券扣了没记账，下一趟会有第二个号再买同一章）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=15；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5, 6]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=15
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第8章 继续 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第8章 继续"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="星彩 第5章 假冒 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第5章 假冒"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="铃兰花 第74章 清晨 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第74章 清晨"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-04-05   铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=6；classification=unknown；行原文="10"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawAmount="10"；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 7 项「10」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 7 项「10」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 1 屏：集合项数 未知 → 15，可见位置=[0, 1, 2, 3, 4, 5, 6]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「星彩 第8章 继续」，末行「铃兰花 第90章 崩坏」；{0=transaction:星彩 第8章 继续:2026-09-08:true:false@232, 1=transaction:星彩 第5章 假冒:null:true:false@624, 2=transaction:铃兰花 第92章 初次见面:null:true:false@928, 3=transaction:铃兰花 第74章 清晨:null:true:false@1232, 4=transaction:铃兰花 第73章 噩梦:null:true:false@1536, 5=transaction:铃兰花 第90章 崩坏:2026-04-05:true:false@1840, 6=unknown:10:null:true:false@2232}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113249-811-772103185984919879.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第8章 继续"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="星彩 第5章 假冒"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第74章 清晨"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[4, 5, 6, 7, 8, 9, 10]；已分类位置=[4, 5, 6, 7, 8, 9]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=4；classification=transaction；行原文="铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=5；classification=transaction；行原文="2026-04-05   铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=6；classification=transaction；行原文="铃兰花 第89章 绽放 10 代券"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第89章 绽放"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=7；classification=transaction；行原文="2026-04-04   铃兰花 第88章 开战 11 代券"；CollectionItemInfo.rowIndex=7；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第88章 开战"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-04"；组头日期未读全=false；本屏连续区间日期="2026-04-04"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=8；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=8；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-04"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=9；classification=transaction；行原文="2026-04-03   铃兰花 第81章 心脏 15 代券"；CollectionItemInfo.rowIndex=9；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 心脏"；rawAmount="15"；parsedAmount=15；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=10；classification=unknown；行原文=""；CollectionItemInfo.rowIndex=10；CollectionItemInfo.rowSpan=1；rawAmount=<未命中>；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 11 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 11 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 2 屏：集合项数 15 → 20，可见位置=[4, 5, 6, 7, 8, 9, 10]，已分类=[4, 5, 6, 7, 8, 9]，交易=6，首行「铃兰花 第73章 噩梦」，末行「铃兰花 第81章 心脏」；{4=transaction:铃兰花 第73章 噩梦:null:true:false@232, 5=transaction:铃兰花 第90章 崩坏:2026-04-05:true:false@512, 6=transaction:铃兰花 第89章 绽放:null:true:false@904, 7=transaction:铃兰花 第88章 开战:2026-04-04:true:false@1208, 8=transaction:铃兰花 第87章 铃兰:null:true:false@1600, 9=transaction:铃兰花 第81章 心脏:2026-04-03:true:false@1904, 10=unknown::null:true:false@2296}
+现场取证已保存：订阅明细集合项数_15_到_20-20260915-113252-934-2149367257821102780.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=4；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=5；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=6；原文="铃兰花 第89章 绽放"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=7；原文="铃兰花 第88章 开战"，金额=11，币种="代券"，归属日期="2026-04-04"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=8；原文="铃兰花 第87章 铃兰"，金额=12，币种="代券"，归属日期="2026-04-04"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=6；UI item index=9；原文="铃兰花 第81章 心脏"，金额=15，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 3 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[7, 8, 9, 10, 11, 12, 13]；已分类位置=[8, 9, 10, 11, 12, 13]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=7；classification=unknown；行原文=""；CollectionItemInfo.rowIndex=7；CollectionItemInfo.rowSpan=1；rawAmount=<未命中>；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=8；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=8；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=9；classification=transaction；行原文="2026-04-03   铃兰花 第81章 心脏 15 代券"；CollectionItemInfo.rowIndex=9；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 心脏"；rawAmount="15"；parsedAmount=15；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=10；classification=transaction；行原文="2026-04-01   铃兰花 第80章 镜子 11 代券"；CollectionItemInfo.rowIndex=10；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第80章 镜子"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-01"；组头日期未读全=false；本屏连续区间日期="2026-04-01"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=11；classification=transaction；行原文="铃兰花 第79章 秘密 12 代券"；CollectionItemInfo.rowIndex=11；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第79章 秘密"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-01"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=12；classification=transaction；行原文="2026-03-31   铃兰花 第78章 自己 11 代券"；CollectionItemInfo.rowIndex=12；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第78章 自己"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=13；classification=transaction；行原文="铃兰花 第77章 思考 11 代券"；CollectionItemInfo.rowIndex=13；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第77章 思考"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 8 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 8 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 3 屏：集合项数 20 → 20，可见位置=[7, 8, 9, 10, 11, 12, 13]，已分类=[8, 9, 10, 11, 12, 13]，交易=6，首行「铃兰花 第87章 铃兰」，末行「铃兰花 第77章 思考」；{7=unknown::null:true:false@232, 8=transaction:铃兰花 第87章 铃兰:null:true:false@267, 9=transaction:铃兰花 第81章 心脏:2026-04-03:true:false@571, 10=transaction:铃兰花 第80章 镜子:2026-04-01:true:false@963, 11=transaction:铃兰花 第79章 秘密:null:true:false@1355, 12=transaction:铃兰花 第78章 自己:2026-03-31:true:false@1659, 13=transaction:铃兰花 第77章 思考:null:true:false@2051}
+    明细第 3 屏日期归属：snapshot行序=2；UI item index=8；原文="铃兰花 第87章 铃兰"，金额=12，币种="代券"，归属日期=<未知>；日期依据=连续日期区间未能证实（组头不可读、裁剪或位置缺项）
+    明细第 3 屏日期归属：snapshot行序=3；UI item index=9；原文="铃兰花 第81章 心脏"，金额=15，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=4；UI item index=10；原文="铃兰花 第80章 镜子"，金额=11，币种="代券"，归属日期="2026-04-01"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=5；UI item index=11；原文="铃兰花 第79章 秘密"，金额=12，币种="代券"，归属日期="2026-04-01"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=6；UI item index=12；原文="铃兰花 第78章 自己"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=7；UI item index=13；原文="铃兰花 第77章 思考"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 4 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[11, 12, 13, 14, 15, 16, 17]；已分类位置=[12, 13, 14, 15, 16, 17]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=11；classification=unknown；行原文="代券"；CollectionItemInfo.rowIndex=11；CollectionItemInfo.rowSpan=1；rawAmount=<未命中>；parsedAmount=-1；rawCurrency="代券"；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=12；classification=transaction；行原文="2026-03-31   铃兰花 第78章 自己 11 代券"；CollectionItemInfo.rowIndex=12；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第78章 自己"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=13；classification=transaction；行原文="铃兰花 第77章 思考 11 代券"；CollectionItemInfo.rowIndex=13；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第77章 思考"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=14；classification=transaction；行原文="2026-03-30   铃兰花 第70章 见面 11 代券"；CollectionItemInfo.rowIndex=14；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第70章 见面"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=15；classification=transaction；行原文="铃兰花 第69章 诅咒 10 代券"；CollectionItemInfo.rowIndex=15；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第69章 诅咒"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=16；classification=transaction；行原文="铃兰花 第68 投影 10 代券"；CollectionItemInfo.rowIndex=16；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第68 投影"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=17；classification=transaction；行原文="铃兰花 第67章 小屋 10 代券"；CollectionItemInfo.rowIndex=17；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第67章 小屋"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 12 项「代券」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 12 项「代券」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 4 屏：集合项数 20 → 20，可见位置=[11, 12, 13, 14, 15, 16, 17]，已分类=[12, 13, 14, 15, 16, 17]，交易=6，首行「铃兰花 第78章 自己」，末行「铃兰花 第67章 小屋」；{11=unknown:代券:null:true:false@232, 12=transaction:铃兰花 第78章 自己:2026-03-31:true:false@318, 13=transaction:铃兰花 第77章 思考:null:true:false@710, 14=transaction:铃兰花 第70章 见面:2026-03-30:true:false@1014, 15=transaction:铃兰花 第69章 诅咒:null:true:false@1406, 16=transaction:铃兰花 第68 投影:null:true:false@1710, 17=transaction:铃兰花 第67章 小屋:null:true:false@2014}
+    明细第 4 屏日期归属：snapshot行序=2；UI item index=12；原文="铃兰花 第78章 自己"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 4 屏日期归属：snapshot行序=3；UI item index=13；原文="铃兰花 第77章 思考"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 4 屏日期归属：snapshot行序=4；UI item index=14；原文="铃兰花 第70章 见面"，金额=11，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 4 屏日期归属：snapshot行序=5；UI item index=15；原文="铃兰花 第69章 诅咒"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 4 屏日期归属：snapshot行序=6；UI item index=16；原文="铃兰花 第68 投影"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 4 屏日期归属：snapshot行序=7；UI item index=17；原文="铃兰花 第67章 小屋"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 5 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[13, 14, 15, 16, 17, 18, 19]；已分类位置=[13, 14, 15, 16, 17, 18, 19]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=13；classification=transaction；行原文="铃兰花 第77章 思考 11 代券"；CollectionItemInfo.rowIndex=13；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第77章 思考"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=14；classification=transaction；行原文="2026-03-30   铃兰花 第70章 见面 11 代券"；CollectionItemInfo.rowIndex=14；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第70章 见面"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=15；classification=transaction；行原文="铃兰花 第69章 诅咒 10 代券"；CollectionItemInfo.rowIndex=15；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第69章 诅咒"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=16；classification=transaction；行原文="铃兰花 第68 投影 10 代券"；CollectionItemInfo.rowIndex=16；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第68 投影"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=17；classification=transaction；行原文="铃兰花 第67章 小屋 10 代券"；CollectionItemInfo.rowIndex=17；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第67章 小屋"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=18；classification=transaction；行原文="铃兰花 第66章 第四天 11 代券"；CollectionItemInfo.rowIndex=18；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第66章 第四天"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=19；classification=transaction；行原文="铃兰花 第65章 薄暮 12 代券"；CollectionItemInfo.rowIndex=19；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第65章 薄暮"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 5 屏：集合项数 20 → 20，可见位置=[13, 14, 15, 16, 17, 18, 19]，已分类=[13, 14, 15, 16, 17, 18, 19]，交易=7，首行「铃兰花 第77章 思考」，末行「铃兰花 第65章 薄暮」；{13=transaction:铃兰花 第77章 思考:null:true:false@232, 14=transaction:铃兰花 第70章 见面:2026-03-30:true:false@402, 15=transaction:铃兰花 第69章 诅咒:null:true:false@794, 16=transaction:铃兰花 第68 投影:null:true:false@1098, 17=transaction:铃兰花 第67章 小屋:null:true:false@1402, 18=transaction:铃兰花 第66章 第四天:null:true:false@1706, 19=transaction:铃兰花 第65章 薄暮:null:true:false@2010}
+    明细第 5 屏日期归属：snapshot行序=1；UI item index=13；原文="铃兰花 第77章 思考"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=2；UI item index=14；原文="铃兰花 第70章 见面"，金额=11，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=3；UI item index=15；原文="铃兰花 第69章 诅咒"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=4；UI item index=16；原文="铃兰花 第68 投影"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=5；UI item index=17；原文="铃兰花 第67章 小屋"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=6；UI item index=18；原文="铃兰花 第66章 第四天"，金额=11，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 5 屏日期归属：snapshot行序=7；UI item index=19；原文="铃兰花 第65章 薄暮"，金额=12，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 6 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[13, 14, 15, 16, 17, 18, 19]；已分类位置=[13, 14, 15, 16, 17, 18, 19]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=13；classification=transaction；行原文="铃兰花 第77章 思考 11 代券"；CollectionItemInfo.rowIndex=13；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第77章 思考"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=14；classification=transaction；行原文="2026-03-30   铃兰花 第70章 见面 11 代券"；CollectionItemInfo.rowIndex=14；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第70章 见面"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-30"；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=15；classification=transaction；行原文="铃兰花 第69章 诅咒 10 代券"；CollectionItemInfo.rowIndex=15；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第69章 诅咒"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=16；classification=transaction；行原文="铃兰花 第68 投影 10 代券"；CollectionItemInfo.rowIndex=16；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第68 投影"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=17；classification=transaction；行原文="铃兰花 第67章 小屋 10 代券"；CollectionItemInfo.rowIndex=17；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第67章 小屋"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=18；classification=transaction；行原文="铃兰花 第66章 第四天 11 代券"；CollectionItemInfo.rowIndex=18；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第66章 第四天"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=19；classification=transaction；行原文="铃兰花 第65章 薄暮 12 代券"；CollectionItemInfo.rowIndex=19；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第65章 薄暮"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-30"（仅单屏，不证明跨屏日期或完整性）
+  明细第 6 屏：集合项数 20 → 20，可见位置=[13, 14, 15, 16, 17, 18, 19]，已分类=[13, 14, 15, 16, 17, 18, 19]，交易=7，首行「铃兰花 第77章 思考」，末行「铃兰花 第65章 薄暮」；{13=transaction:铃兰花 第77章 思考:null:true:false@232, 14=transaction:铃兰花 第70章 见面:2026-03-30:true:false@402, 15=transaction:铃兰花 第69章 诅咒:null:true:false@794, 16=transaction:铃兰花 第68 投影:null:true:false@1098, 17=transaction:铃兰花 第67章 小屋:null:true:false@1402, 18=transaction:铃兰花 第66章 第四天:null:true:false@1706, 19=transaction:铃兰花 第65章 薄暮:null:true:false@2010}
+    明细第 6 屏日期归属：snapshot行序=1；UI item index=13；原文="铃兰花 第77章 思考"，金额=11，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=2；UI item index=14；原文="铃兰花 第70章 见面"，金额=11，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=3；UI item index=15；原文="铃兰花 第69章 诅咒"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=4；UI item index=16；原文="铃兰花 第68 投影"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=5；UI item index=17；原文="铃兰花 第67章 小屋"，金额=10，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=6；UI item index=18；原文="铃兰花 第66章 第四天"，金额=11，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 6 屏日期归属：snapshot行序=7；UI item index=19；原文="铃兰花 第65章 薄暮"，金额=12，币种="代券"，归属日期="2026-03-30"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细未完整：读到 20 条；已打开=true，从顶=true，到底=true，截断=false，未读全=2，列表项覆盖=18/20，聚合章数=20，已读屏数=6，未读全示例=列表第 8 项「」尚未确定行类型；列表第 12 项「代券」尚未确定行类型；列表第 8 项尚未确定行类型；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现；列表项只覆盖 18/20，不能证明中间无遗漏
+现场取证已保存：订阅明细读取未完整-20260915-113305-414-4256249659871626352.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：20 章、火券 0、2026-09-08
+  第一次明细证据：明细未完整：读到 20 条；已打开=true，从顶=true，到底=true，截断=false，未读全=2，列表项覆盖=18/20，聚合章数=20，已读屏数=6，未读全示例=列表第 8 项「」尚未确定行类型；列表第 12 项「代券」尚未确定行类型；列表第 8 项尚未确定行类型；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现；列表项只覆盖 18/20，不能证明中间无遗漏
+    明细：星彩 · 卷内第8章「继续」 10代券 2026-09-08 → 全书第 101 章
+    明细：星彩 · 卷内第5章「假冒」 10代券 2026-09-08 → 全书第 98 章
+    明细：铃兰花 · 卷内第92章「初次见面」 12代券 2026-09-08 → 全书第 92 章
+    明细：铃兰花 · 卷内第74章「清晨」 12代券 2026-09-08 → 全书第 74 章
+    明细：铃兰花 · 卷内第73章「噩梦」 12代券 2026-09-08 → 全书第 73 章
+    明细：铃兰花 · 卷内第90章「崩坏」 10代券 2026-04-05 → 全书第 90 章
+    明细：铃兰花 · 卷内第89章「绽放」 10代券 2026-04-05 → 全书第 89 章
+    明细：铃兰花 · 卷内第88章「开战」 11代券 2026-04-04 → 全书第 88 章
+    明细：铃兰花 · 卷内第87章「铃兰」 12代券 2026-04-04 → 全书第 87 章
+    明细：铃兰花 · 卷内第81章「心脏」 15代券 2026-04-03 → 全书第 81 章
+    明细：铃兰花 · 卷内第80章「镜子」 11代券 2026-04-01 → 全书第 80 章
+    明细：铃兰花 · 卷内第79章「秘密」 12代券 2026-04-01 → 全书第 79 章
+    明细：铃兰花 · 卷内第78章「自己」 11代券 2026-03-31 → 全书第 78 章
+    明细：铃兰花 · 卷内第77章「思考」 11代券 2026-03-31 → 全书第 77 章
+    明细：铃兰花 · 卷内第70章「见面」 11代券 2026-03-30 → 全书第 70 章
+    明细：铃兰花 · 卷内第69章「诅咒」 10代券 2026-03-30 → 全书第 69 章
+    明细：铃兰花 · 卷内第68章「投影」 10代券 2026-03-30 → 全书第 68 章
+    明细：铃兰花 · 卷内第67章「小屋」 10代券 2026-03-30 → 全书第 67 章
+    明细：铃兰花 · 卷内第66章「第四天」 11代券 2026-03-30 → 全书第 66 章
+    明细：铃兰花 · 卷内第65章「薄暮」 12代券 2026-03-30 → 全书第 65 章
+  第 1 次未完整原因：逐章明细没有完整读取的证据，这一次没能核对：明细未完整：读到 20 条；已打开=true，从顶=true，到底=true，截断=false，未读全=2，列表项覆盖=18/20，聚合章数=20，已读屏数=6，未读全示例=列表第 8 项「」尚未确定行类型；列表第 12 项「代券」尚未确定行类型；列表第 8 项尚未确定行类型；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现；列表项只覆盖 18/20，不能证明中间无遗漏；重新取得聚合行并独立重读一次
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=15；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5, 6]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=15
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第8章 继续 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第8章 继续"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="星彩 第5章 假冒 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第5章 假冒"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="铃兰花 第74章 清晨 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第74章 清晨"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-04-05   铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=6；classification=unknown；行原文="10"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawAmount="10"；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 7 项「10」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 7 项「10」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 1 屏：集合项数 未知 → 15，可见位置=[0, 1, 2, 3, 4, 5, 6]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「星彩 第8章 继续」，末行「铃兰花 第90章 崩坏」；{0=transaction:星彩 第8章 继续:2026-09-08:true:false@232, 1=transaction:星彩 第5章 假冒:null:true:false@624, 2=transaction:铃兰花 第92章 初次见面:null:true:false@928, 3=transaction:铃兰花 第74章 清晨:null:true:false@1232, 4=transaction:铃兰花 第73章 噩梦:null:true:false@1536, 5=transaction:铃兰花 第90章 崩坏:2026-04-05:true:false@1840, 6=unknown:10:null:true:false@2232}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113321-814-7346152712288928596.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第8章 继续"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="星彩 第5章 假冒"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第74章 清晨"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[4, 5, 6, 7, 8, 9, 10]；已分类位置=[4, 5, 6, 7, 8, 9]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=4；classification=transaction；行原文="铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=5；classification=transaction；行原文="2026-04-05   铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=6；classification=transaction；行原文="铃兰花 第89章 绽放 10 代券"；CollectionItemInfo.rowIndex=6；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第89章 绽放"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=7；classification=transaction；行原文="2026-04-04   铃兰花 第88章 开战 11 代券"；CollectionItemInfo.rowIndex=7；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第88章 开战"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-04"；组头日期未读全=false；本屏连续区间日期="2026-04-04"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=8；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=8；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-04"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=9；classification=transaction；行原文="2026-04-03   铃兰花 第81章 心脏 15 代券"；CollectionItemInfo.rowIndex=9；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 心脏"；rawAmount="15"；parsedAmount=15；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=10；classification=unknown；行原文=""；CollectionItemInfo.rowIndex=10；CollectionItemInfo.rowSpan=1；rawAmount=<未命中>；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 11 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细采集观察：列表第 11 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细第 2 屏：集合项数 15 → 20，可见位置=[4, 5, 6, 7, 8, 9, 10]，已分类=[4, 5, 6, 7, 8, 9]，交易=6，首行「铃兰花 第73章 噩梦」，末行「铃兰花 第81章 心脏」；{4=transaction:铃兰花 第73章 噩梦:null:true:false@232, 5=transaction:铃兰花 第90章 崩坏:2026-04-05:true:false@510, 6=transaction:铃兰花 第89章 绽放:null:true:false@902, 7=transaction:铃兰花 第88章 开战:2026-04-04:true:false@1206, 8=transaction:铃兰花 第87章 铃兰:null:true:false@1598, 9=transaction:铃兰花 第81章 心脏:2026-04-03:true:false@1902, 10=unknown::null:true:false@2294}
+现场取证已保存：订阅明细集合项数_15_到_20-20260915-113324-970-5573383465466013873.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=4；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=5；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=6；原文="铃兰花 第89章 绽放"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=7；原文="铃兰花 第88章 开战"，金额=11，币种="代券"，归属日期="2026-04-04"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=8；原文="铃兰花 第87章 铃兰"，金额=12，币种="代券"，归属日期="2026-04-04"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=6；UI item index=9；原文="铃兰花 第81章 心脏"，金额=15，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 3 屏原始证据，稳定=false（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=20；位置证据有效=true；可见位置=[7, 8, 9, 10, 11, 12, 13]；已分类位置=[8, 9, 10, 11, 12, 13]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=20
+    snapshot行序=1；UI item index=7；classification=unknown；行原文=""；CollectionItemInfo.rowIndex=7；CollectionItemInfo.rowSpan=1；rawAmount=<未命中>；parsedAmount=-1；rawCurrency=<未命中>；parsedCurrency=<未知>；未解析原因=没有可读取的唯一交易标题；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=8；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=8；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=9；classification=transaction；行原文="2026-04-03   铃兰花 第81章 心脏 15 代券"；CollectionItemInfo.rowIndex=9；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第81章 心脏"；rawAmount="15"；parsedAmount=15；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=10；classification=transaction；行原文="2026-04-01   铃兰花 第80章 镜子 11 代券"；CollectionItemInfo.rowIndex=10；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第80章 镜子"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-01"；组头日期未读全=false；本屏连续区间日期="2026-04-01"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=11；classification=transaction；行原文="铃兰花 第79章 秘密 12 代券"；CollectionItemInfo.rowIndex=11；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第79章 秘密"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-04-01"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=12；classification=transaction；行原文="2026-03-31   铃兰花 第78章 自己 11 代券"；CollectionItemInfo.rowIndex=12；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第78章 自己"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=7；UI item index=13；classification=transaction；行原文="铃兰花 第77章 思考 11 代券"；CollectionItemInfo.rowIndex=13；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第77章 思考"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+    本屏结构问题=列表第 8 项「」未分类：交易标题=0，日期未读全=false，整行可见=true
+  明细未完整：读到 10 条；已打开=true，从顶=true，到底=false，截断=false，未读全=1，列表项覆盖=10/20，聚合章数=20，已读屏数=3，未读全示例=列表第 11 项「」尚未确定行类型；列表第 11 项尚未确定行类型；滚动后画面尚未稳定，不能把暂时不动当作到底；列表项只覆盖 10/20，不能证明中间无遗漏；逐章读到 10 条，聚合为 20 章
+现场取证已保存：订阅明细读取未完整-20260915-113327-838-6582377026375715004.txt；节点探测器 → 运行取证 → 保存到文件
+  重新打开后第二次聚合：订阅清单：20 章、火券 0、2026-09-08
+  重新打开后第二次明细证据：明细未完整：读到 10 条；已打开=true，从顶=true，到底=false，截断=false，未读全=1，列表项覆盖=10/20，聚合章数=20，已读屏数=3，未读全示例=列表第 11 项「」尚未确定行类型；列表第 11 项尚未确定行类型；滚动后画面尚未稳定，不能把暂时不动当作到底；列表项只覆盖 10/20，不能证明中间无遗漏；逐章读到 10 条，聚合为 20 章
+    明细：星彩 · 卷内第8章「继续」 10代券 2026-09-08 → 全书第 101 章
+    明细：星彩 · 卷内第5章「假冒」 10代券 2026-09-08 → 全书第 98 章
+    明细：铃兰花 · 卷内第92章「初次见面」 12代券 2026-09-08 → 全书第 92 章
+    明细：铃兰花 · 卷内第74章「清晨」 12代券 2026-09-08 → 全书第 74 章
+    明细：铃兰花 · 卷内第73章「噩梦」 12代券 2026-09-08 → 全书第 73 章
+    明细：铃兰花 · 卷内第90章「崩坏」 10代券 2026-04-05 → 全书第 90 章
+    明细：铃兰花 · 卷内第89章「绽放」 10代券 2026-04-05 → 全书第 89 章
+    明细：铃兰花 · 卷内第88章「开战」 11代券 2026-04-04 → 全书第 88 章
+    明细：铃兰花 · 卷内第87章「铃兰」 12代券 2026-04-04 → 全书第 87 章
+    明细：铃兰花 · 卷内第81章「心脏」 15代券 2026-04-03 → 全书第 81 章
+  第 2 次未完整原因：逐章明细没有完整读取的证据，这一次没能核对：明细未完整：读到 10 条；已打开=true，从顶=true，到底=false，截断=false，未读全=1，列表项覆盖=10/20，聚合章数=20，已读屏数=3，未读全示例=列表第 11 项「」尚未确定行类型；列表第 11 项尚未确定行类型；滚动后画面尚未稳定，不能把暂时不动当作到底；列表项只覆盖 10/20，不能证明中间无遗漏；逐章读到 10 条，聚合为 20 章；本账号保持未核实
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  w9899 在《反派干部今天也在扮魔法少女》上：逐章明细没有完整读取的证据，这一次没能核对：明细未完整：读到 10 条；已打开=true，从顶=true，到底=false，截断=false，未读全=1，列表项覆盖=10/20，聚合章数=20，已读屏数=3，未读全示例=列表第 11 项「」尚未确定行类型；列表第 11 项尚未确定行类型；滚动后画面尚未稳定，不能把暂时不动当作到底；列表项只覆盖 10/20，不能证明中间无遗漏；逐章读到 10 条，聚合为 20 章
+[4/8] 核对 五杯半雪碧的微博
+点击 mine_tab
+开始切到「五杯半雪碧的微博」（微博）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_agree_checkbox
+点击 login_weibo
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  五杯半雪碧的微博 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：6 章、火券 0、2026-09-08＝账本 6 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=6；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=6
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   铃兰花 第75章 见面 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第75章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-05   铃兰花 第93章 准备 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第93章 准备"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-04-03   铃兰花 第85章 开幕 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第85章 开幕"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-03-31   铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 6，可见位置=[0, 1, 2, 3, 4, 5]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「铃兰花 第75章 见面」，末行「铃兰花 第73章 噩梦」；{0=transaction:铃兰花 第75章 见面:2026-09-08:true:false@232, 1=transaction:铃兰花 第92章 初次见面:null:true:false@624, 2=transaction:铃兰花 第91章 花叶:null:true:false@928, 3=transaction:铃兰花 第93章 准备:2026-04-05:true:false@1232, 4=transaction:铃兰花 第85章 开幕:2026-04-03:true:false@1624, 5=transaction:铃兰花 第73章 噩梦:2026-03-31:true:false@2016}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113356-283-6313373525713034913.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第75章 见面"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第93章 准备"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第85章 开幕"，金额=10，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=6；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=6
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="铃兰花 第75章 见面 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第75章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-05   铃兰花 第93章 准备 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第93章 准备"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-04-03   铃兰花 第85章 开幕 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第85章 开幕"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-03-31   铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 6 → 6，可见位置=[0, 1, 2, 3, 4, 5]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「铃兰花 第75章 见面」，末行「铃兰花 第73章 噩梦」；{0=transaction:铃兰花 第75章 见面:null:true:false@232, 1=transaction:铃兰花 第92章 初次见面:null:true:false@530, 2=transaction:铃兰花 第91章 花叶:null:true:false@834, 3=transaction:铃兰花 第93章 准备:2026-04-05:true:false@1138, 4=transaction:铃兰花 第85章 开幕:2026-04-03:true:false@1530, 5=transaction:铃兰花 第73章 噩梦:2026-03-31:true:false@1922}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第75章 见面"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第93章 准备"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第85章 开幕"，金额=10，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 3 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=6；位置证据有效=true；可见位置=[0, 1, 2, 3, 4, 5]；已分类位置=[0, 1, 2, 3, 4, 5]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=6
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="铃兰花 第75章 见面 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第75章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第92章 初次见面 12 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第92章 初次见面"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="铃兰花 第91章 花叶 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第91章 花叶"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期=<未知>（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-05   铃兰花 第93章 准备 12 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第93章 准备"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-04-03   铃兰花 第85章 开幕 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第85章 开幕"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=6；UI item index=5；classification=transaction；行原文="2026-03-31   铃兰花 第73章 噩梦 12 代券"；CollectionItemInfo.rowIndex=5；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第73章 噩梦"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 3 屏：集合项数 6 → 6，可见位置=[0, 1, 2, 3, 4, 5]，已分类=[0, 1, 2, 3, 4, 5]，交易=6，首行「铃兰花 第75章 见面」，末行「铃兰花 第73章 噩梦」；{0=transaction:铃兰花 第75章 见面:null:true:false@232, 1=transaction:铃兰花 第92章 初次见面:null:true:false@530, 2=transaction:铃兰花 第91章 花叶:null:true:false@834, 3=transaction:铃兰花 第93章 准备:2026-04-05:true:false@1138, 4=transaction:铃兰花 第85章 开幕:2026-04-03:true:false@1530, 5=transaction:铃兰花 第73章 噩梦:2026-03-31:true:false@1922}
+    明细第 3 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第75章 见面"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第92章 初次见面"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=3；UI item index=2；原文="铃兰花 第91章 花叶"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第93章 准备"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第85章 开幕"，金额=10，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 3 屏日期归属：snapshot行序=6；UI item index=5；原文="铃兰花 第73章 噩梦"，金额=12，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 6 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=6/6，聚合章数=6，已读屏数=3；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113402-841-789009556647655535.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：6 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 6 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=6/6，聚合章数=6，已读屏数=3；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：铃兰花 · 卷内第75章「见面」 10代券 2026-09-08 → 全书第 75 章
+    明细：铃兰花 · 卷内第92章「初次见面」 12代券 2026-09-08 → 全书第 92 章
+    明细：铃兰花 · 卷内第91章「花叶」 11代券 2026-09-08 → 全书第 91 章
+    明细：铃兰花 · 卷内第93章「准备」 12代券 2026-04-05 → 全书第 93 章
+    明细：铃兰花 · 卷内第85章「开幕」 10代券 2026-04-03 → 全书第 85 章
+    明细：铃兰花 · 卷内第73章「噩梦」 12代券 2026-03-31 → 全书第 73 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  五杯半雪碧的微博 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第73章、第75章、第85章、第91章、第92章、第93章，共 6 章，全是代券）
+[5/8] 核对 niiiiee
+点击 mine_tab
+开始切到「niiiiee」（账号密码）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_switch_phone
+点击 login_submit
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  niiiiee 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：5 章、火券 0、2026-09-08＝账本 5 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   铃兰花 第83章 最后 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第83章 最后"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第76章 见面 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第76章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第2章 契约 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第2章 契约"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第84章 迷梦 14 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第84章 迷梦"；rawAmount="14"；parsedAmount=14；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第75章 见面 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第75章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「铃兰花 第83章 最后」，末行「铃兰花 第75章 见面」；{0=transaction:铃兰花 第83章 最后:2026-09-08:true:false@232, 1=transaction:铃兰花 第76章 见面:null:true:false@624, 2=transaction:星彩 第2章 契约:2026-04-05:true:false@928, 3=transaction:铃兰花 第84章 迷梦:2026-04-03:true:false@1320, 4=transaction:铃兰花 第75章 见面:2026-03-31:true:false@1712}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113429-256-1426552981300112997.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第83章 最后"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第76章 见面"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第2章 契约"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第84章 迷梦"，金额=14，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第75章 见面"，金额=10，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   铃兰花 第83章 最后 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第83章 最后"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第76章 见面 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第76章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第2章 契约 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第2章 契约"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第84章 迷梦 14 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第84章 迷梦"；rawAmount="14"；parsedAmount=14；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第75章 见面 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第75章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 5 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「铃兰花 第83章 最后」，末行「铃兰花 第75章 见面」；{0=transaction:铃兰花 第83章 最后:2026-09-08:true:false@232, 1=transaction:铃兰花 第76章 见面:null:true:false@624, 2=transaction:星彩 第2章 契约:2026-04-05:true:false@928, 3=transaction:铃兰花 第84章 迷梦:2026-04-03:true:false@1320, 4=transaction:铃兰花 第75章 见面:2026-03-31:true:false@1712}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="铃兰花 第83章 最后"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第76章 见面"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第2章 契约"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第84章 迷梦"，金额=14，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第75章 见面"，金额=10，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113434-421-7829413946470989469.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：5 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：铃兰花 · 卷内第83章「最后」 11代券 2026-09-08 → 全书第 83 章
+    明细：铃兰花 · 卷内第76章「见面」 10代券 2026-09-08 → 全书第 76 章
+    明细：星彩 · 卷内第2章「契约」 11代券 2026-04-05 → 全书第 95 章
+    明细：铃兰花 · 卷内第84章「迷梦」 14代券 2026-04-03 → 全书第 84 章
+    明细：铃兰花 · 卷内第75章「见面」 10代券 2026-03-31 → 全书第 75 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  niiiiee 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第75章、第76章、第83章、第84章、第95章，共 5 章，全是代券）
+[6/8] 核对 wefeef
+点击 mine_tab
+开始切到「wefeef」（账号密码）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_switch_phone
+点击 login_submit
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  wefeef 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：5 章、火券 0、2026-09-08＝账本 5 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第9章 惩罚 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第9章 惩罚"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第4章 原罪 10 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第4章 原罪"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第86章 新月 11 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第86章 新月"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第76章 见面 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第76章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第9章 惩罚」，末行「铃兰花 第76章 见面」；{0=transaction:星彩 第9章 惩罚:2026-09-08:true:false@232, 1=transaction:铃兰花 第87章 铃兰:null:true:false@624, 2=transaction:星彩 第4章 原罪:2026-04-05:true:false@928, 3=transaction:铃兰花 第86章 新月:2026-04-03:true:false@1320, 4=transaction:铃兰花 第76章 见面:2026-03-31:true:false@1712}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113500-309-9042508850380708695.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第9章 惩罚"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第87章 铃兰"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第4章 原罪"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第86章 新月"，金额=11，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第76章 见面"，金额=10，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第9章 惩罚 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第9章 惩罚"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第87章 铃兰 12 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第87章 铃兰"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第4章 原罪 10 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第4章 原罪"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第86章 新月 11 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第86章 新月"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第76章 见面 10 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第76章 见面"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 5 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第9章 惩罚」，末行「铃兰花 第76章 见面」；{0=transaction:星彩 第9章 惩罚:2026-09-08:true:false@232, 1=transaction:铃兰花 第87章 铃兰:null:true:false@624, 2=transaction:星彩 第4章 原罪:2026-04-05:true:false@928, 3=transaction:铃兰花 第86章 新月:2026-04-03:true:false@1320, 4=transaction:铃兰花 第76章 见面:2026-03-31:true:false@1712}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第9章 惩罚"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第87章 铃兰"，金额=12，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第4章 原罪"，金额=10，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第86章 新月"，金额=11，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第76章 见面"，金额=10，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113505-556-2849737386738121856.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：5 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：星彩 · 卷内第9章「惩罚」 11代券 2026-09-08 → 全书第 102 章
+    明细：铃兰花 · 卷内第87章「铃兰」 12代券 2026-09-08 → 全书第 87 章
+    明细：星彩 · 卷内第4章「原罪」 10代券 2026-04-05 → 全书第 97 章
+    明细：铃兰花 · 卷内第86章「新月」 11代券 2026-04-03 → 全书第 86 章
+    明细：铃兰花 · 卷内第76章「见面」 10代券 2026-03-31 → 全书第 76 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  wefeef 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第76章、第86章、第87章、第97章、第102章，共 5 章，全是代券）
+[7/8] 核对 iierr89
+点击 mine_tab
+开始切到「iierr89」（账号密码）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_switch_phone
+点击 login_submit
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  iierr89 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：3 章、火券 0、2026-09-08＝账本 3 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=3；位置证据有效=true；可见位置=[0, 1, 2]；已分类位置=[0, 1, 2]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=3
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第10章 合影 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第10章 合影"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第89章 绽放 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第89章 绽放"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第3章 情报犬 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第3章 情报犬"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 3，可见位置=[0, 1, 2]，已分类=[0, 1, 2]，交易=3，首行「星彩 第10章 合影」，末行「星彩 第3章 情报犬」；{0=transaction:星彩 第10章 合影:2026-09-08:true:false@232, 1=transaction:铃兰花 第89章 绽放:null:true:false@624, 2=transaction:星彩 第3章 情报犬:2026-04-05:true:false@928}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113532-186-3066641834942317731.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第10章 合影"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第89章 绽放"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第3章 情报犬"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=3；位置证据有效=true；可见位置=[0, 1, 2]；已分类位置=[0, 1, 2]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=3
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第10章 合影 10 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第10章 合影"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第89章 绽放 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第89章 绽放"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第3章 情报犬 11 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第3章 情报犬"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 3 → 3，可见位置=[0, 1, 2]，已分类=[0, 1, 2]，交易=3，首行「星彩 第10章 合影」，末行「星彩 第3章 情报犬」；{0=transaction:星彩 第10章 合影:2026-09-08:true:false@232, 1=transaction:铃兰花 第89章 绽放:null:true:false@624, 2=transaction:星彩 第3章 情报犬:2026-04-05:true:false@928}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第10章 合影"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第89章 绽放"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第3章 情报犬"，金额=11，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 3 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=3/3，聚合章数=3，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113537-382-1044583688625075597.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：3 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 3 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=3/3，聚合章数=3，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：星彩 · 卷内第10章「合影」 10代券 2026-09-08 → 全书第 103 章
+    明细：铃兰花 · 卷内第89章「绽放」 10代券 2026-09-08 → 全书第 89 章
+    明细：星彩 · 卷内第3章「情报犬」 11代券 2026-04-05 → 全书第 96 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  iierr89 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第89章、第96章、第103章，共 3 章，全是代券）
+[8/8] 核对 好好上课是
+点击 mine_tab
+开始切到「好好上课是」（账号密码）
+点击 settings_entry
+点击 logout_button
+已退出登录
+点击 login_entry
+点击 login_switch_phone
+点击 login_submit
+点击 mine_tab
+点击 voucher_entry
+点击 subscribed_list_entry
+  好好上课是 在《反派干部今天也在扮魔法少女》上：对上了（订阅清单：5 章、火券 0、2026-09-08＝账本 5 条付费记录，火券 0）
+点击 订阅清单里《反派干部今天也在扮魔法少女》那一整行（完整核对明细）
+  明细第 1 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第11章 小艇 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第11章 小艇"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第1章 晚餐 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第1章 晚餐"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第85章 开幕 10 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第85章 开幕"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第74章 清晨 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第74章 清晨"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 1 屏：集合项数 未知 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第11章 小艇」，末行「铃兰花 第74章 清晨」；{0=transaction:星彩 第11章 小艇:2026-09-08:true:false@232, 1=transaction:铃兰花 第90章 崩坏:null:true:false@624, 2=transaction:星彩 第1章 晚餐:2026-04-05:true:false@928, 3=transaction:铃兰花 第85章 开幕:2026-04-03:true:false@1320, 4=transaction:铃兰花 第74章 清晨:2026-03-31:true:false@1712}
+  明细首端已核实：第 1 项 + 同容器反向探测受阻 + 前后完整事实稳定
+现场取证已保存：订阅明细首屏-20260915-113602-178-717164166102314447.txt；节点探测器 → 运行取证 → 保存到文件
+    明细第 1 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第11章 小艇"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第1章 晚餐"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第85章 开幕"，金额=10，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 1 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第74章 清晨"，金额=12，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细第 2 屏原始证据，稳定=true（单屏原始观察，不证明完整性）
+    页面标记=true；列表项数=5；位置证据有效=true；可见位置=[0, 1, 2, 3, 4]；已分类位置=[0, 1, 2, 3, 4]；发现火券=false；列表标识="com.sfacg:id/baseListView:androidx.recyclerview.widget.RecyclerView:[0, 232, 1080, 2314]"；CollectionInfo.rowCount=5
+    snapshot行序=1；UI item index=0；classification=transaction；行原文="2026-09-08   星彩 第11章 小艇 11 代券"；CollectionItemInfo.rowIndex=0；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第11章 小艇"；rawAmount="11"；parsedAmount=11；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-09-08"；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=2；UI item index=1；classification=transaction；行原文="铃兰花 第90章 崩坏 10 代券"；CollectionItemInfo.rowIndex=1；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第90章 崩坏"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期=<未知>；组头日期未读全=false；本屏连续区间日期="2026-09-08"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=3；UI item index=2；classification=transaction；行原文="2026-04-05   星彩 第1章 晚餐 12 代券"；CollectionItemInfo.rowIndex=2；CollectionItemInfo.rowSpan=1；rawDesc="星彩 第1章 晚餐"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-05"；组头日期未读全=false；本屏连续区间日期="2026-04-05"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=4；UI item index=3；classification=transaction；行原文="2026-04-03   铃兰花 第85章 开幕 10 代券"；CollectionItemInfo.rowIndex=3；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第85章 开幕"；rawAmount="10"；parsedAmount=10；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-04-03"；组头日期未读全=false；本屏连续区间日期="2026-04-03"（仅单屏，不证明跨屏日期或完整性）
+    snapshot行序=5；UI item index=4；classification=transaction；行原文="2026-03-31   铃兰花 第74章 清晨 12 代券"；CollectionItemInfo.rowIndex=4；CollectionItemInfo.rowSpan=1；rawDesc="铃兰花 第74章 清晨"；rawAmount="12"；parsedAmount=12；金额未知原因=无；rawCurrency="代券"；parsedCurrency="代券"；币种未知原因=无；整行可见=true；组头日期="2026-03-31"；组头日期未读全=false；本屏连续区间日期="2026-03-31"（仅单屏，不证明跨屏日期或完整性）
+  明细第 2 屏：集合项数 5 → 5，可见位置=[0, 1, 2, 3, 4]，已分类=[0, 1, 2, 3, 4]，交易=5，首行「星彩 第11章 小艇」，末行「铃兰花 第74章 清晨」；{0=transaction:星彩 第11章 小艇:2026-09-08:true:false@232, 1=transaction:铃兰花 第90章 崩坏:null:true:false@624, 2=transaction:星彩 第1章 晚餐:2026-04-05:true:false@928, 3=transaction:铃兰花 第85章 开幕:2026-04-03:true:false@1320, 4=transaction:铃兰花 第74章 清晨:2026-03-31:true:false@1712}
+    明细第 2 屏日期归属：snapshot行序=1；UI item index=0；原文="星彩 第11章 小艇"，金额=11，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=2；UI item index=1；原文="铃兰花 第90章 崩坏"，金额=10，币种="代券"，归属日期="2026-09-08"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=3；UI item index=2；原文="星彩 第1章 晚餐"，金额=12，币种="代券"，归属日期="2026-04-05"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=4；UI item index=3；原文="铃兰花 第85章 开幕"，金额=10，币种="代券"，归属日期="2026-04-03"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+    明细第 2 屏日期归属：snapshot行序=5；UI item index=4；原文="铃兰花 第74章 清晨"，金额=12，币种="代券"，归属日期="2026-03-31"；日期依据=连续位置的已知组头，已通过本次读取的日期判据
+  明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+现场取证已保存：订阅明细末屏-20260915-113607-500-6440168865207076111.txt；节点探测器 → 运行取证 → 保存到文件
+  首次聚合：订阅清单：5 章、火券 0、2026-09-08
+  第一次明细证据：明细完整：读到 5 条；已打开=true，从顶=true，到底=true，截断=false，未读全=0，列表项覆盖=5/5，聚合章数=5，已读屏数=2；已完成列表内短滑后末屏稳定，同容器向后探测受阻，末项已出现
+    明细：星彩 · 卷内第11章「小艇」 11代券 2026-09-08 → 全书第 104 章
+    明细：铃兰花 · 卷内第90章「崩坏」 10代券 2026-09-08 → 全书第 90 章
+    明细：星彩 · 卷内第1章「晚餐」 12代券 2026-04-05 → 全书第 94 章
+    明细：铃兰花 · 卷内第85章「开幕」 10代券 2026-04-03 → 全书第 85 章
+    明细：铃兰花 · 卷内第74章「清晨」 12代券 2026-03-31 → 全书第 74 章
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+正在返回首页，按返回（活动窗口 com.sfacg，菠萝包挂着 1 个窗口）
+  好好上课是 在《反派干部今天也在扮魔法少女》上逐章核对：逐章都对上了（第74章、第85章、第90章、第94章、第104章，共 5 章，全是代券）
+下一章：第 67 章「第67章 小屋」

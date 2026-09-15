@@ -4,6 +4,8 @@ import com.example.blb.data.Chapter;
 import com.example.blb.data.Novel;
 import com.example.blb.util.Texts;
 
+import java.util.List;
+
 /**
  * 给「当前已登录的这个账号」订阅指定的一章。
  *
@@ -36,8 +38,8 @@ public final class SubscribeTask {
      * 宁可多等 10 秒，也不要把一次买成误判成事故。
      */
     private static final long CONFIRM_TIMEOUT = 30_000;
-    /** 选择章节页最多往下翻多少次找目标章。 */
-    private static final int MAX_SCROLLS = 40;
+    /** 扫描能覆盖的章节，购买定位也必须能到达。 */
+    private static final int MAX_SCROLLS = CatalogScanner.DEFAULT_MAX_SCROLLS;
     private static final long POLL_MS = 600;
 
     public enum Status {
@@ -52,6 +54,8 @@ public final class SubscribeTask {
         DEVICE_HAS_IT,
         /** 券不够。 */
         INSUFFICIENT,
+        /** 实际支付金额超过本账号今天剩余的额度。 */
+        DAILY_LIMIT,
         /** 流程没走通。 */
         FAILED
     }
@@ -66,7 +70,8 @@ public final class SubscribeTask {
         /** 代券余额，-1 表示没读到。 */
         public int vouchers = -1;
         /**
-         * 点过「立即下载」而结果不明 —— 券可能已经扣了。整趟必须停下，不许换号接着点。
+         * 点过「立即下载」而结果不明，或付款后遇到异常，整趟必须停下。
+         * BOUGHT 时先记已发生的购买，再停止，不许因异常把已扣券的记录丢掉。
          *
          * <p>这一位是 2026-08-24 那次事故的直接补丁：失败不占真买保险丝的额度，
          * 于是三个号各点了一次「立即下载」，两个真扣了券，账本一条没记。
@@ -90,6 +95,24 @@ public final class SubscribeTask {
 
     public static Result run(StepRunner r, Novel novel, Chapter chapter)
             throws StepRunner.StepFailure {
+        return run(r, novel, chapter, -1);
+    }
+
+    /** remainingDailyVouchers 为 -1 表示不限，0 表示今天不能再花代券。 */
+    public static Result run(StepRunner r, Novel novel, Chapter chapter,
+                             int remainingDailyVouchers) throws StepRunner.StepFailure {
+        return run(r, novel, chapter, remainingDailyVouchers, null);
+    }
+
+    /**
+     * fullCatalog 必须是本轮同步并核账后的整本目录，不能只传未购买章节。
+     * 已购买的另一卷同名行也会被按全文定位命中，必须在任何勾选之前排除这种歧义。
+     */
+    public static Result run(StepRunner r, Novel novel, Chapter chapter,
+                             int remainingDailyVouchers, List<Chapter> fullCatalog)
+            throws StepRunner.StepFailure {
+        r.checkCancelled();
+        requireUniqueChapter(novel, chapter, fullCatalog);
         openChapterPicker(r, novel);
 
         String label = "第" + chapter.chapterNo + "章";
@@ -160,7 +183,13 @@ public final class SubscribeTask {
             return result;
         }
 
-        return buy(r, chapter, label, pay, balance);
+        Result result = buy(new RunnerPurchaseSession(r, chapter, label), label, pay, balance,
+                remainingDailyVouchers);
+        if (result.status == Status.DAILY_LIMIT) {
+            unselect(r, row.node, label);
+            leave(r);
+        }
+        return result;
     }
 
     /**
@@ -187,73 +216,239 @@ public final class SubscribeTask {
      * <p>两条都没等到 → {@link Status#FAILED} 且 {@link Result#abortRun}：券可能已经扣了，
      * 后面的号一个都不许再点「立即下载」。
      */
-    private static Result buy(StepRunner r, Chapter chapter, String label,
-                              Texts.Payment pay, Texts.Balance balance)
+    interface PurchaseSession {
+        void checkCancelled() throws StepRunner.StepFailure;
+        void submit() throws StepRunner.StepFailure;
+        NodeView confirmation() throws StepRunner.StepFailure;
+        void confirm(NodeView node) throws StepRunner.StepFailure;
+        void guardCaptcha() throws StepRunner.StepFailure;
+        PurchaseObservation observe() throws StepRunner.StepFailure;
+        long now();
+        /** 付款后的等待只读结果，不因取消而丢掉已经发生的交易。 */
+        void waitMillis(long millis);
+    }
+
+    static final class PurchaseObservation {
+        final boolean downloaded;
+        final boolean done;
+        final boolean insufficient;
+        final Texts.Balance balance;
+
+        PurchaseObservation(boolean downloaded, boolean done, boolean insufficient,
+                            Texts.Balance balance) {
+            this.downloaded = downloaded;
+            this.done = done;
+            this.insufficient = insufficient;
+            this.balance = balance;
+        }
+    }
+
+    private static final class RunnerPurchaseSession implements PurchaseSession {
+        private final StepRunner runner;
+        private final Chapter chapter;
+        private final String label;
+
+        RunnerPurchaseSession(StepRunner runner, Chapter chapter, String label) {
+            this.runner = runner;
+            this.chapter = chapter;
+            this.label = label;
+        }
+
+        @Override public void checkCancelled() throws StepRunner.StepFailure {
+            runner.checkCancelled();
+        }
+        @Override public void submit() throws StepRunner.StepFailure {
+            runner.click(Keys.SUBSCRIBE_BUTTON, NAV_TIMEOUT);
+        }
+        @Override public NodeView confirmation() throws StepRunner.StepFailure {
+            StepRunner.Outcome found = runner.findAny(Keys.SUBSCRIBE_CONFIRM);
+            return found == null ? null : found.node;
+        }
+        @Override public void confirm(NodeView node) throws StepRunner.StepFailure {
+            runner.clickNode(Keys.SUBSCRIBE_CONFIRM, node);
+        }
+        @Override public void guardCaptcha() throws StepRunner.StepFailure {
+            runner.guardCaptcha();
+        }
+        @Override public PurchaseObservation observe() throws StepRunner.StepFailure {
+            StepRunner.Outcome row = findRow(runner, chapter, label);
+            boolean downloaded = row != null && ChapterRowState.read(runner, row.node).downloaded;
+            Texts.Balance balance = runner.readBalance(1_000);
+            boolean done = false;
+            boolean insufficient = false;
+            try {
+                done = runner.findAny(Keys.SUBSCRIBE_DONE) != null;
+                insufficient = runner.findAny(Keys.INSUFFICIENT_COUPONS) != null;
+            } catch (StepRunner.StepFailure ignored) {
+                // 成功提示只是辅助文字；读取失败不能抹掉上面已经取得的付款证据。
+            }
+            return new PurchaseObservation(downloaded, done, insufficient, balance);
+        }
+        @Override public long now() {
+            return System.nanoTime() / 1_000_000L;
+        }
+        @Override public void waitMillis(long millis) {
+            sleep(millis);
+        }
+    }
+
+    static Result buy(PurchaseSession session, String label, Texts.Payment pay,
+                      Texts.Balance balance, int remainingDailyVouchers)
             throws StepRunner.StepFailure {
-        int before = balance.voucher;   // 点之前页面上的代券，-1＝没读到
-        r.click(Keys.SUBSCRIBE_BUTTON, NAV_TIMEOUT);
-        r.guardCaptcha();
+        session.checkCancelled();
+        if (!pay.vouchersOnly()) {
+            return new Result(Status.INSUFFICIENT, label + " 读不到明确的纯代券实付，未购买");
+        }
+        if (remainingDailyVouchers >= 0 && pay.voucher > remainingDailyVouchers) {
+            Result result = new Result(Status.DAILY_LIMIT, label + " 实付 " + pay.voucher
+                    + " 代券，超过今日剩余额度 " + remainingDailyVouchers + "，未购买");
+            result.applyBalance(balance);
+            return result;
+        }
+
+        int before = balance.voucher;
+        String stopped = null;
+        boolean abortAfterPurchase = false;
+        try {
+            session.submit();
+        } catch (StepRunner.StepFailure failure) {
+            // StepRunner 在动作之前检查取消；其它点击异常仍可能发生在手势已派发之后。
+            if (failure.kind == StepRunner.Kind.CANCELLED) throw failure;
+            stopped = failure.getMessage();
+            abortAfterPurchase = true;
+        } catch (RuntimeException failure) {
+            stopped = failure.toString();
+            abortAfterPurchase = true;
+        }
+        if (stopped == null) {
+            try {
+                session.checkCancelled();
+                session.guardCaptcha();
+            } catch (StepRunner.StepFailure failure) {
+                stopped = failure.getMessage();
+                abortAfterPurchase |= failure.kind != StepRunner.Kind.CANCELLED;
+            } catch (RuntimeException failure) {
+                stopped = failure.toString();
+                abortAfterPurchase = true;
+            }
+        }
 
         boolean confirmed = false;
         boolean sawDone = false;
-        long deadline = System.currentTimeMillis() + CONFIRM_TIMEOUT;
-        while (System.currentTimeMillis() < deadline) {
-            if (r.findAny(Keys.INSUFFICIENT_COUPONS) != null) {
-                Result result = new Result(Status.INSUFFICIENT,
-                        label + " 券不够，" + balance.describe());
-                result.applyBalance(balance);
-                leave(r);
-                return result;
+        boolean sawInsufficient = false;
+        Texts.Balance lastBalance = Texts.balance(-1, -1);
+        long deadline = session.now() + CONFIRM_TIMEOUT;
+        while (session.now() < deadline) {
+            try {
+                session.checkCancelled();
+            } catch (StepRunner.StepFailure failure) {
+                stopped = failure.getMessage();
+                abortAfterPurchase |= failure.kind != StepRunner.Kind.CANCELLED;
             }
-            if (!confirmed) {
-                StepRunner.Outcome c = r.findAny(Keys.SUBSCRIBE_CONFIRM);
-                if (c != null) {
-                    r.clickNode(Keys.SUBSCRIBE_CONFIRM, c.node);
-                    r.guardCaptcha();
-                    confirmed = true;
-                    continue;
+            try {
+                // 先读付款证据，再考虑任何后续动作；余额不足也可能是刚扣完券后的页面状态。
+                PurchaseObservation observation = session.observe();
+                sawDone |= observation.done;
+                sawInsufficient |= observation.insufficient;
+                Texts.Balance now = observation.balance;
+                lastBalance = now;
+                int paid = before >= 0 && now.voucher >= 0 ? before - now.voucher : -1;
+                if (observation.downloaded || paid > 0) {
+                    Result result = new Result(Status.BOUGHT, label + " 订到手："
+                            + (observation.downloaded ? "这一行已经标成「已下载」" : "")
+                            + (paid > 0 ? (observation.downloaded ? "，而且" : "")
+                            + "页面上的代券从 " + before + " 掉到 " + now.voucher
+                            + "（真扣了 " + paid + " 代券）" : "")
+                            + "（" + pay.describe() + "）"
+                            + (sawDone ? "" : "（界面没给成功提示，按上面这些证据判定）"));
+                    result.cost = pay.fire;
+                    result.costVouchers = paid > 0 ? paid : pay.voucher;
+                    result.abortRun = abortAfterPurchase;
+                    if (stopped != null) result.message += "。已停止后续点击：" + stopped;
+                    if (paid > 0 && paid != pay.voucher) {
+                        result.message += "。注意：「实付」写的是 " + pay.voucher
+                                + " 代券，实际掉了 " + paid + " 代券，按实际掉的记账";
+                    }
+                    if (remainingDailyVouchers >= 0
+                            && result.costVouchers > remainingDailyVouchers) {
+                        result.abortRun = true;
+                        result.message += "。实际扣款超过今日剩余额度，记账后停止整趟";
+                    }
+                    result.applyBalance(now);
+                    return result;
                 }
-            }
-            if (!sawDone) sawDone = r.findAny(Keys.SUBSCRIBE_DONE) != null;
-
-            // 证据一：目标行出现「已下载」。
-            StepRunner.Outcome row = findRow(r, chapter, label);
-            ChapterRowState state = row == null ? null : ChapterRowState.read(r, row.node);
-            // 证据二：页面上的代券掉了 —— 钱真的付出去了。
-            Texts.Balance now = r.readBalance(1_000);
-            int paid = before >= 0 && now.voucher >= 0 ? before - now.voucher : -1;
-
-            if ((state != null && state.downloaded) || paid > 0) {
-                Result result = new Result(Status.BOUGHT, label + " 订到手："
-                        + (state != null && state.downloaded ? "这一行已经标成「已下载」" : "")
-                        + (paid > 0 ? (state != null && state.downloaded ? "，而且" : "")
-                        + "页面上的代券从 " + before + " 掉到 " + now.voucher
-                        + "（真扣了 " + paid + " 代券）" : "")
-                        + "（" + pay.describe() + "）"
-                        + (sawDone ? "" : "（界面没给成功提示，按上面这些证据判定）"));
-                // 花了多少以实际掉的那个数为准；读不到才退回「实付」那一行。
-                result.cost = pay.fire;
-                result.costVouchers = paid > 0 ? paid : pay.voucher;
-                if (paid > 0 && pay.known() && paid != pay.voucher) {
-                    result.message += "。注意：「实付」写的是 " + pay.voucher
-                            + " 代券，实际掉了 " + paid + " 代券，按实际掉的记账";
+                if (stopped == null && !confirmed) {
+                    NodeView confirmation = session.confirmation();
+                    if (confirmation != null) {
+                        // 弹窗查找和出现期间也可能收到停止；确认动作前再检查一次。
+                        session.checkCancelled();
+                        session.confirm(confirmation);
+                        confirmed = true;
+                        session.checkCancelled();
+                        session.guardCaptcha();
+                    }
                 }
-                result.applyBalance(now.known() ? now : r.readBalance(2_000));
-                return result;
+            } catch (StepRunner.StepFailure failure) {
+                stopped = failure.getMessage();
+                abortAfterPurchase |= failure.kind != StepRunner.Kind.CANCELLED;
+            } catch (RuntimeException failure) {
+                stopped = failure.toString();
+                abortAfterPurchase = true;
             }
-            sleep(POLL_MS);
+            session.waitMillis(POLL_MS);
         }
 
         Result result = new Result(Status.FAILED, "点了「立即下载」但 "
                 + CONFIRM_TIMEOUT / 1000 + " 秒内既没看到" + label + "标成「已下载」，"
                 + "也没看到代券减少（点之前是 " + (before >= 0 ? before + " 代券" : "读不到") + "）"
                 + (sawDone ? "，虽然有成功提示" : "")
+                + (sawInsufficient ? "，页面显示过余额不足" : "")
+                + (stopped == null ? "" : "。已停止后续点击：" + stopped)
                 + "。券有可能已经扣了 —— 整趟就此停下，请人工核对余额和这一章的状态；"
                 + "后面的号一个都不再点「立即下载」");
         result.abortRun = true;
-        result.applyBalance(r.readBalance(2_000));
-        leave(r);
+        result.applyBalance(lastBalance);
         return result;
+    }
+
+    /** 2026-09-14 番外没有印刷号；仍须先验证完整标题唯一，不能拿位置猜同名行。 */
+    static void requireUniqueChapter(Novel novel, Chapter target,
+                                             List<Chapter> fullCatalog)
+            throws StepRunner.StepFailure {
+        if (novel == null || target == null || target.novelId != novel.id
+                || target.id <= 0 || target.chapterNo <= 0 || Texts.isBlank(target.title)) {
+            throw unsafeCatalog("目标章节资料不完整，无法确认要订阅哪一章");
+        }
+        if (fullCatalog == null || fullCatalog.isEmpty()) {
+            throw unsafeCatalog("缺少同步后的完整目录，无法核实章节标题是否唯一");
+        }
+        String title = exactLookupTitle(target.title);
+        Chapter matched = null;
+        int matches = 0;
+        for (Chapter chapter : fullCatalog) {
+            if (chapter == null) {
+                throw unsafeCatalog("完整目录中存在未读取的章节，无法核实章节标题是否唯一");
+            }
+            if (chapter.novelId == novel.id && chapter.title != null
+                    && title.equals(exactLookupTitle(chapter.title))) {
+                matches++;
+                matched = chapter;
+            }
+        }
+        if (matches > 1) {
+            throw unsafeCatalog("目录中有 " + matches + " 行的完整标题都是「" + title
+                    + "」，无法确定应订阅哪一行");
+        }
+        if (matched == null || matched.id != target.id
+                || matched.chapterNo != target.chapterNo) {
+            throw unsafeCatalog("目标章节「" + title + "」与同步后的目录身份不一致");
+        }
+    }
+
+    private static StepRunner.StepFailure unsafeCatalog(String reason) {
+        // 复用目录核验的全局停止通道，避免换账号重试同一条歧义行；本次尚未发生付款。
+        return new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR,
+                "订阅已停止：" + reason + "，未勾选章节，也未点击付款");
     }
 
     /** 退出选择章节页。勾选状态随页面一起丢弃，比逐个取消勾选可靠。 */
@@ -277,6 +472,24 @@ public final class SubscribeTask {
         }
         r.click(Keys.DOWNLOAD_ENTRY, NAV_TIMEOUT);
         r.waitFor(Keys.SELECTED_COUNT, NAV_TIMEOUT);
+    }
+
+    /**
+     * 2026-09-14 真机普通目录的卷行有 layoutRoot，下载页却与免费番外同形。
+     * 同步目录先在这一页取得角色证据，再进入原购买页读状态；这里不勾选章节。
+     */
+    static void openCatalogDirectory(StepRunner r, Novel novel) throws StepRunner.StepFailure {
+        r.launchTarget(25_000);
+        if (r.findAny(Keys.SELECTED_COUNT) != null) {
+            r.back();
+            r.sleepHuman();
+        }
+        if (r.findAny(Keys.CATALOG_DIRECTORY_READY) == null) {
+            if (r.findAny(Keys.CATALOG_ENTRY) == null) openNovel(r, novel);
+            r.click(Keys.CATALOG_ENTRY, NAV_TIMEOUT);
+        }
+        r.waitFor(Keys.CATALOG_DIRECTORY_READY, NAV_TIMEOUT);
+        r.waitFor(Keys.CATALOG_DIRECTORY_LIST, NAV_TIMEOUT);
     }
 
     /**
@@ -357,13 +570,39 @@ public final class SubscribeTask {
      * 在选择章节页里定位目标章：每翻一屏都同时试「章节标题」和「标号」，而不是先按标题
      * 翻完整本再从底部按标号翻第二遍。
      */
+    interface ChapterLocator {
+        void checkCancelled() throws StepRunner.StepFailure;
+        StepRunner.Outcome find() throws StepRunner.StepFailure;
+        boolean scrollForward() throws StepRunner.StepFailure;
+        void settle();
+    }
+
     private static StepRunner.Outcome locateChapter(StepRunner r, Chapter chapter, String label)
             throws StepRunner.StepFailure {
+        return locateChapter(new ChapterLocator() {
+            @Override public void checkCancelled() throws StepRunner.StepFailure {
+                r.checkCancelled();
+            }
+            @Override public StepRunner.Outcome find() throws StepRunner.StepFailure {
+                return findRow(r, chapter, label);
+            }
+            @Override public boolean scrollForward() throws StepRunner.StepFailure {
+                return r.scrollForward();
+            }
+            @Override public void settle() {
+                r.sleepHuman();
+            }
+        });
+    }
+
+    static StepRunner.Outcome locateChapter(ChapterLocator locator)
+            throws StepRunner.StepFailure {
         for (int i = 0; i <= MAX_SCROLLS; i++) {
-            StepRunner.Outcome hit = findRow(r, chapter, label);
+            locator.checkCancelled();
+            StepRunner.Outcome hit = locator.find();
             if (hit != null) return hit;
-            if (i == MAX_SCROLLS || !r.scrollForward()) return null;
-            r.sleepHuman();
+            if (i == MAX_SCROLLS || !locator.scrollForward()) return null;
+            locator.settle();
         }
         return null;
     }
@@ -378,8 +617,13 @@ public final class SubscribeTask {
      */
     private static StepRunner.Outcome findRow(StepRunner r, Chapter chapter, String label)
             throws StepRunner.StepFailure {
-        if (Texts.isBlank(chapter.title)) return null;
-        return r.findExactText(label, chapter.title.trim());
+        String title = exactLookupTitle(chapter.title);
+        return title == null ? null : r.findExactText(label, title);
+    }
+
+    /** 2026-09-14 用户文字与节点 dump 的括号写法不同；只按节点原文定位，不能补卷名或改标点。 */
+    static String exactLookupTitle(String title) {
+        return Texts.isBlank(title) ? null : title.trim();
     }
 
     private static String text(String s) {

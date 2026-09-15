@@ -1,6 +1,7 @@
 package com.example.blb.auto;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -62,6 +63,21 @@ public class SubscribeBudgetTest {
         String note = stop2(100, 20, 41, 60);
         assertNotNull(note);
         assertTrue(note.contains("每日上限 60"));
+    }
+
+    @Test
+    public void anExhaustedDailyCapStopsEvenWhenPriceAndBalanceAreUnknown() {
+        assertNotNull(stop2(100, 0, 20, 20));
+        assertNotNull(stop2(-1, 0, 20, 20));
+        assertNotNull(stop2(-1, 20, 30, 20));
+    }
+
+    @Test
+    public void remainingDailyAllowanceIsIndependentOfThePriceEstimate() {
+        assertEquals(0, SubscribeRun.remainingDailyVouchers(20, 20));
+        assertEquals(0, SubscribeRun.remainingDailyVouchers(20, 25));
+        assertEquals(5, SubscribeRun.remainingDailyVouchers(20, 15));
+        assertEquals(-1, SubscribeRun.remainingDailyVouchers(0, 100));
     }
 
     // ---------- 一趟的说明里不许再出现章数上限 ----------
