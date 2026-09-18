@@ -75,8 +75,12 @@ final class RemoteLedgerRecovery {
         Map<String, SubscribedDetail.Entry> facts = new LinkedHashMap<>();
         long tomorrow = startOfTomorrow(System.currentTimeMillis());
         for (SubscribedDetail.Entry e : entries) {
-            if (e == null || e.chapterNo == 0 || Texts.isBlank(e.title)) {
-                return fail(head + "有一条明细没有可核实的章节标题");
+            // 2026-09-16：作者留空章名（「星彩 第24章」）不是"没读到" —— 卷名+印刷章号确定时
+            // 仍有唯一身份（见 SubscribedDetail.Entry.hasChapterIdentity）；而番外那种"整行原文当标题"
+            // 的写法（卷名 null、标题非空）也要照旧放行，靠 unnumberedMatches 用原文去对。
+            if (e == null || e.chapterNo == 0
+                    || (Texts.isBlank(e.title) && !e.hasChapterIdentity())) {
+                return fail(head + "有一条明细既没有可核实的章号也没有卷名，无法定位到本地目录里的哪一章");
             }
             String identity = normalized(e.volume) + "|" + e.chapterNo + "|" + normalized(e.title);
             if (facts.put(identity, e) != null) {
@@ -196,8 +200,10 @@ final class RemoteLedgerRecovery {
             return resolutionFail(head + "订阅明细没读出来");
         }
         for (SubscribedDetail.Entry e : remote) {
-            if (e == null || e.chapterNo == 0 || Texts.isBlank(e.title)) {
-                return resolutionFail(head + "有一条明细缺少可核实的章节标题");
+            // 同上：空章名（作者没写）有卷名+章号就算有身份，番外那种"原文当标题"也照旧放行。
+            if (e == null || e.chapterNo == 0
+                    || (Texts.isBlank(e.title) && !e.hasChapterIdentity())) {
+                return resolutionFail(head + "有一条明细缺少可核实的章节身份（" + detail(e) + "）");
             }
             Chapter match = resolve(e, catalog);
             if (match == null) return resolutionFail(head + resolutionFailure(e, catalog));
@@ -239,7 +245,13 @@ final class RemoteLedgerRecovery {
     private static Chapter resolve(SubscribedDetail.Entry entry, List<Chapter> catalog) {
         List<Chapter> candidates = new ArrayList<>();
         for (Chapter chapter : catalog) {
-            if (Texts.isBlank(chapter.title) || Texts.isBlank(entry.title)) continue;
+            if (Texts.isBlank(entry.title)) {
+                // 作者没写章名（界面上那一行就写着「星彩 第24章」）：没有标题可比，
+                // 只能用「卷名 + 印刷章号」定位。判据见 blankTitleMatches。
+                if (blankTitleMatches(entry, chapter)) candidates.add(chapter);
+                continue;
+            }
+            if (Texts.isBlank(chapter.title)) continue;
             if (entry.known() && Texts.rowChapterNo(chapter.title) == entry.chapterNo
                     && SubscribedDetail.sameChapter(chapter.title, entry.title)) {
                 candidates.add(chapter);
@@ -248,6 +260,21 @@ final class RemoteLedgerRecovery {
             }
         }
         return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    /**
+     * 作者把章名留空时的定位口径：<b>卷名和印刷章号都要确定</b>，而且本地目录里只能有一条符合。
+     *
+     * <p>为什么卷名是必需的：印刷章号是<b>卷内号</b>，不同卷里会重复出现（「星彩 第24章」和
+     * 「铃兰花 第24章」）。少了卷名就可能把明细指到另一卷的同一号上，那比读不出来更危险。
+     * 目录里那一行的标题是「第24章」（标号还在），所以按行首标号取出印刷号来比。
+     */
+    private static boolean blankTitleMatches(SubscribedDetail.Entry entry, Chapter chapter) {
+        if (entry == null || chapter == null) return false;
+        if (!entry.hasChapterIdentity() || !entry.known()) return false;
+        String volume = normalizedVolume(chapter.volumeTitle);
+        if (volume.isEmpty() || !volume.equals(normalizedVolume(entry.volume))) return false;
+        return Texts.rowChapterNo(chapter.title) == entry.chapterNo;
     }
 
     /**
@@ -284,6 +311,15 @@ final class RemoteLedgerRecovery {
             return detail(entry) + (matches > 1
                     ? "在本地目录有 " + matches + " 条同卷同标题候选，不能唯一对应"
                     : "不能按卷名和完整标题唯一对应本地目录（卷名缺失或标题不匹配），请同步目录并核对");
+        }
+        if (Texts.isBlank(entry.title)) {
+            // 作者没写章名的那种：说清是按「卷名＋印刷章号」找的，别写得像是我们漏读了标题。
+            int matches = 0;
+            for (Chapter chapter : catalog) if (blankTitleMatches(entry, chapter)) matches++;
+            return detail(entry) + (matches > 1
+                    ? "在本地目录有 " + matches + " 条同卷同章号候选，不能唯一对应"
+                    : "这一章作者没写章名，按「卷名＋印刷章号」也没能在本地目录里唯一定位"
+                    + "（目录里缺卷名，或同步目录还没登记这一章）");
         }
         int numbered = 0;
         int compatible = 0;

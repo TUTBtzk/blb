@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  2026-09-14 两页重复的整套流程入口造成混淆；这里仅保留同步目录、核对清单两颗主按钮。
-  整套流程统一从签到页启动。
-  只跑订阅、选书、加书、加章、导入导出留在横滚区，避免和每天都要点的操作挤在一起。
+  订阅页从上到下：目标小说一行 → 三个动作（同步目录 / 核对订阅清单 / 只跑订阅，各带一句摘要）
+  → 三张账本入口卡 → 更多（选书 · 加章 · 导入导出）→ 最后一行花费与上限。
 
-  为什么章节列表和各账号累计都变成一行：它们原来是「信息很多、窗口很小」的典型 ——
-  六百多章挤在下半屏的内嵌滚动区里，8 个号的累计被拼成一条 13sp 小字横向截断，
-  第三个号往后根本看不见。完整内容现在各占 DetailActivity 一整屏。
+  三处刻意的取舍：
+  · 目标小说单独一行放最上面：这一页说的每一件事都只对它生效（自动订阅只认 is_target 那一本），
+    先看见它才不会把别的书的结论当成这本书的。
+  · 三颗动作按钮各跟一句摘要（目录什么时候扫的、上次核对结论、下一章买哪一本的哪一章）——
+    不点也要答得出「现在到哪了」。摘要句分别来自 CatalogStatus、Prefs.lastAuditSummary、
+    SubscriptionFragment.refreshSuggestion。
+  · 选书、加章、导入导出不是每天都要点，收在最后的横滚区里，别和每天那三颗挤在一起。
+  · 最后一行是「几个号在跑、每号最多花多少」：上限在设置页，但敢不敢放心跑要看这一行。
 
-  每颗主按钮和每条入口都必须带摘要：使用者手指不能动，只有点开才看得到的信息对他等于不存在。
+  2026-09-14 两页重复的整套流程入口造成混淆；这里不再放整套流程，它统一从签到页启动。
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -25,13 +29,26 @@
         android:orientation="vertical"
         android:paddingBottom="14dp">
 
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Blb.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:id="@+id/target"
+                style="@style/Blb.Text.Headline"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+        </com.google.android.material.card.MaterialCardView>
+
         <TextView
             style="@style/Blb.Text.Section"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="18dp"
             android:layout_marginBottom="8dp"
-            android:text="@string/sub_target_novel" />
+            android:text="@string/sub_actions_section" />
 
         <com.google.android.material.card.MaterialCardView
             style="@style/Blb.Card"
@@ -43,18 +60,11 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/target"
-                    style="@style/Blb.Text.Title"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
-
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/run_catalog"
                     style="@style/Blb.Button.Tonal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
                     android:singleLine="false"
                     android:text="@string/sub_sync_catalog"
                     app:icon="@drawable/ic_action_run" />
@@ -73,7 +83,7 @@
                     style="@style/Blb.Button.Tonal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="14dp"
                     android:singleLine="false"
                     android:text="@string/sub_audit"
                     app:icon="@drawable/ic_action_run" />
@@ -87,6 +97,15 @@
                     android:accessibilityLiveRegion="polite"
                     android:text="@string/sub_audit_unchecked" />
 
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/run_subscribe"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:singleLine="false"
+                    android:text="@string/sub_run" />
+
                 <TextView
                     android:id="@+id/suggestion"
                     style="@style/Blb.Text.Body"
@@ -98,66 +117,6 @@
                     android:padding="14dp"
                     android:text="@string/sub_suggestion_loading"
                     android:textColor="?attr/colorOnPrimaryContainer" />
-
-                <HorizontalScrollView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:scrollbars="none">
-
-                    <LinearLayout
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/run_subscribe"
-                            style="@style/Blb.Button.Outlined"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/sub_run" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/pick_novel"
-                            style="@style/Blb.Button.Tonal"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/sub_pick_novel" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/add_novel"
-                            style="@style/Blb.Button.Outlined"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/sub_add_novel" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/add_chapter"
-                            style="@style/Blb.Button.Outlined"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/sub_add_chapter" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/export_csv"
-                            style="@style/Blb.Button.Outlined"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/sub_export_csv" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/import_csv"
-                            style="@style/Blb.Button.Outlined"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="@string/sub_import_csv" />
-                    </LinearLayout>
-                </HorizontalScrollView>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -171,6 +130,12 @@
 
         <!-- 账本、核对依据和账号累计都要直接带摘要，不能要求使用者逐个点开才能知道结果。 -->
         <com.example.blb.ui.EntryRowView
+            android:id="@+id/entry_stats"
+            style="@style/Blb.Card.Row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <com.example.blb.ui.EntryRowView
             android:id="@+id/entry_chapters"
             style="@style/Blb.Card.Row"
             android:layout_width="match_parent"
@@ -182,11 +147,75 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
-        <com.example.blb.ui.EntryRowView
-            android:id="@+id/entry_stats"
-            style="@style/Blb.Card.Row"
+        <TextView
+            style="@style/Blb.Text.Section"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp"
+            android:text="@string/sub_more_section" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/pick_novel"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/sub_pick_novel" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/add_novel"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/sub_add_novel" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/add_chapter"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/sub_add_chapter" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/export_csv"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/sub_export_csv" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/import_csv"
+                    style="@style/Blb.Button.Outlined"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="@string/sub_import_csv" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <!-- 最后一行：今天有几个号在跑、每个号最多花多少代券。句子由 ui/SpendSummary 算。 -->
+        <TextView
+            android:id="@+id/spend"
+            style="@style/Blb.Text.Body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:accessibilityLiveRegion="polite"
+            android:text="@string/sub_spend_loading"
+            android:textColor="?attr/colorOnSurfaceVariant" />
     </LinearLayout>
 
 </ScrollView>

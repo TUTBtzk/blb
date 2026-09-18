@@ -305,7 +305,8 @@ public class InspectorActivity extends AppCompatActivity {
                 if (out == null) throw new IllegalStateException("openOutputStream 返回 null");
                 out.write(frozen.getBytes(StandardCharsets.UTF_8));
             }
-            toast("已保存");
+            DoneDialogActivity.showDone(this, getString(R.string.done_label_save_forensics),
+                    getString(R.string.done_forensics_saved, new File(frozenPath).getName()));
         } catch (Exception e) {
             toast("保存失败：" + e.getMessage());
         }

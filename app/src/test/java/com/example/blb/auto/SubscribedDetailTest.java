@@ -9,6 +9,7 @@ import static org.junit.Assert.assertTrue;
 import com.example.blb.data.Chapter;
 import com.example.blb.data.Purchase;
 import com.example.blb.data.PurchaseRow;
+import com.example.blb.util.Texts;
 
 import org.junit.Test;
 
@@ -486,6 +487,81 @@ public class SubscribedDetailTest {
         c.chapterNo = no;
         c.title = title;
         return c;
+    }
+
+    private static Chapter chapter(long id, int no, String title, String volume) {
+        Chapter c = chapter(id, no, title);
+        c.volumeTitle = volume;
+        return c;
+    }
+
+    // ---------- 2026-09-16 真机：作者把章名留空（目录里那一行就写着「星彩 第24章」） ----------
+
+    /**
+     * 现场：`blb-log-失败..txt` L148 那条明细原文就是「星彩 第24章 10 代券」——
+     * 标题是空的，卷名和印刷章号都在。以前这种被算成「缺少 章节身份」→ 整个账号
+     * 「本账号保持未核实」→ MONEY_UNCLEAR → 整趟停在这里。
+     */
+    @Test
+    public void aChapterWhoseTitleTheAuthorLeftBlankIsStillACompleteIdentity() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第24章", "10", "代券", "2026-09-15");
+        assertEquals("卷名读出来了", "星彩", entry.volume);
+        assertEquals("印刷章号读出来了", 24, entry.chapterNo);
+        assertTrue("空标题不是没读到 —— 卷名+章号已经够定位", entry.hasChapterIdentity());
+        assertTrue("金额、币种、日期齐全时这一条算完整", SubscribedDetail.completeTransaction(entry));
+        assertTrue("日志要能看出是作者没写章名", entry.describe().contains("作者没写章名"));
+
+        // 对账本：目录扫描把这一行存成「第24章」，卷名是「星彩」。
+        Chapter ledger = chapter(2400, 100, "第24章", "星彩");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(entry), Arrays.asList(ledger));
+        assertTrue(resolved.message, resolved.ok);
+        assertEquals(1, resolved.resolved.size());
+        assertEquals(2400, resolved.resolved.get(0).chapter.id);
+    }
+
+    /** 同一个印刷章号在不同卷里会重复：缺卷名时不许猜，仍然算缺身份。 */
+    @Test
+    public void aBlankTitleWithoutTheVolumeIsStillMissingItsIdentity() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "第24章", "10", "代券", "2026-09-15");
+        assertTrue(Texts.isBlank(entry.volume));
+        assertFalse("卷名读不到就不许认", entry.hasChapterIdentity());
+        assertFalse(SubscribedDetail.completeTransaction(entry));
+        assertFalse(RemoteLedgerRecovery.resolveAll("", Arrays.asList(entry),
+                Arrays.asList(chapter(2400, 100, "第24章", "星彩"))).ok);
+    }
+
+    /** 卷名对不上时不能落到另一卷的同一号上。 */
+    @Test
+    public void aBlankTitleIsMatchedByVolumeNotOnlyByNumber() {
+        SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                "星彩 第24章", "10", "代券", "2026-09-15");
+        Chapter right = chapter(2400, 100, "第24章", "星彩");
+        Chapter wrongVolume = chapter(2500, 124, "第24章", "铃兰花");
+        RemoteLedgerRecovery.Resolution resolved = RemoteLedgerRecovery.resolveAll("",
+                Arrays.asList(entry), Arrays.asList(right, wrongVolume));
+        assertTrue(resolved.message, resolved.ok);
+        assertEquals("只能落到同卷那一行", 2400, resolved.resolved.get(0).chapter.id);
+    }
+
+    /** 护栏不放宽：空标题也一样要求金额、币种、日期齐全。 */
+    @Test
+    public void aBlankTitleStillNeedsItsMoneyCurrencyAndDate() {
+        String[] amounts = {null, "10", "10"};
+        String[] currencies = {"代券", null, "代券"};
+        String[] dates = {"2026-09-15", "2026-09-15", null};
+        for (int i = 0; i < amounts.length; i++) {
+            SubscribedDetail.Entry entry = SubscribedDetail.parseRow(
+                    "星彩 第24章", amounts[i], currencies[i], dates[i]);
+            assertTrue(entry.hasChapterIdentity());
+            assertFalse("缺金额/币种/日期仍然不算完整（第 " + i + " 组）",
+                    SubscribedDetail.completeTransaction(entry));
+        }
+        assertTrue("三项齐全才算完整",
+                SubscribedDetail.completeTransaction(SubscribedDetail.parseRow(
+                        "星彩 第24章", "10", "代券", "2026-09-15")));
     }
 
     /** 聚合 2 对 0 时，完整逐章明细能精确生成两条历史补账，不会猜「前两章」。 */

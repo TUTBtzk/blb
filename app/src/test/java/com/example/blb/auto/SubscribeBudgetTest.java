@@ -11,65 +11,45 @@ import com.example.blb.data.Novel;
 import org.junit.Test;
 
 /**
- * 「一个号连着往下订，订到代券不够再换下一个号」这条判据本身。
+ * 「一个号连着往下订，订到页面说余额不足再换下一个号」这条判据本身。
  *
  * <p>为什么单独钉住：它在真机上要跑一整趟 8 个号才看得到一次，而算错的后果是
- * 拿火券去付，或者一个号把后面几个号该拿的章占掉。干跑已经整套删除，
- * 所以现在没有「先模拟一遍」这层缓冲 —— 这个判据错了就是真花错钱。
+ * 拿火券去付，或者一个号把后面几个号该拿的章占掉。
+ *
+ * <p><b>2026-09-15 第五次反馈之后，这条判据里只剩「今天已花多少」这一件确定的事实。</b>
+ * 以前它会拿上一章的实付价当这一章的估价（`estimate`），余额一低于估价就换号；而每章
+ * 单价 10~14 代券不等，于是真机上出现「订 1~2 章、余额还剩着就换号」。现在不猜价：
+ * 进页面让菠萝包自己说，出现「余额不足，快去充值吧」才算这个号没钱了
+ * （见 {@link SubscribeTask} 的 {@code INSUFFICIENT}）。
  */
 public class SubscribeBudgetTest {
 
-    private static String stop(int budget, int estimate) {
-        return SubscribeRun.stopBecauseBroke("甲", budget, estimate, 0, 0, 50);
+    /** 今天没花过、也没设上限 → 永远不拦，价格多少都进页面读实付。 */
+    private static String stop() {
+        return SubscribeRun.stopBecauseBroke("甲", 0, 0);
     }
 
-    private static String stop2(int budget, int estimate, int spentToday, int cap) {
-        return SubscribeRun.stopBecauseBroke("甲", budget, estimate, spentToday, cap, 50);
+    private static String stop2(int spentToday, int cap) {
+        return SubscribeRun.stopBecauseBroke("甲", spentToday, cap);
     }
 
-    /** 还够就接着往下订 —— 这才是「一个号订到余额不足」而不是「一个号只订一章」。 */
+    /** 不猜价格：无论余额和单价看起来多悬殊，都要进页面让菠萝包自己说。 */
     @Test
-    public void enoughVouchersKeepsGoing() {
-        assertNull("53 券买 20 券的一章，当然接着订", stop(53, 20));
-        assertNull("刚好够也算够", stop(20, 20));
+    public void thePageDecidesWhetherThisAccountIsBroke() {
+        assertNull("53 券买 20 券的一章，当然接着订", stop());
+        assertNull("余额 0 也要进页面 —— 免费章会直接走「已拥有」那条路", stop());
+        assertNull("没设上限、今天也没花过，就不许因为估价拦人", stop());
     }
 
-    /** 差一券就该换号，绝不进页面赌一把。 */
+    /** 每日上限是账本里的确定事实：已经花到上限就换号，不再进页面。 */
     @Test
-    public void oneVoucherShortSwitchesAccount() {
-        String note = stop(19, 20);
+    public void anExhaustedDailyCapStillStopsAccount() {
+        String note = stop2(20, 20);
         assertNotNull(note);
-        assertTrue("要说清剩多少、要多少", note.contains("只剩 19") && note.contains("约 20"));
+        assertTrue(note, note.contains("已达到每日上限 20"));
         assertTrue(note.contains("换下一个号"));
-    }
-
-    /** 估不出价（章节表没登记单价、这个号还没买过一章）就别拦，让菠萝包自己在页面上说。 */
-    @Test
-    public void unknownPriceIsNotAStopReason() {
-        assertNull(stop(0, 0));
-        assertNull(stop(15, 0));
-    }
-
-    /** 余额读不到（-1）也不拦：页面上的「余额不足」才是硬判据。 */
-    @Test
-    public void unknownBalanceIsNotAStopReason() {
-        assertNull(stop(-1, 20));
-    }
-
-    /** 每日上限：够买但会超上限，同样换号。 */
-    @Test
-    public void dailyCapStopsBeforeItIsExceeded() {
-        assertNull("40 + 20 = 60，正好到上限，还能买", stop2(100, 20, 40, 60));
-        String note = stop2(100, 20, 41, 60);
-        assertNotNull(note);
-        assertTrue(note.contains("每日上限 60"));
-    }
-
-    @Test
-    public void anExhaustedDailyCapStopsEvenWhenPriceAndBalanceAreUnknown() {
-        assertNotNull(stop2(100, 0, 20, 20));
-        assertNotNull(stop2(-1, 0, 20, 20));
-        assertNotNull(stop2(-1, 20, 30, 20));
+        assertNull("差一券没到上限就不拦 —— 真实单价由页面回答", stop2(19, 20));
+        assertNull("上限没设（0）时永远不按上限拦", stop2(999, 0));
     }
 
     @Test

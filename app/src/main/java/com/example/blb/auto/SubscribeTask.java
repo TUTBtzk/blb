@@ -104,12 +104,22 @@ public final class SubscribeTask {
         return run(r, novel, chapter, remainingDailyVouchers, null);
     }
 
+    /** 不知道上一章是哪一章（例如独立入口第一次买）时用这一条：清残留只能靠重进页面。 */
+    public static Result run(StepRunner r, Novel novel, Chapter chapter,
+                             int remainingDailyVouchers, List<Chapter> fullCatalog)
+            throws StepRunner.StepFailure {
+        return run(r, novel, chapter, remainingDailyVouchers, fullCatalog, null);
+    }
+
     /**
      * fullCatalog 必须是本轮同步并核账后的整本目录，不能只传未购买章节。
      * 已购买的另一卷同名行也会被按全文定位命中，必须在任何勾选之前排除这种歧义。
+     *
+     * @param previous 这个号上一章买成的那一章（同一个号连着订时用来清残留的勾）；
+     *                 不知道就传 null —— 那就只能靠「重进选择章节页」这条路清。
      */
     public static Result run(StepRunner r, Novel novel, Chapter chapter,
-                             int remainingDailyVouchers, List<Chapter> fullCatalog)
+                             int remainingDailyVouchers, List<Chapter> fullCatalog, Chapter previous)
             throws StepRunner.StepFailure {
         r.checkCancelled();
         requireUniqueChapter(novel, chapter, fullCatalog);
@@ -140,10 +150,36 @@ public final class SubscribeTask {
                     + "请在「我的 → 代券 → 订阅清单」里核对是谁买的");
         }
 
+        // 2026-09-15（第六次修复）：到这里才真的要花钱，所以先清掉上一章留在页面上的勾。
+        // 清干净（「已选」读到 0）才许点这一行；清不掉就不买、如实报告，绝不在不确定时点「立即下载」。
+        ResidueResult residue = clearSelectionResidue(
+                new RunnerPickerPage(r, novel), previous, label);
+        if (residue.selected != 0) {
+            leave(r);
+            return residue.failure(label);
+        }
+        if (residue.reentered) {
+            // 清残留时重进过页面 → 之前那个行节点已经失效，必须按标题重新定位；顺手复核免费/已下载。
+            row = locateChapter(r, chapter, label);
+            if (row == null) {
+                return new Result(Status.FAILED, "清掉残留勾选、重进选择章节页之后，" + label
+                        + " 这一行在页面上找不到了（翻了 " + MAX_SCROLLS + " 屏）");
+            }
+            state = ChapterRowState.read(r, row.node);
+            if (state.free()) {
+                return new Result(Status.ALREADY, label + " " + state.describe()
+                        + " → 免费章，谁登录都看得到，不用花券");
+            }
+            if (state.deviceHasIt()) {
+                return new Result(Status.DEVICE_HAS_IT, label + " " + state.describe()
+                        + " → 这台手机上已经有这一章了，但看不出是哪个号买的：不记账本、也买不了");
+            }
+        }
+
         r.clickNode(label, row.node);
         String selected = r.readText(Keys.SELECTED_COUNT, 3_000);
         int selectedCount = Texts.parseCount(selected);
-        if (selectedCount != 1) {
+        if (!selectionIsExactlyTheTarget(selectedCount)) {
             // 必须正好一章。0 = 点行没勾上（菠萝包里点复选框图标是没反应的，只有点整行才行）；
             // 大于 1 = 勾中的不是单独一章 —— 卷标题行和「全选」都会一下勾上一整批，
             // 那时候按「立即下载」会把一整卷买下来。两种都不许往下走。
@@ -188,8 +224,31 @@ public final class SubscribeTask {
         if (result.status == Status.DAILY_LIMIT) {
             unselect(r, row.node, label);
             leave(r);
+            return result;
+        }
+        if (result.status == Status.BOUGHT) {
+            // 2026-09-15（第六次修复）：买成之后必须当场把这一章的勾清掉并读「已选」自证。
+            // 以前不清，于是下一章一点就变成「已选 2 章」→ 护栏拒买 → 每个号一轮只订得到 1 章。
+            // 买完这一行可能已经变成「已下载」而没有勾，所以绝不能"点一下就算清了" —— 必须读数字。
+            int left = unselect(r, row.node, label);
+            r.log("  " + label + " 买成后清勾：已选 " + describe(left)
+                    + (left == 0 ? "（清干净了）" : "（下一章会先清残留再买）"));
+            result.message += "；买完已清掉这一章的勾（已选 " + describe(left) + "）";
+            leave(r);
+            return result;
         }
         return result;
+    }
+
+    /**
+     * 点完目标行之后「已选」必须<b>正好 1 章</b>。
+     *
+     * <p>0＝点行没勾上（菠萝包里点复选框图标是没反应的，只有点整行才行）；
+     * 大于 1＝勾中的不是单独一章 —— 卷标题行和「全选」都会一下勾上一整批，那时候按
+     * 「立即下载」会把一整卷买下来，多花的券要不回来。这条规则一个字都不放宽。
+     */
+    static boolean selectionIsExactlyTheTarget(int selectedCount) {
+        return selectedCount == 1;
     }
 
     /**
@@ -203,6 +262,165 @@ public final class SubscribeTask {
             throws StepRunner.StepFailure {
         if (!r.pressOrLog("取消勾选 " + label, row)) return -1;
         return Texts.parseCount(r.readText(Keys.SELECTED_COUNT, 3_000));
+    }
+
+    /**
+     * 选择章节页上「清残留勾选」这一步需要的全部动作。
+     *
+     * <p>为什么要抽一层：2026-09-15（第六次修复）真机上每个号买成 1 章之后，下一章一点就
+     * 变成「已选 2 章」而被护栏拦下 —— 于是「代券明明够却换号」。清残留的顺序（按行清 →
+     * 重进页面 → 不许买）是这个 bug 的判据本体，必须能在普通 JVM 单测里钉住
+     * （这个项目没有 Robolectric，界面代码测不了），所以把它和 {@link StepRunner} 隔开。
+     */
+    interface PickerPage {
+        /** 读「已选 N 章」；读不到返回 -1（-1 绝不能当成 0）。 */
+        int selectedCount() throws StepRunner.StepFailure;
+
+        /** 按标题重新定位某一章的行并点掉它的勾；行找不到或点不动返回 false。 */
+        boolean unselect(Chapter chapter, String label) throws StepRunner.StepFailure;
+
+        /** 退出选择章节页。 */
+        void leave() throws StepRunner.StepFailure;
+
+        /** 重新走一遍进入选择章节页的路径（新的一次进入，购物车可能是空的）。 */
+        void reopen() throws StepRunner.StepFailure;
+
+        void log(String message);
+    }
+
+    /** 读到「已选」之后下一步做什么。抽成纯函数：判错的代价是漏订，或者白花一次券。 */
+    enum ResidueStep { PROCEED, CLEAR_BY_ROW, REENTER, GIVE_UP }
+
+    static ResidueStep residueStep(int selected, boolean previousKnown,
+                                   boolean rowTried, boolean reentered) {
+        if (selected == 0) return ResidueStep.PROCEED;
+        // 读不到「已选」＝不能确认页面上干不干净；不确定就不许点「立即下载」。
+        if (selected < 0) return ResidueStep.GIVE_UP;
+        if (previousKnown && !rowTried) return ResidueStep.CLEAR_BY_ROW;
+        if (!reentered) return ResidueStep.REENTER;
+        return ResidueStep.GIVE_UP;
+    }
+
+    /** 清残留的结果：0＝干净可以买；>0＝还留着几章；-1＝读不到，都不许买。 */
+    static final class ResidueResult {
+        int selected;
+        /** 为了清残留重进过选择章节页：调用方必须按标题重新定位目标行（旧节点已失效）。 */
+        boolean reentered;
+        String log = "进页时「已选」是 0，没有残留的勾";
+
+        /**
+         * 清不掉时给调用方的那条结论。
+         *
+         * <p>话必须写准：这是「页面上的勾没清掉」，<b>不是余额不足</b> ——
+         * 上一版日志里所有买不成都写成「页面上说余额不足」，把真正的原因盖掉了。
+         */
+        Result failure(String label) {
+            return new Result(Status.FAILED, selected < 0
+                    ? label + " 没能确认页面上没有残留的勾选（" + log + "），这一章这次没订，"
+                      + "也没敢点「立即下载」"
+                    : label + " 上一章留下的勾清不掉（清完「已选」还是 " + selected
+                      + " 章：" + log + "），这一章这次没订，也没敢点「立即下载」 —— "
+                      + "不是余额不足，是页面上的勾没清掉");
+        }
+    }
+
+    /**
+     * 买这一章之前，先把上一章留在页面上的勾清干净。
+     *
+     * <p>2026-09-15 现场（`blb-log-订阅` L180-190）：皓平订到第111章之后，同一页上那一章的勾
+     * 还在；下一次进来点第112章 → 「已选 2 章」→ 护栏拒买 → 换号。每个号都一模一样，
+     * 表现出来就是「代券足够却换号」。{@code openChapterPicker} 见页面上已有「已选」就直接返回
+     * （不重进页面），所以残留会一直留着 —— 这也是为什么第 2 条兜底要真的先退出去再进来。
+     *
+     * <p>每一步都用「已选」这个数字自证：按行清完要读、重进之后要读，读不到一律算没清干净。
+     */
+    static ResidueResult clearSelectionResidue(PickerPage page, Chapter previous, String label)
+            throws StepRunner.StepFailure {
+        ResidueResult out = new ResidueResult();
+        int selected = page.selectedCount();
+        boolean rowTried = false;
+        for (int guard = 0; guard < 4; guard++) {
+            ResidueStep step = residueStep(selected, previous != null, rowTried, out.reentered);
+            if (step == ResidueStep.PROCEED) {
+                out.selected = 0;
+                return out;
+            }
+            if (step == ResidueStep.GIVE_UP) {
+                out.selected = selected;
+                out.log = selected < 0
+                        ? "「已选」读不到，不能确认页面上有没有残留的勾"
+                        : "按行清、重进页面都试过，「已选」还是 " + selected + " 章";
+                page.log("  " + label + " 前清残留失败：" + out.log + "，这一章不许点「立即下载」");
+                return out;
+            }
+            if (step == ResidueStep.CLEAR_BY_ROW) {
+                rowTried = true;
+                String previousLabel = "第" + previous.chapterNo + "章";
+                page.log("  页面上还留着 " + selected + " 章的勾（上一章买完没清掉），先按「"
+                        + previousLabel + "」那一行清");
+                if (!page.unselect(previous, previousLabel)) {
+                    page.log("  上一章「" + previousLabel + "」的行在页面上找不到或点不动，改走重进页面");
+                }
+                selected = page.selectedCount();
+                page.log("  按行清残留之后「已选」=" + describe(selected)
+                        + (selected == 0 ? "，清干净了" : "，还没清干净"));
+                if (out.log.startsWith("进页时")) out.log = "按行清残留（" + previousLabel + "）：已选 "
+                        + selected + (selected == 0 ? "（清干净）" : "（没清干净）");
+                continue;
+            }
+            // REENTER：真的先退出去再进来。openChapterPicker 见页面上有「已选」就不重进，
+            // 所以不先 leave() 的话这一步等于没做。
+            page.log("  按行清不掉，退出选择章节页再重新进一次");
+            page.leave();
+            page.reopen();
+            out.reentered = true;
+            int again = page.selectedCount();
+            page.log("  重进选择章节页之后「已选」=" + describe(again)
+                    + (again == 0 ? "，清干净了" : "，还是没清干净"));
+            out.log += (out.log.isEmpty() || out.log.startsWith("进页时") ? "" : "；")
+                    + "重进页面：已选 " + describe(again);
+            selected = again;
+        }
+        out.selected = selected;
+        return out;
+    }
+
+    private static String describe(int selected) {
+        return selected < 0 ? "读不到" : selected + " 章";
+    }
+
+    /** 真机上的 {@link PickerPage}：每一步都走 StepRunner，和以前点行、清勾用的是同一套动作。 */
+    private static final class RunnerPickerPage implements PickerPage {
+        private final StepRunner runner;
+        private final Novel novel;
+
+        RunnerPickerPage(StepRunner runner, Novel novel) {
+            this.runner = runner;
+            this.novel = novel;
+        }
+
+        @Override public int selectedCount() throws StepRunner.StepFailure {
+            return Texts.parseCount(runner.readText(Keys.SELECTED_COUNT, 3_000));
+        }
+
+        @Override public boolean unselect(Chapter chapter, String label) throws StepRunner.StepFailure {
+            // 必须重新定位：重进页面之后旧节点已经失效，拿它点等于点在旧树上。
+            StepRunner.Outcome row = locateChapter(runner, chapter, label);
+            if (row == null) return false;
+            return runner.pressOrLog("取消勾选 " + label, row.node);
+        }
+
+        @Override public void leave() throws StepRunner.StepFailure {
+            SubscribeTask.leave(runner);
+        }
+
+        @Override public void reopen() throws StepRunner.StepFailure {
+            openChapterPicker(runner, novel);
+        }
+
+        @Override public void log(String message) {
+            runner.log(message);
+        }
     }
 
     /**

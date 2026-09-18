@@ -122,6 +122,49 @@ public class AuditDaoTest extends DbTestBase {
         audit.saveProgress(row);
     }
 
+    /**
+     * 2026-09-15 用户要的「一键清理」：只清这本书的留痕，购买记录、章节、核对凭证一条不动。
+     *
+     * <p>为什么这几条断言都要有：清掉 {@code ledger_audit} 只该丢「撤销的依据」，
+     * 不该让任何账本事实变化 —— 也不该把别的书的存疑记录一起带走。
+     */
+    @Test
+    public void clearingOneNovelRemovesOnlyItsOwnAuditTrail() {
+        Fixture f = new Fixture();
+        long otherNovelAudit = f.audit.insertLedgerAudit(suspectOf(f.other, f.anotherNovel, 1));
+        f.audit.insertLedgerAudit(suspectOf(f.mine, f.novel, 1));
+        f.audit.insertLedgerAudit(suspectOf(f.mine, f.novel, 2));
+        progress(f.audit, f.mine, f.novel);
+        String markerBefore = f.audit.paidLedgerMarker(f.mine, f.novel);
+        int paidBefore = subs.countPaidPurchases(f.mine, f.novel);
+
+        assertEquals(2, f.audit.deleteLedgerAuditsOfNovel(f.novel));
+
+        assertTrue(f.audit.loadRecentLedgerAudits(f.novel, 10).isEmpty());
+        assertEquals("别的书的存疑记录不许一起清掉", 1,
+                f.audit.loadRecentLedgerAudits(f.anotherNovel, 10).size());
+        assertNotNull("别的书的留痕还在", f.audit.ledgerAuditById(otherNovelAudit));
+        assertEquals("购买记录一条都不能动", paidBefore, subs.countPaidPurchases(f.mine, f.novel));
+        assertNotNull(f.audit.purchaseById(f.extraId));
+        assertEquals("已登记的章节不许动", 4, subs.loadChapters(f.novel).size());
+        assertEquals("核对凭证（购买闸门）不许动", markerBefore,
+                f.audit.paidLedgerMarker(f.mine, f.novel));
+        assertNotNull("核对进度不许动", f.audit.auditFor(f.mine, f.novel));
+        assertEquals("清第二遍没有可删的", 0, f.audit.deleteLedgerAuditsOfNovel(f.novel));
+    }
+
+    private static LedgerAudit suspectOf(long account, long novel, int chapterNo) {
+        LedgerAudit audit = new LedgerAudit();
+        audit.at = NOW;
+        audit.accountId = account;
+        audit.novelId = novel;
+        audit.kind = LedgerAudit.KIND_SUSPECT;
+        audit.chapterNo = chapterNo;
+        audit.title = "第" + chapterNo + "章";
+        audit.detail = "";
+        return audit;
+    }
+
     @Test
     public void twoIndependentReadsDeleteOnlyTheProvenOldExtraFact() {
         Fixture f = new Fixture();

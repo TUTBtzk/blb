@@ -149,7 +149,7 @@ public final class DailyQueue {
                         summary.catalogNote = CatalogStatus.runNote(plan.novel,
                                 System.currentTimeMillis(), Prefs.catalogMaxAgeHours(context));
                         SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                                balance, settled, tally);
+                                settled, tally);
                     }
                 } catch (StepRunner.StepFailure e) {
                     if (CheckInQueue.isGlobal(e.kind)) summary.abortReason = e.getMessage();

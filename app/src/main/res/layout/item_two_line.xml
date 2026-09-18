@@ -61,6 +61,19 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp" />
+
+            <!--
+              2026-09-15 二级页排版统一：有些行天生有三件事（时间 / 依据 / 备注），
+              塞进 line2 用 \n 拼起来就再也分不清哪句是哪句。默认隐藏 ——
+              用不到的页面（账号页、今日状态）不用管它。
+            -->
+            <TextView
+                android:id="@+id/line3"
+                style="@style/Blb.Text.Line2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

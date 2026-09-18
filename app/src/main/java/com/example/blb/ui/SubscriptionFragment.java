@@ -73,6 +73,7 @@ public class SubscriptionFragment extends Fragment {
     private TextView suggestion;
     private TextView catalogSummary;
     private TextView auditSummary;
+    private TextView spend;
     private EntryRowView entryChapters;
     private EntryRowView entryStats;
     private EntryRowView entrySuspect;
@@ -111,6 +112,7 @@ public class SubscriptionFragment extends Fragment {
         suggestion = v.findViewById(R.id.suggestion);
         catalogSummary = v.findViewById(R.id.catalog_summary);
         auditSummary = v.findViewById(R.id.audit_summary);
+        spend = v.findViewById(R.id.spend);
         runSubscribe = v.findViewById(R.id.run_subscribe);
         runCatalog = v.findViewById(R.id.run_catalog);
         runAudit = v.findViewById(R.id.run_audit);
@@ -282,16 +284,24 @@ public class SubscriptionFragment extends Fragment {
     }
 
     private void renderRunCosts(List<Account> accounts) {
+        int enabled = 0;
+        if (accounts != null) {
+            for (Account account : accounts) if (account.enabled) enabled++;
+        }
         String auditText;
         if (accounts == null) {
             auditText = getString(R.string.sub_audit_accounts_loading);
         } else {
-            int enabled = 0;
-            for (Account account : accounts) if (account.enabled) enabled++;
             auditText = enabled == 0 ? getString(R.string.sub_audit_no_accounts)
                     : getString(R.string.sub_audit_cost, enabled);
         }
         runAudit.setText(getString(R.string.sub_audit) + "\n" + auditText);
+        // 最后一行：今天几个号在跑、每号最多花多少代券（上限在设置页，0＝不限）。
+        // 句子由 ui/SpendSummary 算 —— 这一行决定「敢不敢放心跑」，不该散在别处。
+        if (spend != null) {
+            spend.setText(accounts == null ? getString(R.string.sub_spend_loading)
+                    : SpendSummary.line(enabled, Prefs.dailySpendCap(requireContext())));
+        }
     }
 
     private void refreshAuditSummary() {
@@ -307,19 +317,14 @@ public class SubscriptionFragment extends Fragment {
             entrySuspect.setSummary(getString(R.string.detail_suspect_empty));
             return;
         }
-        int suspects = 0;
-        int deletes = 0;
-        for (LedgerAudit audit : ledgerAudits) {
-            if (LedgerAudit.KIND_SUSPECT.equals(audit.kind)) suspects++;
-            if (LedgerAudit.KIND_DELETE.equals(audit.kind)) deletes++;
-        }
         LedgerAudit latest = ledgerAudits.get(0);
-        String when = latest.at > 0 ? DateFormat.format("MM-dd HH:mm", latest.at).toString()
-                : "时间未记录";
-        String evidence = LedgerAuditPayload.message(latest.detail);
-        entrySuspect.setSummary("最近 " + ledgerAudits.size() + " 条：存疑 " + suspects
-                + " · 修正 " + deletes + "\n最近 " + when + "："
-                + (Texts.isBlank(evidence) ? "依据未记录" : evidence));
+        String when = latest.at > 0 ? DateFormat.format("MM-dd HH:mm", latest.at).toString() : "";
+        // 计数规则和签到页那张卡共用一份（ui/SuspectSummary）：两页说的必须是同一批数。
+        // 时间与依据在这里读好传进去 —— org.json 那条链是 Android API，进不了那个类。
+        String summary = SuspectSummary.detailLine(ledgerAudits, when,
+                LedgerAuditPayload.message(latest.detail));
+        entrySuspect.setSummary(Texts.isBlank(summary)
+                ? getString(R.string.detail_suspect_empty) : summary);
     }
 
     /** 起始章：自动订阅只碰它及之后的章，前面的旧章不会被顺手买掉。 */
@@ -429,11 +434,14 @@ public class SubscriptionFragment extends Fragment {
                 .setTitle(R.string.sub_pick_novel)
                 .setItems(labels, (d, which) -> {
                     long id = novels.get(which).id;
+                    Novel picked = novels.get(which);
                     Context app = requireContext().getApplicationContext();
                     LedgerEdits.submit(app, () -> {
                         dao.setTargetNovel(id);
                         Db.get(app).auditDao().invalidateAll();
-                    });
+                    }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                            getString(R.string.done_label_pick_novel),
+                            getString(R.string.done_picked_novel, picked.title))));
                 })
                 .setNeutralButton(R.string.delete, (d, w) -> pickNovelToDelete())
                 .setNegativeButton(R.string.cancel, null)
@@ -451,7 +459,9 @@ public class SubscriptionFragment extends Fragment {
                     LedgerEdits.submit(app, () -> {
                         dao.deleteNovel(n);
                         Db.get(app).auditDao().invalidateNovel(n.id);
-                    });
+                    }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                            getString(R.string.done_label_delete_novel),
+                            getString(R.string.done_deleted_novel, n.title))));
                 })
                 .setNegativeButton(R.string.cancel, null)
                 .show();
@@ -487,7 +497,9 @@ public class SubscriptionFragment extends Fragment {
                         // 第一本书自动设为集中订阅目标，省一次操作。
                         if (firstNovel && id > 0) dao.setTargetNovel(id);
                         Db.get(app).auditDao().invalidateNovel(id);
-                    });
+                    }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                            getString(R.string.done_label_add_novel),
+                            getString(R.string.done_added_novel, t))));
                 })
                 .show();
     }
@@ -534,7 +546,9 @@ public class SubscriptionFragment extends Fragment {
                             dao.ensureChapter(novelId, no, no == s ? chapterTitle : null, p);
                         }
                         Db.get(app).auditDao().invalidateNovel(novelId);
-                    });
+                    }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                            getString(R.string.done_label_add_chapters),
+                            getString(R.string.done_added_chapters, s, e))));
                 })
                 .show();
     }
@@ -773,7 +787,8 @@ public class SubscriptionFragment extends Fragment {
                 return;
             }
             int n = count;
-            post(() -> toast("导出了 " + n + " 条订阅记录"));
+            post(() -> DoneDialogActivity.showDone(requireContext(),
+                    getString(R.string.done_label_export_csv), "导出了 " + n + " 条订阅记录"));
         });
     }
 
@@ -851,7 +866,8 @@ public class SubscriptionFragment extends Fragment {
             int a = counts.added;
             int s = counts.skipped;
             int badDates = counts.invalidDates;
-            post(() -> toast("导入 " + a + " 条，跳过 " + s + " 条"
+            post(() -> DoneDialogActivity.showDone(requireContext(),
+                    getString(R.string.done_label_import_csv), "导入 " + a + " 条，跳过 " + s + " 条"
                     + (badDates > 0 ? "（其中 " + badDates + " 条金额或购买日期缺失、无效）"
                     : s > 0 ? "（账号不存在或必填字段无效）" : "")));
         });

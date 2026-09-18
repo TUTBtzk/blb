@@ -49,6 +49,7 @@ import com.example.blb.data.Novel;
 import com.example.blb.data.Purchase;
 import com.example.blb.data.SubscriptionDao;
 import com.example.blb.util.DayRollover;
+import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
 
 import java.io.OutputStream;
@@ -114,6 +115,8 @@ public class DetailActivity extends AppCompatActivity {
     private TextView empty;
     /** 「运行日志」页头部那个「导出」；其它页一律不出现。 */
     private TextView exportLog;
+    /** 「核对记录与存疑」页头部那个「清理」；其它页一律不出现。 */
+    private TextView clearAudits;
     /** 最近一次渲染出来的日志行，导出时原样落盘。 */
     private List<String> logLines = new ArrayList<>();
     private ActivityResultLauncher<String> logExportLauncher;
@@ -157,6 +160,7 @@ public class DetailActivity extends AppCompatActivity {
         logText = findViewById(R.id.detail_log);
         empty = findViewById(R.id.detail_empty);
         exportLog = findViewById(R.id.detail_export);
+        clearAudits = findViewById(R.id.detail_clear);
         logExportLauncher = registerForActivityResult(
                 new ActivityResultContracts.CreateDocument("text/plain"), this::writeLog);
         exportLog.setOnClickListener(v -> logExportLauncher.launch(
@@ -231,7 +235,8 @@ public class DetailActivity extends AppCompatActivity {
         logScroll.setVisibility(View.VISIBLE);
         exportLog.setVisibility(View.VISIBLE);
         AutomationBus.status().observe(this, s ->
-                setSubtitle(Texts.isBlank(s) ? getString(R.string.checkin_idle) : s));
+                setSubtitle(getString(R.string.detail_log_status,
+                        Texts.isBlank(s) ? getString(R.string.checkin_idle) : s)));
         AutomationBus.log().observe(this, lines -> {
             logLines = lines == null ? new ArrayList<>() : new ArrayList<>(lines);
             logText.setText(lines == null || lines.isEmpty()
@@ -261,8 +266,9 @@ public class DetailActivity extends AppCompatActivity {
                         Toast.LENGTH_LONG).show());
                 return;
             }
-            runOnUiThread(() -> Toast.makeText(this,
-                    getString(R.string.detail_log_exported, count), Toast.LENGTH_SHORT).show());
+            runOnUiThread(() -> DoneDialogActivity.showDone(this,
+                    getString(R.string.done_label_export_log),
+                    getString(R.string.detail_log_exported, count)));
         }).start();
     }
 
@@ -296,7 +302,9 @@ public class DetailActivity extends AppCompatActivity {
         todayRows = Db.get(this).checkInDao().observeTodayStatus(ymd);
         todayRows.observe(this, rows -> {
             todayAdapter.submit(rows);
-            setSubtitle(CheckInRows.summary(rows));
+            // 二级页第一句用 pageLine（先说「一共几个号」）；入口卡上那句 summary 不动。
+            // 没有号时留空：空态那行字已经把「下一步做什么」说完了，不必再说一遍。
+            setSubtitle(CheckInRows.pageLine(rows));
             showEmpty(rows == null || rows.isEmpty(), getString(R.string.checkin_no_account));
         });
     }
@@ -310,6 +318,8 @@ public class DetailActivity extends AppCompatActivity {
                     row.<TextView>findViewById(R.id.line1).setText(item.displayName());
                     row.<TextView>findViewById(R.id.line2).setText(AccountStatText.line(item));
                     row.findViewById(R.id.badge).setVisibility(View.GONE);
+                    // 行布局共用：用不到第三行的页面必须显式收起（复用 View 时会留着上一行的内容）。
+                    row.findViewById(R.id.line3).setVisibility(View.GONE);
                     // 色条＝这个号有没有为这本书出过力：买过章＝绿，一章没买＝灰。
                     StatusPalette tone = item.chapterCount > 0
                             ? StatusPalette.OK : StatusPalette.SKIP;
@@ -318,7 +328,8 @@ public class DetailActivity extends AppCompatActivity {
         useList(adapter);
         Db.get(this).subscriptionDao().observeAccountStats().observe(this, l -> {
             adapter.submit(l);
-            setSubtitle(AccountStatText.summary(l));
+            // 空表时留空：下面的空态已经说了「还没有订阅记录、下一步去做什么」。
+            setSubtitle(AccountStatText.pageLine(l));
             showEmpty(l == null || l.isEmpty(), getString(R.string.detail_stats_empty));
         });
     }
@@ -331,6 +342,8 @@ public class DetailActivity extends AppCompatActivity {
 
     private void showSuspect() {
         title.setText(R.string.detail_suspect_title);
+        clearAudits.setVisibility(View.VISIBLE);
+        clearAudits.setOnClickListener(v -> confirmClearAudits());
         dao = Db.get(this).subscriptionDao();
         accountDao = Db.get(this).accountDao();
         auditAdapter = new SimpleAdapter<>(R.layout.item_two_line, this::bindAudit);
@@ -371,10 +384,57 @@ public class DetailActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * 清空这本书的核对留痕（用户 2026-09-15 要的「一键清理」）。
+     *
+     * <p>先说清后果再删：{@code ledger_audit} 里那条修正留痕是「撤销」的唯一依据，
+     * 被删掉的订阅记录只活在它的 detail JSON 里 —— 清完就撤不回来了。
+     * 只删当前这本书（页面本来也只显示这一本），购买记录/章节/已下载标记/核对凭证
+     * （都在别的表）一条都不碰；订阅页那行「最后核对：…」摘要一起清，免得两个界面对不上。
+     */
+    private void confirmClearAudits() {
+        if (current == null) {
+            toast(getString(R.string.detail_audit_clear_no_target));
+            return;
+        }
+        if (ledgerAudits.isEmpty()) {
+            toast(getString(R.string.detail_audit_clear_empty));
+            return;
+        }
+        if (AutomationBus.isBusy()) {
+            toast(getString(R.string.detail_audit_clear_busy));
+            return;
+        }
+        final Novel target = current;
+        final int count = ledgerAudits.size();
+        new AlertDialog.Builder(this)
+                .setTitle(getString(R.string.detail_audit_clear_title, target.title))
+                .setMessage(R.string.detail_audit_clear_message)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.detail_audit_clear, (d, w) -> {
+                    // 删除跑在 Db.io 上；成功提示必须等提交结束、回到主线程再说，
+                    // 不能先在事务里 toast（那会在数据库线程上建 Toast）。
+                    final int[] deleted = {0};
+                    LedgerEdits.submit(this, () -> {
+                        deleted[0] = Db.get(this).auditDao().deleteLedgerAuditsOfNovel(target.id);
+                        Prefs.setLastAuditSummary(this, target.id, "");
+                    }, () -> DoneDialogActivity.showDone(this,
+                            getString(R.string.done_label_clear_audits),
+                            getString(R.string.detail_audit_cleared,
+                                    deleted[0] > 0 ? deleted[0] : count)));
+                })
+                .show();
+    }
+
     private void renderAudits() {
+        // 第一句：这本书 · 最近 N 条 · 存疑/修正/补记各几条（pageLine）。
+        // 第二行保留「撤销会恢复什么」——它是这一页唯一会改账本的动作，必须写在明处。
+        // 一条记录都没有时只说书名，由空态去说下一步。
+        String line = SuspectSummary.pageLine(ledgerAudits);
         setSubtitle(current == null ? getString(R.string.detail_suspect_no_target)
-                : "《" + current.title + "》 · 最近 " + ledgerAudits.size()
-                + " 条核对记录\n撤销会恢复修正前的本地订阅记录");
+                : line.isEmpty() ? "《" + current.title + "》"
+                : "《" + current.title + "》 · " + line + "\n"
+                + getString(R.string.detail_suspect_undo_hint));
         auditAdapter.submit(ledgerAudits);
         showEmpty(ledgerAudits.isEmpty(), getString(current == null
                 ? R.string.detail_suspect_no_target : R.string.detail_suspect_empty));
@@ -403,11 +463,15 @@ public class DetailActivity extends AppCompatActivity {
         String heading = action + " · " + accountName(audit.accountId) + chapter
                 + (Texts.isBlank(audit.title) ? "" : "「" + audit.title + "」");
         row.<TextView>findViewById(R.id.line1).setText(heading);
+        // 时间与依据分成两行：依据可能很长（一句话说明当时凭什么改的账），
+        // 和「什么时候」挤在一行里就都读不顺。
         String when = audit.at > 0 ? DateFormat.format("yyyy-MM-dd HH:mm:ss", audit.at).toString()
                 : "时间未记录";
         String evidence = LedgerAuditPayload.message(audit.detail);
-        row.<TextView>findViewById(R.id.line2).setText(when + "\n依据："
-                + (Texts.isBlank(evidence) ? "没有保存可读依据" : evidence));
+        row.<TextView>findViewById(R.id.line2).setText(when);
+        TextView detail = row.findViewById(R.id.line3);
+        detail.setText("依据：" + (Texts.isBlank(evidence) ? "没有保存可读依据" : evidence));
+        detail.setVisibility(View.VISIBLE);
         row.findViewById(R.id.accent).setBackgroundColor(color(tone.foreground));
 
         TextView undo = row.findViewById(R.id.badge);
@@ -428,8 +492,16 @@ public class DetailActivity extends AppCompatActivity {
     private void restoreAudit(long auditId) {
         Context app = getApplicationContext();
         String[] result = new String[1];
-        LedgerEdits.submit(app, () -> result[0] = Db.get(app).auditDao().restore(auditId),
-                () -> Toast.makeText(app, result[0], Toast.LENGTH_LONG).show());
+        LedgerEdits.submit(app, () -> result[0] = Db.get(app).auditDao().restore(auditId), () -> {
+            String message = result[0] == null ? "" : result[0];
+            // DAO 的拒绝语一律以「不能撤销：」开头（见 AuditDao.restore 的每一条返回）。
+            // 拒绝是「你这次没做成」，按用户定的规矩仍只给短提示；真恢复了才弹完成窗口。
+            if (message.startsWith("不能撤销")) {
+                toast(message);
+                return;
+            }
+            DoneDialogActivity.showDone(this, getString(R.string.done_label_undo_audit), message);
+        });
     }
 
     // ---------- 已登记的章节与订阅情况 ----------
@@ -508,8 +580,12 @@ public class DetailActivity extends AppCompatActivity {
     }
 
     private void renderChapters() {
+        // 第一句按「一共有多少 → 买了多少 → 还差多少」排（pageLine）；
+        // 入口卡上那句 summary 是另一句、不动。没有章节时只报书名，空态负责说下一步。
+        String line = ChapterLedgerText.pageLine(chapters, purchases);
         setSubtitle(current == null ? null
-                : "《" + current.title + "》　" + ChapterLedgerText.summary(chapters, purchases));
+                : line.isEmpty() ? "《" + current.title + "》"
+                : "《" + current.title + "》 · " + line);
         // 空态两种：一本小说都没有，和有小说但这本还没登记章节。
         if (novels.isEmpty()) showEmpty(true, getString(R.string.sub_empty));
         else if (chapters.isEmpty()) showEmpty(true, getString(R.string.sub_no_chapters));
@@ -519,8 +595,10 @@ public class DetailActivity extends AppCompatActivity {
     private void bindChapter(View row, Chapter c, int position) {
         StringBuilder line1 = new StringBuilder("第").append(c.chapterNo).append('章');
         if (!Texts.isBlank(c.title)) line1.append(' ').append(c.title);
-        if (c.priceCoupons > 0) line1.append("　").append(c.priceCoupons).append(" 券");
+        if (c.priceCoupons > 0) line1.append(" · ").append(c.priceCoupons).append(" 券");
         row.<TextView>findViewById(R.id.line1).setText(line1);
+        // 章节行只有两件事；同一个行布局被别的页面复用，第三行要显式收起。
+        row.<TextView>findViewById(R.id.line3).setVisibility(View.GONE);
 
         // 「谁买的」和「不用买」必须分开说。source=OWNED 只在<b>免费章</b>上写（没有锁的行，
         // 谁登录都看得到），2026-08-25 拿订阅清单逐章对过账：8 个号在这本书上只付费订阅过
@@ -583,29 +661,20 @@ public class DetailActivity extends AppCompatActivity {
                 .show();
     }
 
-    /** 真的去切号：交给 {@link AutomationService}，它整趟点着屏幕（无障碍只对亮屏有效）。 */
+    /** 真的去切号：守卫和提示与账号页共用 {@link AccountSwitchAction}，免得两处漂移。 */
     private void switchToBuyer(long accountId, Chapter chapter) {
         Account account = accountById(accountId);
         if (account == null) {
             toast("账本里这一章记在 账号#" + accountId + " 名下，可账号页已经没有这个号了");
             return;
         }
-        if (AccessibilityAccess.state(this) == AccessibilityAccess.State.DISABLED) {
-            AccessibilityAccess.RestoreResult restore =
-                    AccessibilityAccess.restoreIfAuthorized(this);
-            if (restore == AccessibilityAccess.RestoreResult.NOT_AUTHORIZED
-                    || restore == AccessibilityAccess.RestoreResult.FAILED) {
-                toast("系统无障碍开关已关闭，无法自动恢复，切不了号");
-                return;
-            }
-        }
-        if (AutomationBus.isBusy()) {
-            toast("有任务正在运行或账本正在更新，请等结束后再切号");
+        String blocked = AccountSwitchAction.blocker(this);
+        if (blocked != null) {
+            toast(blocked);
             return;
         }
-        toast("正在切到「" + account.displayName() + "」：退出当前账号再登它。"
-                + "进度看签到页的运行日志");
-        AutomationService.startSwitchAccount(this, accountId);
+        toast(AccountSwitchAction.startedMessage(account));
+        AccountSwitchAction.start(this, account);
     }
 
     private Account accountById(long accountId) {
@@ -693,7 +762,10 @@ public class DetailActivity extends AppCompatActivity {
                         dao.upsertPurchase(Purchase.of(
                                 account.id, chapter.id, 0, cost, Purchase.SRC_MANUAL));
                         Db.get(app).auditDao().invalidateNovel(chapter.novelId);
-                    });
+                    }, () -> DoneDialogActivity.showDone(this,
+                            getString(R.string.done_label_manual_purchase),
+                            getString(R.string.done_manual_purchase,
+                                    account.displayName(), chapter.chapterNo)));
                 })
                 .show();
     }
@@ -718,7 +790,9 @@ public class DetailActivity extends AppCompatActivity {
                         LedgerEdits.submit(app, () -> {
                             dao.deleteChapter(chapter);
                             Db.get(app).auditDao().invalidateNovel(chapter.novelId);
-                        }))
+                        }, () -> DoneDialogActivity.showDone(this,
+                                getString(R.string.done_label_delete_chapter),
+                                getString(R.string.done_deleted_chapter, chapter.chapterNo))))
                 .show();
     }
 

@@ -238,8 +238,10 @@ public class SubscribeTaskTest {
 
     @Test
     public void aRealPriceAboveTheRemainingDailyCapNeverClicksBuy() throws Exception {
-        // 预估 10 券可放行，但页面实际是 20 券；最后付款门槛必须认实际的数。
-        assertNull(SubscribeRun.stopBecauseBroke("甲", 100, 10, 5, 20, 50));
+        // 上限按账本里今天已花的 5 券算还剩 15；页面实际是 20 券 —— 最后付款门槛必须认实际的数，
+        // 而进页前那一步只认「已经花掉多少」这件确定的事实（不再拿估价拦人）。
+        assertEquals("今天才花 5 券，没到上限 20，就该进页面读实付",
+                null, SubscribeRun.stopBecauseBroke("甲", 5, 20));
         Session session = new Session(observed(100));
         SubscribeTask.Result result = buy(session, 20,
                 SubscribeRun.remainingDailyVouchers(20, 5));

@@ -1,9 +1,13 @@
 package com.example.blb.ui;
 
+import android.Manifest;
+import android.app.NotificationManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.text.TextUtils;
@@ -42,6 +46,8 @@ public class SettingsFragment extends Fragment {
 
     private TextView a11yStatus;
     private TextView selectorInfo;
+    /** 通知权限那一行：查得到状态，所以明写「已允许/未允许」。 */
+    private TextView notifyStatus;
     private EditText catalogMaxAge;
     private MaterialSwitch catalogAutoSync;
     private MaterialSwitch alwaysDetailAudit;
@@ -69,6 +75,13 @@ public class SettingsFragment extends Fragment {
         v.<Button>findViewById(R.id.export_selectors).setOnClickListener(b -> exportSelectors());
         v.<Button>findViewById(R.id.battery).setOnClickListener(b -> openBatterySettings());
         v.<Button>findViewById(R.id.app_details).setOnClickListener(b -> openAppDetails());
+        // 2026-09-15：完成提示被「没通知权限 / 没后台弹出界面」整条掐掉，这两条要能自己走过去。
+        notifyStatus = v.findViewById(R.id.notify_status);
+        v.<Button>findViewById(R.id.open_notification_settings)
+                .setOnClickListener(b -> openNotificationSettings());
+        v.<Button>findViewById(R.id.open_popup_permission)
+                .setOnClickListener(b -> openPopupPermissionSettings());
+        refreshNotificationStatus();
 
         com.google.android.material.materialswitch.MaterialSwitch daily = v.findViewById(R.id.daily);
         daily.setChecked(Prefs.isDailyEnabled(ctx));
@@ -316,6 +329,71 @@ public class SettingsFragment extends Fragment {
         } catch (Exception e) {
             openAppDetails();
         }
+    }
+
+    /**
+     * 本应用的通知设置页：通知权限被拒过之后系统不再弹框（代码里也不会去纠缠），
+     * 所以这里给一条自己走过去的门。
+     */
+    private void openNotificationSettings() {
+        Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, requireContext().getPackageName());
+        try {
+            startActivity(intent);
+        } catch (Exception e) {
+            openAppDetails();
+        }
+    }
+
+    /**
+     * MIUI 的「后台弹出界面」权限页。
+     *
+     * <p>这一条查不出状态（MIUI 没给出公开的查询接口），所以只给一句说明 + 一颗按钮：
+     * App 不在前台时那个浮动完成弹窗靠的就是它，被拒时那一趟跑完屏幕上什么都不会出现。
+     * 各版本入口不一，逐个试，最后退回应用详情页。
+     */
+    private void openPopupPermissionSettings() {
+        String pkg = requireContext().getPackageName();
+        for (ComponentName page : new ComponentName[]{
+                new ComponentName("com.miui.securitycenter",
+                        "com.miui.permcenter.permissions.PermissionsEditorActivity"),
+                new ComponentName("com.miui.securitycenter",
+                        "com.miui.permcenter.permissions.AppPermissionsEditorActivity")}) {
+            try {
+                startActivity(new Intent("miui.intent.action.APP_PERM_EDITOR")
+                        .setComponent(page)
+                        .putExtra("extra_pkgname", pkg));
+                return;
+            } catch (Exception ignored) {
+                // 试下一个入口
+            }
+        }
+        try {
+            startActivity(new Intent("miui.intent.action.APP_PERM_EDITOR")
+                    .putExtra("extra_pkgname", pkg));
+            return;
+        } catch (Exception ignored) {
+            // 这台机器不是 MIUI，或者该页被改过：退回应用详情页
+        }
+        openAppDetails();
+    }
+
+    /** 通知权限这一条能在代码里查，状态就明写出来；「后台弹出界面」查不到，只能给说明。 */
+    private void refreshNotificationStatus() {
+        if (notifyStatus == null) return;
+        boolean allowed;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            allowed = ContextCompat.checkSelfPermission(requireContext(),
+                    Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+        } else {
+            NotificationManager nm = (NotificationManager)
+                    requireContext().getSystemService(Context.NOTIFICATION_SERVICE);
+            allowed = nm == null || nm.areNotificationsEnabled();
+        }
+        notifyStatus.setText(allowed
+                ? R.string.settings_notify_allowed : R.string.settings_notify_denied);
+        notifyStatus.setTextColor(ContextCompat.getColor(requireContext(),
+                allowed ? R.color.blb_ok : R.color.blb_fail));
     }
 
     private void openAppDetails() {

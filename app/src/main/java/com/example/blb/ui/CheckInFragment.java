@@ -30,12 +30,16 @@ import com.example.blb.auto.AccessibilityAccess;
 import com.example.blb.auto.Keys;
 import com.example.blb.auto.SelectorSet;
 import com.example.blb.auto.StepRunner;
+import com.example.blb.auto.SubscribeRun;
 import com.example.blb.data.Account;
 import com.example.blb.data.CheckInRow;
 import com.example.blb.data.Db;
+import com.example.blb.data.LedgerAudit;
+import com.example.blb.data.Novel;
 import com.example.blb.util.DayRollover;
 import com.example.blb.util.Texts;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -50,6 +54,12 @@ import java.util.List;
  */
 public class CheckInFragment extends Fragment {
 
+    /** 「今天新订阅了几章」的统计窗口；真被截断时由 TodayPurchases.truncated 说出来。 */
+    private static final int RECENT_PURCHASE_WINDOW = 500;
+    /** 账本核对那一行的窗口，跟订阅页取同一份数据。 */
+    private static final int AUDIT_WINDOW = 100;
+
+    private TextView headline;
     private TextView status;
     private View pauseBanner;
     private TextView pauseReason;
@@ -59,8 +69,17 @@ public class CheckInFragment extends Fragment {
     private Button stop;
     private EntryRowView entryToday;
     private EntryRowView entryLog;
+    private EntryRowView entrySuspect;
     private DayRollover todayRollover;
     private LiveData<List<CheckInRow>> todayRows;
+    private LiveData<List<LedgerAudit>> auditsLd;
+    private long auditNovelId;
+
+    /** 最上面那一行的三个输入：启用账号数、今日状态、今天新订阅的章数。 */
+    private int enabledAccounts;
+    private List<CheckInRow> today = new ArrayList<>();
+    private int newChapters;
+    private boolean newChaptersCapped;
 
     @Nullable
     @Override
@@ -71,6 +90,7 @@ public class CheckInFragment extends Fragment {
 
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
+        headline = v.findViewById(R.id.today_headline);
         status = v.findViewById(R.id.status);
         pauseBanner = v.findViewById(R.id.pause_banner);
         pauseReason = v.findViewById(R.id.pause_reason);
@@ -81,6 +101,7 @@ public class CheckInFragment extends Fragment {
 
         entryToday = v.findViewById(R.id.entry_today);
         entryLog = v.findViewById(R.id.entry_log);
+        entrySuspect = v.findViewById(R.id.entry_suspect);
 
         entryToday.setTitle(getString(R.string.checkin_today_header));
         entryToday.setSummary(getString(R.string.detail_today_summary_empty));
@@ -92,6 +113,11 @@ public class CheckInFragment extends Fragment {
         entryLog.setOnClickListener(b -> DetailActivity.open(
                 requireContext(), DetailActivity.PAGE_LOG));
 
+        entrySuspect.setTitle(getString(R.string.detail_suspect_title));
+        entrySuspect.setSummary(getString(R.string.detail_suspect_empty));
+        entrySuspect.setOnClickListener(b -> DetailActivity.open(
+                requireContext(), DetailActivity.PAGE_SUSPECT));
+
         run.setOnClickListener(b -> start(false));
         runDaily.setOnClickListener(b -> start(true));
         // 2026-09-14 两页重复入口让整套流程含义冲突；集中到这里后仍要展示真实启用数量。
@@ -100,11 +126,25 @@ public class CheckInFragment extends Fragment {
         Db.get(requireContext()).accountDao().observeAll().observe(getViewLifecycleOwner(), accounts -> {
             int enabled = 0;
             if (accounts != null) for (Account account : accounts) if (account.enabled) enabled++;
+            enabledAccounts = enabled;
             String detail = accounts == null ? getString(R.string.sub_audit_accounts_loading)
                     : enabled == 0 ? getString(R.string.sub_audit_no_accounts)
                     : getString(R.string.checkin_daily_cost, enabled);
             runDaily.setText(getString(R.string.checkin_run_daily) + "\n" + detail);
+            renderHeadline();
         });
+        // 「今天新订阅了几章」：在最近订阅记录里数今天的，按章去重、跳过免费章回填（见 TodayPurchases）。
+        Db.get(requireContext()).subscriptionDao()
+                .observeRecentRows(RECENT_PURCHASE_WINDOW)
+                .observe(getViewLifecycleOwner(), rows -> {
+                    long since = SubscribeRun.startOfToday();
+                    newChapters = TodayPurchases.chapters(rows, since);
+                    newChaptersCapped = TodayPurchases.truncated(rows, since);
+                    renderHeadline();
+                });
+        // 账本核对那一行跟着目标小说走：换书之后不能拿上一本的存疑数说话。
+        Db.get(requireContext()).subscriptionDao().observeNovels()
+                .observe(getViewLifecycleOwner(), this::onNovels);
         stop.setOnClickListener(b -> AutomationBus.cancel());
         v.<Button>findViewById(R.id.resume).setOnClickListener(
                 b -> AutomationBus.submitDecision(StepRunner.Decision.CONTINUE));
@@ -172,6 +212,9 @@ public class CheckInFragment extends Fragment {
         todayRollover = null;
         if (todayRows != null) todayRows.removeObservers(getViewLifecycleOwner());
         todayRows = null;
+        if (auditsLd != null) auditsLd.removeObservers(getViewLifecycleOwner());
+        auditsLd = null;
+        auditNovelId = 0;
         super.onDestroyView();
     }
 
@@ -185,9 +228,62 @@ public class CheckInFragment extends Fragment {
 
     /** 今日状态那一行的摘要：成了几个、哪个号没成。 */
     private void renderToday(List<CheckInRow> rows) {
-        String summary = CheckInRows.summary(rows);
+        today = rows == null ? new ArrayList<>() : rows;
+        String summary = CheckInRows.summary(today);
         entryToday.setSummary(Texts.isBlank(summary)
                 ? getString(R.string.detail_today_summary_empty) : summary);
+        renderHeadline();
+    }
+
+    /**
+     * 最上面那一行「今天怎么样了」。
+     *
+     * <p>三个数据源（启用账号数、今日状态、今天新订阅的章数）谁先回来都可能，
+     * 所以这句话不去读数据，只把手上这三份事实交给 {@link TodayHeadline} 合成；
+     * 颜色同样只走三档（绿／琥珀／灰），红色留给二级页面里逐个号那一行。
+     */
+    private void renderHeadline() {
+        if (headline == null) return;
+        headline.setText(TodayHeadline.line(enabledAccounts, today, newChapters, newChaptersCapped));
+        headline.setTextColor(ContextCompat.getColor(
+                requireContext(), TodayHeadline.tone(today).foreground));
+    }
+
+    /**
+     * 账本核对那一行跟着目标小说走。
+     *
+     * <p>一本都没标目标时跟订阅页一样先认第一本：两页说的必须是同一本书，否则「存疑几条」
+     * 会变成另一本书的数。换书要换观察对象，不能只改文字。
+     */
+    private void onNovels(List<Novel> novels) {
+        long target = 0;
+        if (novels != null && !novels.isEmpty()) {
+            for (Novel n : novels) {
+                if (n != null && n.isTarget) {
+                    target = n.id;
+                    break;
+                }
+            }
+            if (target == 0 && novels.get(0) != null) target = novels.get(0).id;
+        }
+        if (target == auditNovelId && auditsLd != null) return;
+        if (auditsLd != null) auditsLd.removeObservers(getViewLifecycleOwner());
+        auditsLd = null;
+        auditNovelId = target;
+        if (target <= 0) {
+            entrySuspect.setSummary(getString(R.string.detail_suspect_no_target));
+            return;
+        }
+        auditsLd = Db.get(requireContext()).auditDao()
+                .observeRecentLedgerAudits(target, AUDIT_WINDOW);
+        auditsLd.observe(getViewLifecycleOwner(), this::renderAuditEntry);
+    }
+
+    /** 账本核对那一行的摘要：存疑几条、修过几条；逐条留痕点进去才看。 */
+    private void renderAuditEntry(List<LedgerAudit> audits) {
+        String summary = SuspectSummary.shortLine(audits);
+        entrySuspect.setSummary(Texts.isBlank(summary)
+                ? getString(R.string.detail_suspect_empty) : summary);
     }
 
     /** 日志那一行的摘要＝最新那一行。要看全部得点进去。 */

@@ -20,6 +20,7 @@ import androidx.core.app.ServiceCompat;
 
 import com.example.blb.MainActivity;
 import com.example.blb.R;
+import com.example.blb.ui.AppForeground;
 import com.example.blb.ui.DoneDialogActivity;
 import com.example.blb.util.Prefs;
 import com.example.blb.util.Texts;
@@ -55,7 +56,16 @@ public class AutomationService extends Service implements StepRunner.Host {
     private static final String EXTRA_ACCOUNT_ID = "com.example.blb.extra.ACCOUNT_ID";
 
     public static final String CHANNEL_ID = "blb_auto";
+    /**
+     * 跑完那条结论专用的渠道（高重要性）。
+     *
+     * <p>为什么要单独一条：进度那条是 {@code IMPORTANCE_LOW}，渠道重要性建完之后 App 自己改不了，
+     * 所以「跑完了」永远弹不出横幅。结论改发这一条，MIUI 拦掉浮动弹窗时至少还有横幅＋声音。
+     */
+    public static final String CHANNEL_DONE_ID = "blb_done";
     private static final int NOTIF_ID = 1001;
+    /** 跑完结论的通知 id：和进度那条分开，免得收尾时把结论覆盖掉。 */
+    private static final int NOTIF_DONE_ID = 1002;
     private static final String TAG = "BlbAuto";
     /**
      * 开跑前等无障碍服务连上来的时间。系统把被杀掉的无障碍服务排在 30 s 后重启
@@ -135,16 +145,36 @@ public class AutomationService extends Service implements StepRunner.Host {
     public void onCreate() {
         super.onCreate();
         ensureChannel(this);
+        // 进程可能只被服务拉起来（开机后定时那趟），那时 MainActivity 从没跑过、
+        // 生命周期回调也就没挂上。这里补挂一次（attach 自身幂等），否则「App 到底在不在前台」
+        // 永远数不准，完成提示就会一直退回那条需要 MIUI 权限的浮动窗口。
+        AppForeground.attach(getApplication());
     }
 
+    /**
+     * 建两条通知渠道。已存在的渠道不会重建（渠道重要性建完之后 App 自己改不了），
+     * 所以两条各自判断，不能像以前那样「第一条在就直接 return」。
+     */
     public static void ensureChannel(Context context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationManager nm = context.getSystemService(NotificationManager.class);
-        if (nm == null || nm.getNotificationChannel(CHANNEL_ID) != null) return;
-        NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "签到任务", NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("显示签到队列进度，以及需要你手动处理时的提示");
-        nm.createNotificationChannel(channel);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(CHANNEL_ID) == null) {
+            NotificationChannel progress = new NotificationChannel(
+                    CHANNEL_ID, "签到任务", NotificationManager.IMPORTANCE_LOW);
+            progress.setDescription("显示签到队列进度，以及需要你手动处理时的提示");
+            nm.createNotificationChannel(progress);
+        }
+        if (nm.getNotificationChannel(CHANNEL_DONE_ID) == null) {
+            // 2026-09-16 用户报「跑完没有任何弹窗」：浮动窗口要靠 MIUI 的「后台弹出界面」权限，
+            // 被拒时屏幕上就什么都不会出现。这条高重要性渠道是最后一道保险 ——
+            // 即使弹窗被拦，结论也会以横幅出现，还带声音和震动。
+            NotificationChannel done = new NotificationChannel(
+                    CHANNEL_DONE_ID, "跑完了", NotificationManager.IMPORTANCE_HIGH);
+            done.setDescription("每趟任务跑完时的结论（会响一声并震动）；进度仍在「签到任务」那条里");
+            done.enableVibration(true);
+            nm.createNotificationChannel(done);
+        }
     }
 
     @Nullable
@@ -314,10 +344,10 @@ public class AutomationService extends Service implements StepRunner.Host {
                 ReturnWatchdog.disarm(this);
                 releaseScreenLock();
                 AutomationBus.setStatus(text);
-                notifyFinished(current, text);
+                RunReport done = report != null ? report : RunReport.failed(current.label, text);
+                notifyFinished(current, done, text);
                 if (!destroyed) {
-                    DoneDialogActivity.show(this,
-                            report != null ? report : RunReport.failed(current.label, text));
+                    DoneDialogActivity.show(this, done);
                 }
             } finally {
                 try {
@@ -486,16 +516,56 @@ public class AutomationService extends Service implements StepRunner.Host {
         return b.build();
     }
 
-    private void notifyFinished(Mode current, String text) {
-        Notification n = new NotificationCompat.Builder(this, CHANNEL_ID)
+    private void notifyFinished(Mode current, RunReport report, String text) {
+        // 结论走「跑完了」那条高重要性渠道：标题用 RunReport 的标题，正文取前几行。
+        String title = report != null && report.title != null && !report.title.trim().isEmpty()
+                ? report.title : current.label + "任务结束";
+        String body = report != null ? report.body() : text;
+        if (body == null || body.trim().isEmpty()) body = text;
+        String summary = report != null ? report.firstLines(3) : body;
+        Notification n = new NotificationCompat.Builder(this, CHANNEL_DONE_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
-                .setContentTitle(current.label + "任务结束")
-                .setContentText(text)
-                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setContentTitle(title)
+                .setContentText(summary)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setAutoCancel(true)
                 .setContentIntent(activityIntent())
                 .build();
-        notifyManager().notify(NOTIF_ID, n);
+        notifyManager().notify(NOTIF_DONE_ID, n);
+    }
+
+    /**
+     * 最后一道保险：浮动弹窗被系统/MIUI 拒掉时，把结论以通知发出去（高重要性＝横幅＋声音）。
+     *
+     * <p>{@link com.example.blb.ui.DoneDialogActivity} 在 startActivity 抛异常时调用它 ——
+     * 用户 2026-09-16 的现场就是「什么都看不到」，那时候连一条通知都没有。
+     */
+    public static void notifyDone(Context context, RunReport report) {
+        if (context == null || report == null) return;
+        try {
+            ensureChannel(context);
+            NotificationManager nm = context.getSystemService(NotificationManager.class);
+            if (nm == null) return;
+            String body = report.body();
+            Intent intent = new Intent(context, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            PendingIntent open = PendingIntent.getActivity(context, 1, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            Notification n = new NotificationCompat.Builder(context, CHANNEL_DONE_ID)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setContentTitle(report.title)
+                    .setContentText(report.firstLines(3))
+                    .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
+                    .setPriority(NotificationCompat.PRIORITY_HIGH)
+                    .setAutoCancel(true)
+                    .setContentIntent(open)
+                    .build();
+            nm.notify(NOTIF_DONE_ID, n);
+        } catch (Exception e) {
+            // 通知也发不出去（权限被拒等）时只能记日志：这一趟的结果已经落库，绝不能在这里崩。
+            Log.w(TAG, "跑完的通知没发出去", e);
+        }
     }
 
     private PendingIntent activityIntent() {

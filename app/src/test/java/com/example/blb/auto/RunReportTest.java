@@ -26,6 +26,23 @@ public class RunReportTest {
 
     // ---------- 只签到 ----------
 
+    /**
+     * 2026-09-16：完成弹窗被系统拦掉时的最后一道保险是「发通知」，而通知栏放不下整段正文。
+     * 折叠态取前几行，一行都没有时退回完整正文 —— 绝不发一条空通知出去。
+     */
+    @Test
+    public void theNotificationSummaryTakesTheFirstFewLines() {
+        RunReport report = RunReport.ofDone("清理核对记录", "已清理 20 条核对记录\n第二行\n第三行\n第四行");
+        assertEquals("已完成：清理核对记录", report.title);
+        assertEquals("已清理 20 条核对记录\n第二行\n第三行", report.firstLines(3));
+        assertEquals("只取一行时不该带换行", "已清理 20 条核对记录", report.firstLines(1));
+        assertEquals("要的比有的多就给全部",
+                report.body(), report.firstLines(99));
+
+        RunReport empty = RunReport.ofDone("保存账号", "");
+        assertEquals("已经做完了", empty.firstLines(3));
+    }
+
     @Test
     public void aCleanCheckInSaysHowManyOutOfHowMany() {
         RunReport r = RunReport.ofCheckIn(checkIn(6, 2, 0, 8));
@@ -143,7 +160,8 @@ public class RunReportTest {
         s.checkedIn = 8;
         s.subscribing = true;
         s.stuckNote = "第83章没订下来（8 个号都试过了），整本停在这里 —— 后面的章一章都没往后买"
-                + "。最后一个号：好好上课是 只剩 2 代券，不够买第83章（约 20 代券），换下一个号";
+                + "。最后一个号：好好上课是 买不起第83章：第83章 页面显示余额不足（需 11 券，"
+                + "账户余额：0火券/9代券），换下一个号";
         RunReport r = RunReport.ofDaily(s);
         assertEquals("今天的流程跑完了", r.title);
         assertTrue("代券不够不是出错", r.allGood);
@@ -432,6 +450,37 @@ public class RunReportTest {
         s.total = 8;
         s.checked = 7;
         assertFalse(RunReport.ofAudit(s).allGood);
+    }
+
+    // ---------- 单件小事做完 ----------
+
+    /**
+     * 用户 2026-09-15 要的「所有行动完成后弹窗提醒我已完成」：
+     * 清理、导入导出、保存账号、保存取证、补录章节这些小事也走同一个完成弹窗。
+     */
+    @Test
+    public void aFinishedSmallActionShowsItsOwnCompletion() {
+        RunReport r = RunReport.ofDone("清理核对记录", "已清理 12 条核对记录");
+        assertEquals("已完成：清理核对记录", r.title);
+        assertEquals("已清理 12 条核对记录", r.body());
+        assertTrue(r.allGood);
+        assertEquals(1, r.lines.size());
+    }
+
+    /** 没写结果就只说做完了，绝不编一句它不知道的细节。 */
+    @Test
+    public void aCompletionWithoutADetailStillSaysItIsDone() {
+        for (String detail : new String[]{null, "", "   "}) {
+            RunReport r = RunReport.ofDone("导出运行日志", detail);
+            assertEquals("已完成：导出运行日志", r.title);
+            assertEquals("已经做完了", r.body());
+            assertTrue(r.allGood);
+        }
+        // 连标签都没给（不该发生）也不能弹出「已完成：null」。
+        RunReport blank = RunReport.ofDone(null, "已保存");
+        assertEquals("已完成：刚才那件事", blank.title);
+        assertEquals("已保存", blank.body());
+        assertTrue(blank.allGood);
     }
 
     // ---------- 切号、跑都没跑起来 ----------

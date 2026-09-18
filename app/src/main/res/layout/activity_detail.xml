@@ -48,7 +48,27 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="6dp"
-            android:layout_weight="1" />
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <!--
+          只跟着「核对记录与存疑」出现：清空这本书的核对留痕。它会一并丢掉「撤销」的唯一依据，
+          所以点下去先弹窗把后果说清楚，再删（见 DetailActivity.confirmClearAudits）。
+        -->
+        <TextView
+            android:id="@+id/detail_clear"
+            style="@style/Blb.Text.Action"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:gravity="center"
+            android:minWidth="64dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:text="@string/detail_audit_clear"
+            android:textColor="?attr/colorSecondary"
+            android:visibility="gone" />
 
         <!--
           只跟着「运行日志」出现：使用者手指动不了，日志出问题时他能做的只有把这一趟
@@ -56,7 +76,7 @@
         -->
         <TextView
             android:id="@+id/detail_export"
-            style="@style/Blb.Text.Hint"
+            style="@style/Blb.Text.Action"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
@@ -69,15 +89,22 @@
             android:visibility="gone" />
     </LinearLayout>
 
+    <!--
+      标题下面那一句：整屏页面的开场白（「8 个号 · 签到 8/8 · 2 个要人管」这种）。
+      2026-09-15 与主流程三页统一：从 13sp 的「提示字」提到 15sp 正文 —— 它是这一页的第一句人话，
+      不是脚注；有的页（核对记录）会有第二行，所以留了行距。
+    -->
     <TextView
         android:id="@+id/detail_subtitle"
-        style="@style/Blb.Text.Hint"
+        style="@style/Blb.Text.Body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginTop="2dp"
         android:layout_marginEnd="14dp"
         android:layout_marginBottom="10dp"
+        android:lineSpacingExtra="3dp"
+        android:textColor="?attr/colorOnSurfaceVariant"
         android:visibility="gone" />
 
     <FrameLayout

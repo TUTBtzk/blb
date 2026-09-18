@@ -207,9 +207,18 @@ public final class SubscribedDetail {
             return chapterNo > 0;
         }
 
-        /** 2026-09-14 番外无章号；其卷名和完整标题经目录唯一映射后也能作为章节身份。 */
+        /**
+         * 2026-09-14 番外无章号；其卷名和完整标题经目录唯一映射后也能作为章节身份。
+         *
+         * <p><b>2026-09-16 真机反馈：作者会把章名留空。</b>目录列表里那一行就写着「星彩 第24章」，
+         * 明细里也只读到「星彩 第24章 10 代券」—— 这不是"我们没读到"，是作者本来就没写章名。
+         * 卷名和印刷章号都确定时，这一条仍然能在本地目录里唯一定位（同一个章号在不同卷里会重复，
+         * 所以<b>卷名是必需的</b>）：有印刷章号 + 有卷名就算有身份。
+         * 卷名读不到、或者既没有章号也没有标题的行<b>仍然算缺身份</b>，这条护栏没有放宽。
+         */
         boolean hasChapterIdentity() {
-            return !Texts.isBlank(title) && (known() || (chapterNo < 0 && !Texts.isBlank(volume)));
+            if (!Texts.isBlank(title)) return known() || (chapterNo < 0 && !Texts.isBlank(volume));
+            return known() && !Texts.isBlank(volume);
         }
 
         /** 明确出现「火券」就是硬错误；金额读不到不能把币种证据抹掉。 */
@@ -232,7 +241,8 @@ public final class SubscribedDetail {
             return (Texts.isBlank(volume) ? "" : volume.trim() + " · ")
                     + (known() ? "卷内第" + chapterNo + "章" : hasChapterIdentity()
                     ? "无印刷章号" : "章号认不出")
-                    + (Texts.isBlank(title) ? "" : "「" + title.trim() + "」")
+                    // 作者没写章名时说清楚，别让人以为是我们漏读了标题。
+                    + (Texts.isBlank(title) ? "（作者没写章名）" : "「" + title.trim() + "」")
                     + (amount >= 0 ? " " + amount + (currency == null ? "" : currency) : " 花费读不到")
                     + (Texts.isBlank(date) ? "" : " " + date.trim());
         }
@@ -383,7 +393,7 @@ public final class SubscribedDetail {
                     return new VoucherLedger.Audit(false, true,
                             head + "无印刷章号的明细出现火券支付证据，必须先核实：" + entry.describe());
                 }
-                if (entry != null && entry.known() && !Texts.isBlank(entry.title)) {
+                if (entry != null && entry.known() && entry.hasChapterIdentity()) {
                     known.add(entry);
                 } else {
                     Entry identified = identifyUnnumbered(entry, chapters);
@@ -1624,7 +1634,12 @@ public final class SubscribedDetail {
 
     private static String missingFacts(Entry entry) {
         List<String> missing = new ArrayList<>();
-        if (!entry.hasChapterIdentity()) missing.add("章节身份");
+        if (!entry.hasChapterIdentity()) {
+            // 分清「作者本来就没写章名」和「我们没读到」：有章号+卷名就算有身份，
+            // 走到这里说明连卷名或章号都缺，那才是真的没法在目录里定位。
+            missing.add(Texts.isBlank(entry.title) && entry.known()
+                    ? "卷名（作者没写章名时靠它定位）" : "章节身份");
+        }
         if (entry.amount < 0) missing.add("金额");
         if (!"代券".equals(entry.currency) && !"火券".equals(entry.currency)) missing.add("币种");
         if (RemoteLedgerRecovery.date(entry.date) <= 0) missing.add("日期");

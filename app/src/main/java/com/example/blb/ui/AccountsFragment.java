@@ -1,8 +1,10 @@
 package com.example.blb.ui;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.format.DateFormat;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,6 +15,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
@@ -37,6 +40,8 @@ public class AccountsFragment extends Fragment {
     private AccountDao dao;
     private SimpleAdapter<Account> adapter;
     private TextView empty;
+    private TextView overview;
+    private View overviewDot;
 
     @Nullable
     @Override
@@ -49,6 +54,8 @@ public class AccountsFragment extends Fragment {
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         dao = Db.get(requireContext()).accountDao();
         empty = v.findViewById(R.id.empty);
+        overview = v.findViewById(R.id.overview);
+        overviewDot = v.findViewById(R.id.overview_dot);
 
         adapter = new SimpleAdapter<Account>(R.layout.item_two_line, this::bind)
                 .onClick((item, pos) -> edit(item))
@@ -70,6 +77,25 @@ public class AccountsFragment extends Fragment {
         adapter.submit(accounts);
         boolean none = accounts == null || accounts.isEmpty();
         empty.setVisibility(none ? View.VISIBLE : View.GONE);
+        renderOverview(accounts);
+    }
+
+    /**
+     * 顶部那一行总览：几个号在跑、手上还剩多少券。
+     *
+     * <p>句子由 {@link AccountOverviewText} 合成（它进单测），颜色只走三档：
+     * 绿＝都能自动跑、琥珀＝有号缺密码（切号会失败）、灰＝一个启用号都没有。
+     */
+    private void renderOverview(List<Account> accounts) {
+        if (overview == null) return;
+        overview.setText(AccountOverviewText.line(accounts));
+        tint(overviewDot, AccountOverviewText.tone(accounts).foreground);
+    }
+
+    private void tint(View v, @ColorRes int res) {
+        if (v == null) return;
+        v.setBackgroundTintList(ColorStateList.valueOf(
+                ContextCompat.getColor(requireContext(), res)));
     }
 
     private void bind(View row, Account a, int position) {
@@ -78,30 +104,28 @@ public class AccountsFragment extends Fragment {
         StatusPalette tone = StatusPalette.forAccount(a.enabled, loginable);
         row.findViewById(R.id.accent).setBackgroundColor(
                 ContextCompat.getColor(row.getContext(), tone.foreground));
-        row.findViewById(R.id.badge).setVisibility(View.GONE);
 
+        // 一行名字；「已停用」「缺密码」这些状态交给下面那句状态话去说，标题上不再重复。
         String title = a.displayName();
-        row.<TextView>findViewById(R.id.line1).setText(title + (a.enabled ? "" : "（已停用）"));
+        row.<TextView>findViewById(R.id.line1).setText(title);
 
-        // 第二行只放第一行没有的信息：登录名和昵称跟标题一样时就别再重复一遍。
-        StringBuilder sb = new StringBuilder();
-        if (!title.equals(a.loginName)) {
-            sb.append(a.loginName).append(" · ");
-        }
-        sb.append(a.loginKindLabel());
-        if (a.needsPassword()) {
-            sb.append(a.hasPassword() ? " · 已存密码" : " · 未存密码（切号会失败）");
-        }
-        sb.append(" · ").append(a.balanceText());
-        if (a.lastCheckInAt > 0) {
-            sb.append(" · 上次签到 ").append(DateFormat.format("MM-dd HH:mm", a.lastCheckInAt));
-        } else {
-            sb.append(" · 还没签过");
-        }
-        if (!Texts.isBlank(a.nickname) && !a.nickname.equals(title)) {
-            sb.append("\n菠萝包昵称：").append(a.nickname);
-        }
-        row.<TextView>findViewById(R.id.line2).setText(sb);
+        // 2026-09-15 用户要的：每一行都能直接切到这个号（和「已登记的章节」页那颗一样）。
+        // 行的点击仍然是「编辑」、长按仍然是「删除」，这颗按钮自己吃掉点击事件，互不影响。
+        TextView switchButton = row.findViewById(R.id.badge);
+        switchButton.setVisibility(View.VISIBLE);
+        switchButton.setText(R.string.account_switch);
+        switchButton.setTextSize(15f);
+        // 切号是退登＋重登（最招验证码），所以把可点区域撑到 48dp 并写清会切到谁。
+        switchButton.setMinHeight(Math.round(48 * row.getResources().getDisplayMetrics().density));
+        switchButton.setGravity(Gravity.CENTER);
+        switchButton.setContentDescription(getString(R.string.account_switch) + "：" + title);
+        switchButton.setOnClickListener(x -> confirmSwitch(a));
+
+        // 第二行只留一句状态：能不能自动跑 · 还有多少代券 · 上次什么时候签的（见 ui/AccountRowText）。
+        // 时间在这里格式化 —— DateFormat 是 Android API，不能进那个可以进单测的类。
+        String lastCheckIn = a.lastCheckInAt > 0
+                ? DateFormat.format("MM-dd HH:mm", a.lastCheckInAt).toString() : "";
+        row.<TextView>findViewById(R.id.line2).setText(AccountRowText.statusLine(a, lastCheckIn));
     }
 
     /** Spinner 的第 n 项对应哪种登录方式，顺序跟 strings.xml 里的 account_kinds 一致。 */
@@ -216,6 +240,9 @@ public class AccountsFragment extends Fragment {
         boolean isNew = existing == null;
         long accountId = isNew ? 0 : existing.id;
         Context app = requireContext().getApplicationContext();
+        // 名字要等事务里取到账号对象才算得出来（备注名优先、否则登录名），
+        // 完成弹窗说「谁」比说「保存成功」有用得多。
+        final String[] savedName = new String[1];
         LedgerEdits.submit(app, () -> {
             try {
                 // 占用成功后再取数据库对象，不能提前修改列表正在显示的账号。
@@ -243,12 +270,16 @@ public class AccountsFragment extends Fragment {
                 } else {
                     dao.update(account);
                 }
+                savedName[0] = account.displayName();
                 // 身份或启用名单一变，旧清单结论就不能再替这批账号证明购买归属。
                 Db.get(app).auditDao().invalidateAll();
             } catch (KeyStoreBox.CryptoException e) {
                 throw new IllegalStateException("密码加密失败：" + e.getMessage(), e);
             }
-        });
+        }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                getString(R.string.done_label_save_account),
+                getString(R.string.done_saved_account,
+                        savedName[0] == null ? "账号" : savedName[0]))));
     }
 
     private void confirmDelete(Account account) {
@@ -262,7 +293,31 @@ public class AccountsFragment extends Fragment {
                         LedgerEdits.submit(app, () -> {
                             dao.delete(account);
                             Db.get(app).auditDao().invalidateAll();
-                        }))
+                        }, () -> post(() -> DoneDialogActivity.showDone(requireContext(),
+                                getString(R.string.done_label_delete_account),
+                                getString(R.string.done_deleted_account, account.displayName())))))
+                .show();
+    }
+
+    /**
+     * 切到这个号。先问一句再动手 —— 账号页一行一颗按钮，误触的代价是一次真的退登＋重登
+     * （最招验证码），而「已登记章节」页那颗是点行触发、路径唯一，所以那边没有确认框。
+     */
+    private void confirmSwitch(Account account) {
+        String blocked = AccountSwitchAction.blocker(requireContext());
+        if (blocked != null) {
+            toast(blocked);
+            return;
+        }
+        Context app = requireContext().getApplicationContext();
+        new AlertDialog.Builder(requireContext())
+                .setTitle(getString(R.string.account_switch_confirm_title, account.displayName()))
+                .setMessage(R.string.account_switch_confirm_message)
+                .setNegativeButton(R.string.cancel, null)
+                .setPositiveButton(R.string.account_switch, (d, w) -> {
+                    toast(AccountSwitchAction.startedMessage(account));
+                    AccountSwitchAction.start(app, account);
+                })
                 .show();
     }
 

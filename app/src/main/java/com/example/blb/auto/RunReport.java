@@ -44,6 +44,29 @@ public final class RunReport {
         return sb.toString();
     }
 
+    /**
+     * 通知折叠态用的前几行。
+     *
+     * <p>为什么要有它：2026-09-16 用户报「跑完没有任何弹窗」，最后一道保险是把结论发成通知 ——
+     * 而通知栏放不下整段正文（会有十几行），所以折叠态只取前几行不空的；真的一行都没有时退回
+     * 完整正文，绝不发一条空通知。
+     */
+    public String firstLines(int maxLines) {
+        String text = body();
+        if (text == null || text.trim().isEmpty()) return "";
+        int limit = Math.max(1, maxLines);
+        StringBuilder out = new StringBuilder();
+        int taken = 0;
+        for (String part : text.split("\\r?\\n")) {
+            if (taken >= limit) break;
+            if (part.trim().isEmpty()) continue;
+            if (out.length() > 0) out.append('\n');
+            out.append(part.trim());
+            taken++;
+        }
+        return out.length() == 0 ? text.trim() : out.toString();
+    }
+
     // ---------- 只签到 ----------
 
     public static RunReport ofCheckIn(CheckInQueue.Summary s) {
@@ -159,6 +182,31 @@ public final class RunReport {
         List<String> lines = new ArrayList<>();
         lines.add(text == null || text.trim().isEmpty() ? "结果不明" : text.trim());
         return new RunReport(label + "没跑起来", lines, false);
+    }
+
+    // ---------- 单件小事做完（清理、导入导出、保存账号、保存取证…） ----------
+
+    /**
+     * 用户 2026-09-15 要的：「所有行动完成后要弹出弹窗提醒我已完成」。
+     *
+     * <p>为什么连「导出日志」这种小事也要弹：他会一边放手机一边干别的，短提示（Toast）
+     * 几秒就没了、错过了就再也看不到；而这个弹窗会一直留到他读为止（见 {@link
+     * com.example.blb.ui.DoneDialogActivity}），并且配一声短响／一次震动，
+     * 让他不看着屏幕也知道「刚才那一下做成了」。
+     *
+     * <p><b>只给「做成了」用</b>：校验不通过（「登录名不能为空」）和忙碌拒绝（「有任务在运行」）
+     * 仍然只给短提示 —— 那些是「你这次没做成」，弹一个「已完成」会让状态更难看懂。
+     * 失败也走 {@link #failed}，不从这里走。
+     *
+     * @param label  刚做完的那件事，例如「清理核对记录」「导出运行日志」
+     * @param detail 一句话结果，例如「已清理 12 条」；空的就只说做完了
+     */
+    public static RunReport ofDone(String label, String detail) {
+        String what = label == null || label.trim().isEmpty() ? "刚才那件事" : label.trim();
+        List<String> lines = new ArrayList<>();
+        String text = detail == null ? "" : detail.trim();
+        lines.add(text.isEmpty() ? "已经做完了" : text);
+        return new RunReport("已完成：" + what, lines, true);
     }
 
     // ---------- 几种说法 ----------

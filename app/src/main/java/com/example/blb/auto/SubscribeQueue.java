@@ -131,7 +131,7 @@ public final class SubscribeQueue {
                         accountDao.setBalance(account.id, balance.fire, balance.voucher);
                     }
                     SubscribeRun.oneAccount(runner, host, subs, accountDao, plan, account,
-                            balance, settled, tally);
+                            settled, tally);
                 } catch (StepRunner.StepFailure e) {
                     if (isGlobal(e.kind)) summary.abortReason = e.getMessage();
                     host.log("  " + e.getMessage());

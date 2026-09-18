@@ -31,8 +31,8 @@ import java.util.Set;
  * <b>所有号合起来还没买过</b>的最小章，所以各个号的券摊在不同章上，
  * 合起来把进度往前推，而不是几个号买同一章。失败章仍留给下一个账号尝试，不能越过。
  *
- * <p>停止条件只有一条：<b>这个号的代券不够下一章 → 换下一个号</b>；所有号都不够 → 收工。
- * 没有章数上限 —— 一个号代券够就一直往下订到花光。
+ * <p>停止条件只有一条：<b>页面上出现「余额不足，快去充值吧」→ 换下一个号</b>；所有号都不够 → 收工。
+ * 没有章数上限 —— 一个号代券够就一直往下订到页面说没钱为止。
  */
 public final class SubscribeRun {
 
@@ -57,7 +57,7 @@ public final class SubscribeRun {
 
         public String describe() {
             return "订阅是真实购买：《" + novel.title + "》从第" + novel.startFrom() + "章起，"
-                    + "按队列顺序一章一章往下订，一个号订到代券不够为止再换下一个号"
+                    + "按队列顺序一章一章往下订，一个号订到页面显示余额不足再换下一个号"
                     + "（不限章数）"
                     + (cap > 0 ? "，每号每日上限 " + cap + " 代券" : "");
         }
@@ -171,15 +171,16 @@ public final class SubscribeRun {
      * 它后面的章。用户的原话：「对比要订阅的章节能不能订阅，能就订阅，不能就判断下一个账号，
      * 永远也不会出现跳过某一章的情况」。订下来了才往后走下一章，直到这个号的代券花光。
      *
-     * @param balance 这一趟刚读到的余额；不知道就传 {@link Texts.Balance} 的未知值，
-     *                会退回账号库里记的代券数。
+     * <p>2026-09-15 起不再需要传「这一趟刚读到的余额」：那时候它被用来在进页面之前猜价格，
+     * 而猜价正是「订 1~2 章就换号」的原因（见 {@link #stopBecauseBroke}）。现在买不买得起
+     * 只由页面回答；余额仍由调用方自己读、自己写回账号库（签到页和订阅页都要显示它）。
      */
     public static void oneAccount(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
                                   AccountDao accountDao, Plan plan, Account account,
-                                  Texts.Balance balance, Settled settled, Tally tally)
+                                  Settled settled, Tally tally)
             throws StepRunner.StepFailure {
         try {
-            runAccount(r, host, subs, accountDao, plan, account, balance, settled, tally);
+            runAccount(r, host, subs, accountDao, plan, account, settled, tally);
         } catch (StepRunner.StepFailure failure) {
             if (failure.kind == StepRunner.Kind.MONEY_UNCLEAR) {
                 invalidateAfterFailure(r, host, plan, account, failure);
@@ -195,7 +196,7 @@ public final class SubscribeRun {
 
     private static void runAccount(StepRunner r, StepRunner.Host host, SubscriptionDao subs,
                                     AccountDao accountDao, Plan plan, Account account,
-                                    Texts.Balance balance, Settled settled, Tally tally)
+                                    Settled settled, Tally tally)
             throws StepRunner.StepFailure {
         String name = account.displayName();
         List<Chapter> fullCatalog = subs.loadChapters(plan.novel.id);
@@ -203,7 +204,6 @@ public final class SubscribeRun {
         if (r.context() == null) throw new StepRunner.StepFailure(StepRunner.Kind.CONFIG,
                 "核对订阅需要本地数据库上下文，未执行购买");
         AppDatabase db = Db.get(r.context());
-        int budget = balance.voucher >= 0 ? balance.voucher : account.lastKnownVouchers;
         boolean willSpend = subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom()) != null;
         SubscriptionAuditQueue.AccountResult audit = SubscriptionAuditQueue.auditAccount(
                 r, host, db, plan.novel, account, false,
@@ -220,7 +220,9 @@ public final class SubscribeRun {
         // 刚补回的当天真实花费也算额度；核账前缓存这个数字会在到达上限后再花一次券。
         int spentToday = plan.cap > 0 ? subs.spentVouchersSince(account.id, plan.since) : 0;
         int doneHere = 0;
-        int lastPaid = -1;
+        // 2026-09-15（第六次修复）：这个号上一章买成的是哪一章 —— 它的勾可能还留在页面上，
+        // 下一次购买前要按它那一行清干净（见 SubscribeTask.clearSelectionResidue）。
+        Chapter boughtHere = null;
         while (true) {
             if (host.isCancelled()) {
                 throw new StepRunner.StepFailure(StepRunner.Kind.CANCELLED, "已取消");
@@ -242,14 +244,15 @@ public final class SubscribeRun {
                 throw new StepRunner.StepFailure(StepRunner.Kind.MONEY_UNCLEAR, blocker);
             }
 
-            // 进页之前先算一次「还买得起吗」。章节表里的单价是历史遗留（旧版按火券登记，
-            // 扫目录不会写它），所以优先用上一章的实付代券当估价。
-            int estimate = lastPaid > 0 ? lastPaid : chapter.priceCoupons;
-            String stop = stopBecauseBroke(name, budget, estimate,
-                    spentToday, plan.cap, chapter.chapterNo);
+            // 2026-09-15 第五次反馈：以前这里拿「上一章的实付价」当这一章的估价，余额一低于它
+            // 就判买不起、直接换号 —— 而这本书每章单价 10~14 代券不等，于是「有时订 1 章、
+            // 有时订 2 章、余额还剩着就换号」。章节表里的 priceCoupons 是旧版按火券登记的
+            // 历史遗留（扫目录写 -1），也不能当价。现在不再猜价：进页面让菠萝包自己说，
+            // 页面上出现「余额不足，快去充值吧」才算这个号没钱了（见 SubscribeTask）。
+            // 每日上限仍然是硬事实（账本里今天已经花掉多少），所以先按它拦一次。
+            String stop = stopBecauseBroke(name, spentToday, plan.cap);
             if (stop != null) {
                 host.log("  " + stop);
-                // 买不起也是「这个号订不了这一章」：记一次，交给下一个号试同一章。
                 noteBlocked(host, tally, chapter, stop);
                 return;
             }
@@ -259,7 +262,7 @@ public final class SubscribeRun {
             requireStillUnowned(chapter,
                     subs.findNextUnownedChapterFrom(plan.novel.id, plan.novel.startFrom()));
             SubscribeTask.Result result = SubscribeTask.run(r, plan.novel, chapter,
-                    remainingDailyVouchers(plan.cap, spentToday), fullCatalog);
+                    remainingDailyVouchers(plan.cap, spentToday), fullCatalog, boughtHere);
             // 钱已经付出去时先记购买事实。取消或后续余额回填失败都不能把这笔账丢掉。
             boolean completed;
             int boughtBefore = tally.bought;
@@ -287,8 +290,6 @@ public final class SubscribeRun {
                     accountDao.setBalance(account.id, paidResult.coupons, paidResult.vouchers);
                     return null;
                 });
-                // 买成之后页面上的余额就是权威预算：下一章买不买得起完全看它。
-                if (result.vouchers >= 0) budget = result.vouchers;
             }
 
             if (host.isCancelled()) {
@@ -296,16 +297,19 @@ public final class SubscribeRun {
             }
             if (!completed) {
                 // 没订下来：这一章一个字都不划掉，换下一个号来试它。绝不改去买后面的章。
-                noteBlocked(host, tally, chapter,
-                        result.status == SubscribeTask.Status.INSUFFICIENT
-                                ? name + " 代券不够（页面上说余额不足）" : brief(result.message));
+                // 2026-09-15：如实报告是哪一种「买不成」—— 页面说余额不足、还是这一章
+                // 只能花火券买。以前一律写成「代券不够（页面上说余额不足）」，把火券章
+                // 也混进余额不足里，日志看不出真相。
+                noteBlocked(host, tally, chapter, name + " 买不起这一章：" + brief(result.message));
                 return;
             }
             // 只有已经落到账本的购买或免费归属才有定论；本机下载状态不能使队列越过空章。
             settled.mark(chapter.id);
             doneHere++;
-            if (result.costVouchers > 0) lastPaid = result.costVouchers;
-            if (result.status == SubscribeTask.Status.BOUGHT) spentToday += result.costVouchers;
+            if (result.status == SubscribeTask.Status.BOUGHT) {
+                spentToday += result.costVouchers;
+                boughtHere = chapter;   // 下一章买之前要按它清掉留在页面上的勾
+            }
         }
     }
 
@@ -480,28 +484,24 @@ public final class SubscribeRun {
     }
 
     /**
-     * 进下一章之前判断「这个号还买得起吗」。返回 null＝还买得起，否则返回该写进日志的那句话。
+     * 进下一章之前判断「这个号今天还有额度吗」。返回 null＝还有，否则返回该写进日志的那句话。
      *
-     * <p>拆成一个纯函数是为了能单测：这是「一个号订到余额不足再换下一个号」的判据本身，
-     * 而它在真机上要跑一整趟 8 个号才看得到一次。
+     * <p>拆成纯函数是为了能单测：它在真机上要跑一整趟 8 个号才看得到一次。
      *
-     * @param budget   这个号还剩多少代券（页面上刚读到的那个数）
-     * @param estimate 下一章大概要多少代券，-1＝不知道（那就进页面读实付）
+     * <p><b>2026-09-15 起这里不再猜价格</b>。以前拿「上一章的实付价」当这一章的估价，
+     * 余额一低于它就直接换号，而每章单价并不相同（实测 10~14 代券），于是出现
+     * 「订 1~2 章、余额还剩着就换号」。章节表里的 {@code priceCoupons} 也不能当价：
+     * 那是旧版按火券登记的历史遗留，扫目录只会写 -1。
+     * 现在只保留一件确定的事实：账本里今天已经花掉多少（每日上限设为 0 时不拦）。
+     * 「买不买得起」交给页面自己回答 —— 出现「余额不足，快去充值吧」才算没钱。
+     *
+     * @param spentToday 账本里这个号今天已经花掉的代券（含今天更早那一趟）
+     * @param cap        每账号每日代券上限；0＝不限
      */
-    static String stopBecauseBroke(String name, int budget, int estimate,
-                                   int spentToday, int cap, int chapterNo) {
+    static String stopBecauseBroke(String name, int spentToday, int cap) {
         if (cap > 0 && spentToday >= cap) {
             return name + " 今天已花 " + spentToday + " 代券，已达到每日上限 "
                     + cap + "，换下一个号";
-        }
-        if (estimate <= 0 || budget < 0) return null;
-        if (budget < estimate) {
-            return name + " 只剩 " + budget
-                    + " 代券，不够买第" + chapterNo + "章（约 " + estimate + " 代券），换下一个号";
-        }
-        if (cap > 0 && estimate > remainingDailyVouchers(cap, spentToday)) {
-            return name + " 今天已花 " + spentToday + " 代券，再买第" + chapterNo
-                    + "章会超过每日上限 " + cap + "，换下一个号";
         }
         return null;
     }
@@ -563,8 +563,10 @@ public final class SubscribeRun {
                 host.log("  " + label + " 的归属已在账本里确认，继续重算下一章");
                 return true;
             case INSUFFICIENT:
-                tally.notes.add(name + " 代券不够（" + label + "）");
-                host.log("  " + name + " 买不起，换下一个号");
+                // 页面上的「余额不足，快去充值吧」或者「实付里有火券/读不到实付」。
+                // 两者都不买、不划掉这一章，交给下一个号来试。
+                tally.notes.add(name + " 买不起" + label + "：" + brief(result.message));
+                host.log("  " + name + " 买不起这一章，换下一个号：" + result.message);
                 return false;
             case DAILY_LIMIT:
                 tally.notes.add(name + " 每日额度不足（" + label + "）");

@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-  签到页从上到下四块：现在在干什么（状态卡）→ 要不要我做决定（暂停卡）→
-  开跑的按钮 → 两行「点进去看全部」的入口。
+  签到页从上到下五块：今天怎么样了（大字号那一行）→ 现在在干什么（状态卡）→
+  要不要我做决定（暂停卡）→ 开跑的按钮 → 三张一眼入口卡。
 
-  三处刻意的取舍：
-  · 今日状态、运行日志原来都是「信息很多、窗口很小」：列表挤在
-    半屏里、日志锁死 120dp 约八行。现在它们各是一行
-    EntryRowView（标题 + 一句摘要 + 箭头），完整内容在 DetailActivity 里占一整屏。
-  · 每一行都必须带那句摘要：这个 App 的使用者手指不能动，只有点开才看得到的信息对他
-    等于不存在。所以不点也答得出「今天成了几个」「最新一行日志是什么」。
-  · 主按钮 56dp 高、17sp、带图标：屏幕上的东西是给他看的，看清比塞得下重要。
+  四处刻意的取舍：
+  · 最上面那一行是「今天」的答案：几个号、签到几个、今天新订了几章。句子由
+    ui/TodayHeadline 算好（它要进单测），字号 20sp —— 这是每天第一眼要读的东西，
+    比别处的标题大一档。颜色按状态换三档：绿＝该做的都成了、琥珀＝有号要人管、灰＝今天还没跑。
+  · 今日状态、运行日志、账本核对各是一行 EntryRowView（标题 + 一句摘要 + 箭头），
+    完整内容在 DetailActivity 里占一整屏。每一行都必须带那句摘要：不点也答得出
+    「今天成了几个」「最新一行日志是什么」「存疑几条」。
+  · 主按钮「跑今天的整套流程」56dp 高、占满宽度；「只签到」和「停止」降成描边的次要按钮，
+    但仍 ≥52dp —— 这两颗是备选手动操作，不该跟每天那颗抢注意力。
+  · 实时状态那行用 15sp 淡色，跟大字号那一句分开：一句是「今天怎么样」，一句是「此刻在干什么」。
 
   整页套在 ScrollView 里：内容变成固定几块之后不再需要抢剩余高度，但小屏上要能滚到底。
 -->
@@ -37,23 +40,38 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <View
-                    android:id="@+id/run_dot"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:layout_marginEnd="10dp"
-                    android:background="@drawable/bg_dot"
-                    android:backgroundTint="@color/blb_idle" />
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/status"
-                    style="@style/Blb.Text.Title"
-                    android:layout_width="0dp"
+                    android:id="@+id/today_headline"
+                    style="@style/Blb.Text.Headline"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1" />
+                    android:text="@string/checkin_headline_loading" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:id="@+id/run_dot"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:layout_marginEnd="10dp"
+                        android:background="@drawable/bg_dot"
+                        android:backgroundTint="@color/blb_idle" />
+
+                    <TextView
+                        android:id="@+id/status"
+                        style="@style/Blb.Text.Body"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="?attr/colorOnSurfaceVariant" />
+                </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -141,10 +159,10 @@
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/run"
-                style="@style/Blb.Button.Tonal"
+                style="@style/Blb.Button.Outlined"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="2"
+                android:layout_weight="1"
                 android:text="@string/checkin_run_now"
                 app:icon="@drawable/ic_action_run" />
 
@@ -168,7 +186,7 @@
             android:layout_marginBottom="14dp"
             android:text="@string/checkin_run_hint" />
 
-        <!-- 两行入口。标题和摘要都在 CheckInFragment 里灌，摘要随数据变。 -->
+        <!-- 三行入口。标题和摘要都在 CheckInFragment 里灌，摘要随数据变。 -->
         <com.example.blb.ui.EntryRowView
             android:id="@+id/entry_today"
             style="@style/Blb.Card.Row"
@@ -177,6 +195,12 @@
 
         <com.example.blb.ui.EntryRowView
             android:id="@+id/entry_log"
+            style="@style/Blb.Card.Row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <com.example.blb.ui.EntryRowView
+            android:id="@+id/entry_suspect"
             style="@style/Blb.Card.Row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />

@@ -252,6 +252,43 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:text="@string/settings_app_details" />
+
+                <!--
+                  2026-09-15：用户报「跑完没有任何提示」。查下来两条系统开关都会把它整条掐掉：
+                  没有通知权限 → 「跑完了」那条通知根本不显示；没有 MIUI 的「后台弹出界面」→
+                  App 不在前台时那个浮动弹窗起不来。所以这两条要在这里明明白白写出来，
+                  并且各给一个直接跳过去的按钮，而不是指望他自己找到那些藏在系统设置里的开关。
+                -->
+                <TextView
+                    android:id="@+id/notify_status"
+                    style="@style/Blb.Text.Body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:textColor="@color/blb_warn" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/open_notification_settings"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_open_notification_settings" />
+
+                <TextView
+                    style="@style/Blb.Text.Hint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/settings_popup_permission_hint" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/open_popup_permission"
+                    style="@style/Blb.Button.Tonal"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/settings_open_popup_permission" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

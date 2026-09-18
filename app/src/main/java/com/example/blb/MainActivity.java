@@ -57,6 +57,9 @@ public class MainActivity extends AppCompatActivity {
 
         AccessibilityAccess.restoreIfAuthorized(this);
         askNotificationPermission();
+        // 2026-09-15：完成提示要靠「App 在不在前台」决定走应用内对话框还是浮动窗口（见 AppForeground）。
+        // 这里挂一次就够了；重复调用在 AppForeground 里自己挡掉。
+        com.example.blb.ui.AppForeground.attach(getApplication());
     }
 
     @Override

@@ -73,6 +73,20 @@ public abstract class AuditDao {
             + "ORDER BY at DESC, id DESC LIMIT :limit")
     public abstract LiveData<List<LedgerAudit>> observeRecentLedgerAudits(long novelId, int limit);
 
+    /**
+     * 「核对记录与存疑」页的清理：只清这本书的留痕（页面上本来也只显示这一本）。
+     *
+     * <p><b>2026-09-15 用户要的「一键清理」。</b>为什么只按 novel_id 删、绝不清整表：
+     * 别的书的存疑/修正记录和他要看的东西无关，删掉只是白白丢证据。
+     * 为什么不能顺手清理 {@code account_novel_audit}：那张表是购买闸门（{@code ledger_marker}
+     * 决定这一轮还认不认旧凭证），删了会让「已核对」变成「未核对」，重新逼着跑一遍核对。
+     * <p>清掉的后果只有一个，但很重：{@code KIND_DELETE} 那条留痕是「撤销」的唯一依据，
+     * 而被删掉的订阅记录只活在它的 {@code detail} JSON 里 —— 清完就再也撤销不回来了。
+     * 所以调用方必须先弹窗把这句话说给用户听。
+     */
+    @Query("DELETE FROM ledger_audit WHERE novel_id = :novelId")
+    public abstract int deleteLedgerAuditsOfNovel(long novelId);
+
     /** 免费 OWNED 也可能暴露归属冲突，删账的第二份快照不能只取付费行。 */
     @Query("SELECT p.id AS purchaseId, p.account_id AS accountId, p.chapter_id AS chapterId, "
             + "p.cost_coupons AS costCoupons, p.cost_vouchers AS costVouchers, "

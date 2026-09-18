@@ -9,7 +9,12 @@
     <string name="tab_settings">设置</string>
 
     <string name="accounts_add">添加账号</string>
+    <string name="account_switch">切换账号</string>
+    <string name="account_switch_confirm_title">切换到「%1$s」？</string>
+    <string name="account_switch_confirm_message">会先退出现在登着的号，再登入它。切号是退登＋重登，最容易触发验证码，中间别动屏幕。进度看签到页的运行日志。</string>
     <string name="accounts_empty">还没有账号。点右下角添加，密码会用系统密钥库加密后存在本机。</string>
+    <!-- 账号页顶部那一行总览的占位；句子本身由 AccountOverviewText 算，好进单测。 -->
+    <string name="accounts_overview_loading">正在读取账号…</string>
     <string name="account_label_hint">备注名（例如 主号）</string>
     <string name="account_login_hint">手机号或用户名</string>
     <string name="account_password_hint">密码（留空表示不改）</string>
@@ -39,6 +44,11 @@
     <string name="checkin_stop">停止</string>
     <string name="checkin_continue">继续</string>
     <string name="checkin_skip">跳过此账号</string>
+    <!--
+      签到页最上面那一行：这趟到底怎么样了。真正的句子由 TodayHeadline 算（它要进单测），
+      这一条只是数据读回来之前的占位 —— 空着会让人以为页面没加载。
+    -->
+    <string name="checkin_headline_loading">今天：正在读取…</string>
     <string name="checkin_log_header">运行日志</string>
     <string name="checkin_need_a11y">还没开启无障碍服务，先去设置里打开。</string>
     <string name="checkin_no_account">没有启用中的账号，先在「账号」页添加。</string>
@@ -58,6 +68,15 @@
     <string name="sub_cost_prompt">这一章花了多少代券？</string>
 
     <string name="sub_target_novel">集中订阅的目标小说</string>
+    <!--
+      订阅页中段那三颗动作按钮分区块：同步目录 / 核对订阅清单 / 只跑订阅 各带一句结果摘要，
+      它们原来散在卡片和横滚条里，看不出是同一类「跑一次」的动作。
+    -->
+    <string name="sub_actions_section">今天要做的三件事</string>
+    <!-- 选书、加章、导入导出不是每天都要点，收在最后一个横滚区里。 -->
+    <string name="sub_more_section">更多：选书 · 加章 · 导入导出</string>
+    <!-- 页面最后一行「几个号在跑、最多花多少」的占位；句子由 SpendSummary 算。 -->
+    <string name="sub_spend_loading">今天：正在读取启用账号…</string>
     <string name="sub_pick_novel">选择小说</string>
     <string name="sub_add_novel">添加小说</string>
     <string name="sub_add_chapter">添加章节</string>
@@ -121,6 +140,34 @@
     <string name="detail_log_export">导出</string>
     <string name="detail_log_export_failed">导出失败：%1$s</string>
     <string name="detail_log_exported">已导出 %1$d 行日志</string>
+    <!--
+      完成弹窗的标题用词。用户 2026-09-15 要的「所有行动完成后弹窗提醒我已完成」：
+      做成了的小事也要弹（清理、导入导出、保存账号、保存取证、补录章节…），
+      因为短提示几秒就没了，而他会把手机放在一边。校验不通过、忙碌拒绝、失败不走这里。
+    -->
+    <string name="done_label_clear_audits">清理核对记录</string>
+    <string name="done_label_export_log">导出运行日志</string>
+    <string name="done_label_undo_audit">撤销这条修正</string>
+    <string name="done_label_save_forensics">保存取证</string>
+    <string name="done_forensics_saved">已保存到「%1$s」</string>
+    <string name="done_label_export_csv">导出订阅记录</string>
+    <string name="done_label_import_csv">导入订阅记录</string>
+    <string name="done_label_add_novel">添加小说</string>
+    <string name="done_added_novel">已添加《%1$s》</string>
+    <string name="done_label_add_chapters">补录章节</string>
+    <string name="done_added_chapters">已登记第 %1$d–%2$d 章</string>
+    <string name="done_label_save_account">保存账号</string>
+    <string name="done_saved_account">「%1$s」已保存</string>
+    <string name="done_label_delete_account">删除账号</string>
+    <string name="done_deleted_account">「%1$s」已删除</string>
+    <string name="done_label_pick_novel">选择目标小说</string>
+    <string name="done_picked_novel">现在盯的是《%1$s》</string>
+    <string name="done_label_delete_novel">删除小说</string>
+    <string name="done_deleted_novel">已删除《%1$s》</string>
+    <string name="done_label_manual_purchase">手动补录订阅</string>
+    <string name="done_manual_purchase">%1$s 的第 %2$d 章已写进账本</string>
+    <string name="done_label_delete_chapter">删除无账章节</string>
+    <string name="done_deleted_chapter">第 %1$d 章的空登记已删除</string>
     <string name="detail_log_summary_idle">还没有日志。跑起来之后这里会显示最新那一行。</string>
     <string name="detail_today_summary_empty">还没有账号，先去「账号」页添加。</string>
     <string name="detail_stats_title">各账号累计</string>
@@ -129,7 +176,18 @@
     <string name="detail_suspect_title">核对记录与存疑</string>
     <string name="detail_suspect_empty">还没有核对记录。核对后的补记、修正和存疑会直接显示在这里。</string>
     <string name="detail_suspect_no_target">先在订阅页选择目标小说。</string>
+    <!-- 二级页第一句的第二行：这一页唯一会改账本的动作，写在明处 -->
+    <string name="detail_suspect_undo_hint">撤销会恢复修正前的本地订阅记录</string>
+    <!-- 运行日志页第一句的前缀：光写「空闲」看不出说的是什么状态 -->
+    <string name="detail_log_status">当前状态：%1$s</string>
     <string name="detail_audit_undo">撤销</string>
+    <string name="detail_audit_clear">清理</string>
+    <string name="detail_audit_clear_title">清空《%1$s》的核对记录？</string>
+    <string name="detail_audit_clear_message">会删掉这本书的全部核对留痕（补记、修正、存疑），并清空订阅页那行「最后核对」摘要。\n\n注意：那些「撤销」按钮会一起失效 —— 被修正或删除过的订阅记录只存在这些留痕里，清掉就再也撤不回来了。订阅记录本身、章节、购买凭证一条都不会动。</string>
+    <string name="detail_audit_cleared">已清理 %1$d 条核对记录</string>
+    <string name="detail_audit_clear_empty">这本书没有可清理的核对记录</string>
+    <string name="detail_audit_clear_no_target">先在订阅页选择目标小说，再清理它的核对记录</string>
+    <string name="detail_audit_clear_busy">有任务正在运行或账本正在更新，请等结束后再清理</string>
     <string name="sub_ledger_section">这本书的账本</string>
     <string name="detail_scrollbar_hint">快速滚动</string>
     <string name="detail_scrollbar_next_page">向下滚动一屏</string>
@@ -149,4 +207,14 @@
     <string name="done_ok">知道了</string>
     <string name="done_open_log">看这一趟的运行日志</string>
     <string name="done_at">%1$s 跑完</string>
+
+    <!--
+      2026-09-15：用户报「跑完没有任何提示」。通知权限与 MIUI 的「后台弹出界面」这两条
+      各自都能把提示整条掐掉，所以在设置页明写状态并各给一个跳转按钮。
+    -->
+    <string name="settings_notify_allowed">完成提示的通知权限：已允许 —— 「跑完了」那条通知会正常显示。</string>
+    <string name="settings_notify_denied">完成提示的通知权限：未允许 —— 跑完之后那条通知不会显示（App 在前台时仍会弹完成对话框）。点下面这颗去打开。</string>
+    <string name="settings_open_notification_settings">打开本应用的通知设置</string>
+    <string name="settings_popup_permission_hint">小米手机还有一处开关：App 不在前台时，完成提示要弹一个浮动窗口，需要「后台弹出界面」权限（设置 → 应用管理 → 本应用 → 后台弹出界面）。被拒时那一趟跑完屏幕上不会出现任何东西。</string>
+    <string name="settings_open_popup_permission">打开「后台弹出界面」权限页</string>
 </resources>

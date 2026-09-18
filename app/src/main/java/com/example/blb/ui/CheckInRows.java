@@ -47,6 +47,9 @@ final class CheckInRows {
 
         row.<TextView>findViewById(R.id.line1).setText(r.accountName());
 
+        // 行布局是三行共用的：今日状态只有两件事，第三行要显式收起（复用时会把别的页面的字留下）。
+        row.findViewById(R.id.line3).setVisibility(View.GONE);
+
         StringBuilder sb = new StringBuilder();
         if (!Texts.isBlank(r.message)) join(sb).append(r.message);
         if (r.createdAt > 0) join(sb).append(DateFormat.format("HH:mm:ss", r.createdAt));
@@ -81,6 +84,37 @@ final class CheckInRows {
         StringBuilder sb = new StringBuilder("已签到 ").append(done).append('/').append(rows.size());
         if (!bad.isEmpty()) join(sb).append("没成的：").append(names(bad));
         if (notRun > 0) join(sb).append("还没跑 ").append(notRun).append(" 个");
+        return sb.toString();
+    }
+
+    /**
+     * 二级页「今日状态」标题下面那一句：「3 个号 · 签到 2/3 · 1 个要人管」。
+     *
+     * <p>为什么和 {@link #summary} 分开、而不改那一句：{@code summary} 是一级页面入口卡上的
+     * 摘要（主流程已经上线，改它会连带改主流程的文案）；这一句是整屏页面的开场白，
+     * 先把「一共几个号」说清楚，再说成了几个、有没有要人管的 —— 点进来第一眼要能安心。
+     *
+     * <p>「跳过」不算要人管：那是他自己按的，和「失败」不是一回事（{@link StatusPalette} 同一条判据）。
+     */
+    static String pageLine(List<CheckInRow> rows) {
+        if (rows == null || rows.isEmpty()) return "";
+        int done = 0;
+        int notRun = 0;
+        int bad = 0;
+        int counted = 0;
+        for (CheckInRow r : rows) {
+            if (r == null) continue;
+            counted++;
+            if (r.status == null) notRun++;
+            else if (CheckInLog.OK.equals(r.status) || CheckInLog.ALREADY.equals(r.status)) done++;
+            else if (!CheckInLog.SKIPPED.equals(r.status)) bad++;
+        }
+        StringBuilder sb = new StringBuilder().append(counted).append(" 个号");
+        // 一个都还没成、也没人失败：说「签到 0/8」像在报失败，直接说它还没开始跑。
+        if (done == 0 && bad == 0) return sb.append(" · 今天还没跑").toString();
+        sb.append(" · 签到 ").append(done).append('/').append(counted);
+        if (bad > 0) sb.append(" · ").append(bad).append(" 个要人管");
+        if (notRun > 0) sb.append(" · 还没跑 ").append(notRun).append(" 个");
         return sb.toString();
     }
 
